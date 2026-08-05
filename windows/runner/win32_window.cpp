@@ -187,6 +187,17 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_GETMINMAXINFO: {
+      // Below roughly this width the rail + room list + chat columns stop
+      // fitting side by side. Scaled by DPI so the limit is a logical size.
+      const UINT dpi = FlutterDesktopGetDpiForHWND(hwnd);
+      const double scale = dpi / 96.0;
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      info->ptMinTrackSize.x = static_cast<LONG>(940 * scale);
+      info->ptMinTrackSize.y = static_cast<LONG>(560 * scale);
+      return 0;
+    }
+
     case WM_DPICHANGED: {
       auto newRectSize = reinterpret_cast<RECT*>(lparam);
       LONG newWidth = newRectSize->right - newRectSize->left;
