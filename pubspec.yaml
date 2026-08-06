@@ -23,7 +23,21 @@ dependencies:
   # same flutter_webrtc version, so the two do not fight over native bits.
   livekit_client: ^2.10.0
   matrix: ^9.0.0
+  # Already resolved transitively via matrix, but listed explicitly because the
+  # attachment tray sniffs a dropped file's type before the SDK ever sees it —
+  # lookupMimeType decides whether a chip shows a thumbnail or a file icon.
+  mime: ^2.0.0
   path: ^1.9.1
+  # Attachment input. super_* is chosen over desktop_drop/pasteboard because it
+  # is one framework for both gestures, reads virtual files (an attachment
+  # dragged straight out of Outlook or a zip viewer has no path on disk), and
+  # already supports iOS/Android if this ever leaves the desktop. See the
+  # device_info_plus override below for the price of that choice.
+  #
+  # Neither package offers a file dialog, hence file_selector alongside them.
+  super_clipboard: ^0.9.1
+  super_drag_and_drop: ^0.9.1
+  file_selector: ^1.1.0
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
   sqflite_common_ffi: ^2.4.2
@@ -31,6 +45,21 @@ dependencies:
   # implement WebRTCDelegate and extend MediaDevices — both are its types, so
   # this is a direct dependency in substance.
   webrtc_interface: ^1.5.1
+
+dependency_overrides:
+  # super_native_extensions (under super_clipboard/super_drag_and_drop) caps
+  # device_info_plus below 12.0.0; livekit_client requires ^12.3.0. Without this
+  # override pub does not fail — it silently backtracks super_* to 0.1.x, a
+  # three-year-old release with a different API, and drags js down with it.
+  #
+  # Safe because this changes nothing for livekit: 12.4.0 was already the
+  # resolved version before super_* was added. The only package now seeing a
+  # version it did not declare is super_native_extensions, which uses
+  # device_info_plus in exactly one place — an `is AndroidDeviceInfo` /
+  # `sdkInt <= 30` workaround in drag_interaction/long_press_handler.dart:206.
+  # That branch is unreachable on desktop, and the API it touches is unchanged
+  # between v11 and v12. Re-check this if the app ever ships on Android.
+  device_info_plus: ^12.3.0
 
 dev_dependencies:
   flutter_test:

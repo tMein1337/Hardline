@@ -59,6 +59,14 @@ abstract final class DiscordPalettes {
       DiscordSlot.inputBorder: Color(0xFF1E1F22),
       DiscordSlot.inputBorderFocused: Color(0xFF00A8FC),
 
+      DiscordSlot.attachmentCard: Color(0xFF2B2D31),
+      DiscordSlot.attachmentCardBorder: Color(0xFF232428),
+      DiscordSlot.attachmentPlaceholder: Color(0xFF232428),
+      DiscordSlot.attachmentTray: Color(0xFF2B2D31),
+      DiscordSlot.attachmentChip: Color(0xFF1E1F22),
+      DiscordSlot.dropOverlay: Color(0xCC1E1F22),
+      DiscordSlot.dropBorder: Color(0xFF5865F2),
+
       DiscordSlot.voiceConnected: Color(0xFF23A55A),
       DiscordSlot.voiceConnecting: Color(0xFFF0B232),
       DiscordSlot.voiceError: Color(0xFFF23F42),
@@ -125,6 +133,14 @@ abstract final class DiscordPalettes {
       DiscordSlot.inputBackgroundAlt: Color(0xFF202225),
       DiscordSlot.inputBorder: Color(0xFF202225),
       DiscordSlot.inputBorderFocused: Color(0xFF00AFF4),
+
+      DiscordSlot.attachmentCard: Color(0xFF2F3136),
+      DiscordSlot.attachmentCardBorder: Color(0xFF26282C),
+      DiscordSlot.attachmentPlaceholder: Color(0xFF26282C),
+      DiscordSlot.attachmentTray: Color(0xFF2F3136),
+      DiscordSlot.attachmentChip: Color(0xFF202225),
+      DiscordSlot.dropOverlay: Color(0xCC202225),
+      DiscordSlot.dropBorder: Color(0xFF5865F2),
 
       DiscordSlot.voiceConnected: Color(0xFF3BA55D),
       DiscordSlot.voiceConnecting: Color(0xFFFAA81A),
@@ -193,6 +209,14 @@ abstract final class DiscordPalettes {
       DiscordSlot.inputBackgroundAlt: Color(0xFFFFFFFF),
       DiscordSlot.inputBorder: Color(0xFFDCDEE1),
       DiscordSlot.inputBorderFocused: Color(0xFF006CE7),
+
+      DiscordSlot.attachmentCard: Color(0xFFF2F3F5),
+      DiscordSlot.attachmentCardBorder: Color(0xFFDCDEE1),
+      DiscordSlot.attachmentPlaceholder: Color(0xFFEBEDEF),
+      DiscordSlot.attachmentTray: Color(0xFFF2F3F5),
+      DiscordSlot.attachmentChip: Color(0xFFFFFFFF),
+      DiscordSlot.dropOverlay: Color(0xCCFFFFFF),
+      DiscordSlot.dropBorder: Color(0xFF5865F2),
 
       DiscordSlot.voiceConnected: Color(0xFF248046),
       DiscordSlot.voiceConnecting: Color(0xFFB98300),

@@ -7,8 +7,9 @@ import 'package:flutter/material.dart';
 /// concrete colors for each role live in `discord_palettes.dart`, which is the
 /// only file in the project allowed to contain hex literals.
 ///
-/// Adding a slot is a three-step change: add the constant here, add it to
-/// [DiscordSlot.all], and give it a value in every palette.
+/// Adding a slot is a four-step change: add the constant here, add it to
+/// [DiscordSlot.all], add a typed accessor on [DiscordColors], and give it a
+/// value in every palette. `discord_colors_test.dart` enforces the last step.
 abstract final class DiscordSlot {
   // Surfaces, darkest to lightest.
   static const serverRail = 'serverRail';
@@ -60,6 +61,18 @@ abstract final class DiscordSlot {
   static const inputBackgroundAlt = 'inputBackgroundAlt';
   static const inputBorder = 'inputBorder';
   static const inputBorderFocused = 'inputBorderFocused';
+
+  // Attachments.
+  //
+  // `dropOverlay` is its own slot rather than a reuse of `scrim`: a black wash
+  // over the chat reads as a modal dialog, not as "let go here".
+  static const attachmentCard = 'attachmentCard';
+  static const attachmentCardBorder = 'attachmentCardBorder';
+  static const attachmentPlaceholder = 'attachmentPlaceholder';
+  static const attachmentTray = 'attachmentTray';
+  static const attachmentChip = 'attachmentChip';
+  static const dropOverlay = 'dropOverlay';
+  static const dropBorder = 'dropBorder';
 
   // Voice and video.
   //
@@ -123,6 +136,13 @@ abstract final class DiscordSlot {
     inputBackgroundAlt,
     inputBorder,
     inputBorderFocused,
+    attachmentCard,
+    attachmentCardBorder,
+    attachmentPlaceholder,
+    attachmentTray,
+    attachmentChip,
+    dropOverlay,
+    dropBorder,
     voiceConnected,
     voiceConnecting,
     voiceError,
@@ -225,6 +245,14 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
   Color get inputBackgroundAlt => slot(DiscordSlot.inputBackgroundAlt);
   Color get inputBorder => slot(DiscordSlot.inputBorder);
   Color get inputBorderFocused => slot(DiscordSlot.inputBorderFocused);
+
+  Color get attachmentCard => slot(DiscordSlot.attachmentCard);
+  Color get attachmentCardBorder => slot(DiscordSlot.attachmentCardBorder);
+  Color get attachmentPlaceholder => slot(DiscordSlot.attachmentPlaceholder);
+  Color get attachmentTray => slot(DiscordSlot.attachmentTray);
+  Color get attachmentChip => slot(DiscordSlot.attachmentChip);
+  Color get dropOverlay => slot(DiscordSlot.dropOverlay);
+  Color get dropBorder => slot(DiscordSlot.dropBorder);
 
   Color get voiceConnected => slot(DiscordSlot.voiceConnected);
   Color get voiceConnecting => slot(DiscordSlot.voiceConnecting);

@@ -27,7 +27,7 @@ class AvatarRequest {
 ///
 /// Async because the SDK has to determine whether the homeserver supports
 /// authenticated media before it knows which endpoint to use. The modern
-/// endpoint requires an `Authorization` header — see [avatarRequestHeaders].
+/// endpoint requires an `Authorization` header — see [mediaRequestHeaders].
 ///
 /// Results are cached by [AvatarRequest], so the same avatar appearing in the
 /// rail, the room list and a message is resolved once.
@@ -52,8 +52,9 @@ final avatarUriProvider = FutureProvider.family<Uri?, AvatarRequest>((
 });
 
 /// Authenticated media (Matrix 1.11+) rejects unauthenticated requests, so
-/// every avatar fetch must carry the access token.
-final avatarRequestHeaders = Provider<Map<String, String>>((ref) {
+/// every media fetch must carry the access token — avatars and message
+/// attachments alike.
+final mediaRequestHeaders = Provider<Map<String, String>>((ref) {
   final token = ref.watch(clientProvider).accessToken;
   return token == null ? const {} : {'authorization': 'Bearer $token'};
 });

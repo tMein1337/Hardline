@@ -64,7 +64,7 @@ class MxAvatar extends ConsumerWidget {
             width: size,
             height: size,
             fit: BoxFit.cover,
-            headers: ref.watch(avatarRequestHeaders),
+            headers: ref.watch(mediaRequestHeaders),
             errorBuilder: (_, _, _) => fallback,
             // Avoids a flash of fallback on every rebuild once cached.
             gaplessPlayback: true,

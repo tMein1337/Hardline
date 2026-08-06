@@ -26,6 +26,22 @@ still unverified, because testing it needs a second person:
 | **Screen share system audio** | **built, not yet verified — see TODO** |
 | Calls in encrypted rooms (E2EE media) | works, verified against Element |
 
+**Stage 3 — file attachments.** Built, awaiting a pass against Element:
+
+| Feature | State |
+|---|---|
+| Drag and drop onto the chat | built |
+| Attach button (system file dialog) | built |
+| Paste an image or a copied file | built |
+| Staging tray, multiple files, per-file removal | built |
+| Caption on a single attachment (MSC2530) | built |
+| Attachments in encrypted rooms | built |
+| Images shown inline | built |
+| Files as a card with save-as | built |
+| Upload progress, retry after failure | built |
+| Video poster frame for videos **we** send | not supported — see below |
+| Inline video/audio playback | out of scope for now |
+
 ## Running
 
 ```
@@ -79,13 +95,116 @@ Windows and returns a second track, which LiveKit publishes as a separate
 - Is the flutter_webrtc version still ≥ 1.5.0? Below that the feature does not
   exist and `audio: true` is silently ignored.
 
-### 2. Smaller things
+### 2. Plattform Support
+- Linux
+- Macos
+- iOS
+- Android
+
+### 3. Settings
+- unified Settings
+- Audio settings
+- Account Settings
+- etc.
+
+### last: Smaller things
 
 - Renegotiating the microphone mid-call briefly drops audio for others.
 - Matrix device ids change on every logout/login, so per-device volumes are
   forgotten when someone re-authenticates. Inherent to keying by device.
 - A hard kill (Task Manager) cannot withdraw the call membership; it expires on
   its own after a few hours.
+
+## File attachments
+
+Notes that are expensive to rediscover. Code lives in
+`lib/features/chat/attachments/`.
+
+### `Room.sendFileEvent`, never `Client.uploadContent`
+
+`uploadContent` uploads **plaintext**. In an encrypted room that ships the file
+to the server unprotected, with no error and nothing downstream able to tell.
+The SDK's own doc says to use `sendFileEvent` for end-to-end encryption.
+
+`sendFileEvent` also supplies, for free: the local echo, `fileSendingStatus`,
+thumbnail generation with separate thumbnail encryption, the `m.upload.size`
+pre-check, a retrying upload loop, the cache write that makes
+`Event.sendAgain()` work later, and the `EventStatus.error` transition. All of
+it arrives through the timeline's existing `onChange → notifyListeners` path,
+so the feature added no new state plumbing to `TimelineController`.
+
+### Captions are MSC2530, and the SDK does not expose them directly
+
+`filename` holds the real name, `body` holds the caption when the two differ.
+`sendFileEvent` spreads `extraContent` **last** into the event content, so
+`extraContent: {'body': caption}` overrides the body while leaving `filename`
+intact — exactly the right shape without hand-building content (which would
+also mean reimplementing the encrypted-file block).
+
+A caption belongs to *one* file. With several attachments the text is sent as
+its own message ahead of them; putting it on the first would make Element render
+it as a label for whichever image happened to lead.
+
+### Classification ignores `hasAttachment`
+
+`attachmentKindOf` deliberately switches on msgtype alone. The local echo that
+`sendFileEvent` injects has neither `url` nor `file` until the upload finishes,
+so gating on `hasAttachment` would render our own image as the text "sent a
+picture" for a second and then pop into a thumbnail.
+
+### Encrypted attachments cannot use `Image.network`
+
+`Event.getAttachmentUri()` returns null for an encrypted attachment — the bytes
+on the server are ciphertext. That null is the whole branch: when it comes back,
+`downloadAndDecryptAttachment()` handles the download, decryption and caching.
+One caveat: passing `getThumbnail: true` **throws** when no thumbnail exists,
+hence `getThumbnail: event.hasThumbnail`.
+
+### No byte-level upload progress exists
+
+`FileSendingStatus` is a three-value enum (`generatingThumbnail`, `encrypting`,
+`uploading`) and neither `sendFileEvent` nor `uploadContent` takes a progress
+callback. The UI is indeterminate on purpose; a percentage would be invented.
+
+### Videos we send have no poster frame
+
+`Client.customVideoThumbnailGenerator` is not set and the SDK has no built-in
+one, so our own videos render as a placeholder with a play glyph. Videos from
+Element carry a thumbnail and do show one. Fixing this means a video decoding
+dependency.
+
+### Paste owns `PasteTextIntent`
+
+Intercepting Ctrl+V in a `Focus.onKeyEvent` cannot work: the handler must answer
+synchronously and every clipboard read is async. Overriding `PasteTextIntent`
+instead also catches the context menu's *Paste* and Shift+Insert, and delegates
+back to `EditableText` through `callingAction` when the clipboard holds no
+attachment — so selection replacement and undo history stay the framework's job.
+The cost is one clipboard round trip on every ordinary text paste.
+
+Regression surface worth re-testing after touching `message_composer.dart`:
+paste with a mid-word caret, paste over a selection, the context menu, and
+Shift+Insert.
+
+### Drafts are per room, text is not
+
+Attachments staged in one room survive switching away and back, because
+`AttachmentDrafts` is a non-autoDispose provider keyed by room id. Typed *text*
+is still global — `MessageComposer` carries no `ValueKey(roomId)`, so its state
+is reused across rooms. That predates this feature and is left alone
+deliberately: adding the key would newly discard typed text on every switch.
+
+### The `device_info_plus` override
+
+`super_native_extensions` caps `device_info_plus` below 12.0.0 while
+`livekit_client` requires `^12.3.0`. Without the override in `pubspec.yaml` pub
+does **not** fail — it silently backtracks `super_*` to 0.1.x, a three-year-old
+release with a different API. See the comment there for why overriding is safe.
+
+If that ever stops being true, the three `attachment_*_source.dart` files are
+the only ones that import an input package; `desktop_drop` + `pasteboard` is a
+two-file swap. The cost of that route is no iOS support and no virtual files
+(an attachment dragged straight out of Outlook or a zip viewer has no path).
 
 ## Voice architecture
 

@@ -5,8 +5,7 @@ import '../../../core/util/time_format.dart';
 import '../../../theme/theme_context.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
-
-const _localizations = MatrixDefaultLocalizations();
+import 'message_body.dart';
 
 /// A chat message row.
 ///
@@ -30,15 +29,6 @@ class MessageTile extends StatelessWidget {
     final metrics = context.metrics;
     final sender = event.senderFromMemoryOrFallback;
     final senderName = sender.calcDisplayname();
-
-    // Resolves replies, edits and non-text message types to something
-    // presentable, and handles pending sends.
-    final body = event.calcLocalizedBodyFallback(
-      _localizations,
-      hideReply: true,
-      hideEdit: true,
-      plaintextBody: true,
-    );
 
     final isPending = !event.status.isSent;
     final isMention = event.mentions.userIds.contains(event.room.client.userID);
@@ -115,14 +105,7 @@ class MessageTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                     ],
-                    SelectableText(
-                      body,
-                      style: context.text.messageBody.copyWith(
-                        color: isPending
-                            ? colors.textMuted
-                            : context.text.messageBody.color,
-                      ),
-                    ),
+                    MessageBody(event: event, isPending: isPending),
                   ],
                 ),
               ),

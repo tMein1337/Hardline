@@ -151,6 +151,61 @@ class TimelineController extends ChangeNotifier {
     }
   }
 
+  /// Sends staged attachments, optionally with [caption] as the message text.
+  ///
+  /// Uses [Room.sendFileEvent] and never [Client.uploadContent]. The latter
+  /// uploads *plaintext* — in an encrypted room that silently ships the file to
+  /// the server unprotected, and nothing downstream can tell. The SDK's own doc
+  /// on uploadContent says to use this method for end-to-end encryption.
+  ///
+  /// It also hands us, for free: the local echo (a fake sync event at
+  /// EventStatus.sending), `fileSendingStatus`, thumbnail generation with
+  /// separate thumbnail encryption, the `m.upload.size` pre-check, a retrying
+  /// upload loop, the cache write that later makes `Event.sendAgain()` work,
+  /// and the transition to EventStatus.error on failure. All of it arrives
+  /// through the existing onChange -> notifyListeners path with no new state.
+  Future<void> sendFiles(List<MatrixFile> files, {String caption = ''}) async {
+    if (files.isEmpty) return;
+
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+
+    final text = caption.trim();
+
+    // MSC2530 attaches a caption to *one* file. With several, putting it on the
+    // first makes Element render it under whichever image happens to lead,
+    // which reads as a label for that image rather than for the batch. So: one
+    // file gets a real caption; several get the text as its own message ahead
+    // of them, which is what Discord shows too.
+    if (text.isNotEmpty && files.length > 1) {
+      try {
+        await room.sendTextEvent(text);
+      } catch (error) {
+        debugPrint('Could not send the caption to $roomId: $error');
+      }
+    }
+
+    for (final file in files) {
+      try {
+        await room.sendFileEvent(
+          file,
+          // sendFileEvent spreads extraContent last into the event content, so
+          // this overrides 'body' while 'filename' keeps the real file name —
+          // exactly the MSC2530 caption shape. Building the content by hand
+          // would mean reimplementing the encrypted-file block as well.
+          extraContent: text.isNotEmpty && files.length == 1
+              ? {'body': text}
+              : null,
+        );
+      } catch (error) {
+        // The SDK has already flipped the local echo to EventStatus.error,
+        // which the tile renders with a retry button. Same swallow-and-log as
+        // send() above.
+        debugPrint('Could not send an attachment to $roomId: $error');
+      }
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;

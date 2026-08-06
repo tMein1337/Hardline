@@ -1,0 +1,45 @@
+/// The `file_selector` adapter.
+///
+/// One of three source files that import an input package; everything else in
+/// the feature speaks plain paths and bytes. Swapping `file_selector` for
+/// another picker means rewriting this file and nothing else.
+library;
+
+import 'package:file_selector/file_selector.dart';
+import 'package:path/path.dart' as p;
+
+/// Opens the system file dialog and returns the chosen paths.
+///
+/// Empty when the user cancels — a cancel is not an error and should leave the
+/// tray untouched.
+Future<List<String>> pickAttachmentPaths() async {
+  // No acceptedTypeGroups: a chat accepts anything, and an empty list is what
+  // shows "All files" rather than an empty dropdown.
+  final files = await openFiles();
+  return [for (final file in files) file.path];
+}
+
+/// Asks where to save a downloaded attachment. Null when the user cancels.
+Future<String?> chooseSaveLocation({required String suggestedName}) async {
+  final location = await getSaveLocation(
+    suggestedName: suggestedName,
+    // Windows only appends an extension when a type group declares one, so a
+    // file saved as "report" becomes "report.pdf" instead of extensionless.
+    // Extensions must be bare here — a leading dot makes IFileSaveDialog
+    // produce "report..pdf".
+    acceptedTypeGroups: _typeGroupFor(suggestedName),
+  );
+  return location?.path;
+}
+
+List<XTypeGroup> _typeGroupFor(String name) {
+  final extension = p.extension(name).replaceFirst('.', '');
+  if (extension.isEmpty) return const [];
+
+  return [
+    XTypeGroup(
+      label: extension.toUpperCase(),
+      extensions: [extension],
+    ),
+  ];
+}

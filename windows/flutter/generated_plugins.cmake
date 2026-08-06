@@ -4,8 +4,11 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
+  file_selector_windows
   flutter_webrtc
+  irondash_engine_context
   livekit_client
+  super_native_extensions
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
