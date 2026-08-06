@@ -1,0 +1,33 @@
+{
+  // Windows is pinned via `deviceId` in every configuration. Without it the
+  // Flutter extension launches whichever device happens to be selected, and
+  // Chrome/Edge are always listed — which starts a web build that cannot work
+  // here anyway: sqflite_common_ffi, flutter_webrtc and vodozemac are all
+  // desktop-only in this project.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "matrix_client (Windows)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "windows"
+    },
+    {
+      "name": "matrix_client (Windows, profile)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "windows",
+      "flutterMode": "profile"
+    },
+    {
+      "name": "matrix_client (Windows, release)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "windows",
+      "flutterMode": "release"
+    }
+  ]
+}

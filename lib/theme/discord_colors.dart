@@ -61,6 +61,29 @@ abstract final class DiscordSlot {
   static const inputBorder = 'inputBorder';
   static const inputBorderFocused = 'inputBorderFocused';
 
+  // Voice and video.
+  //
+  // Kept separate from the semantic slots above (rather than reusing `success`
+  // and `danger`) so the call UI can be recolored on its own. Discord treats
+  // voice state as its own visual language, and folding it into the generic
+  // states would mean recoloring every success message to restyle a call.
+  static const voiceConnected = 'voiceConnected';
+  static const voiceConnecting = 'voiceConnecting';
+  static const voiceError = 'voiceError';
+  static const voiceSpeakingRing = 'voiceSpeakingRing';
+  static const voiceMutedIcon = 'voiceMutedIcon';
+  static const voiceDeafenedIcon = 'voiceDeafenedIcon';
+  static const voiceParticipantRow = 'voiceParticipantRow';
+  static const voiceParticipantRowHover = 'voiceParticipantRowHover';
+  static const voiceControlBar = 'voiceControlBar';
+  static const voiceControlIcon = 'voiceControlIcon';
+  static const voiceControlIconActive = 'voiceControlIconActive';
+  static const voiceControlDanger = 'voiceControlDanger';
+  static const videoTileBackground = 'videoTileBackground';
+  static const videoTilePlaceholder = 'videoTilePlaceholder';
+  static const volumeSliderTrack = 'volumeSliderTrack';
+  static const volumeSliderActive = 'volumeSliderActive';
+
   /// Drives the settings screen's picker list and validates palettes.
   static const List<String> all = [
     serverRail,
@@ -100,6 +123,22 @@ abstract final class DiscordSlot {
     inputBackgroundAlt,
     inputBorder,
     inputBorderFocused,
+    voiceConnected,
+    voiceConnecting,
+    voiceError,
+    voiceSpeakingRing,
+    voiceMutedIcon,
+    voiceDeafenedIcon,
+    voiceParticipantRow,
+    voiceParticipantRowHover,
+    voiceControlBar,
+    voiceControlIcon,
+    voiceControlIconActive,
+    voiceControlDanger,
+    videoTileBackground,
+    videoTilePlaceholder,
+    volumeSliderTrack,
+    volumeSliderActive,
   ];
 
   /// Human-readable labels for a future settings UI.
@@ -186,6 +225,24 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
   Color get inputBackgroundAlt => slot(DiscordSlot.inputBackgroundAlt);
   Color get inputBorder => slot(DiscordSlot.inputBorder);
   Color get inputBorderFocused => slot(DiscordSlot.inputBorderFocused);
+
+  Color get voiceConnected => slot(DiscordSlot.voiceConnected);
+  Color get voiceConnecting => slot(DiscordSlot.voiceConnecting);
+  Color get voiceError => slot(DiscordSlot.voiceError);
+  Color get voiceSpeakingRing => slot(DiscordSlot.voiceSpeakingRing);
+  Color get voiceMutedIcon => slot(DiscordSlot.voiceMutedIcon);
+  Color get voiceDeafenedIcon => slot(DiscordSlot.voiceDeafenedIcon);
+  Color get voiceParticipantRow => slot(DiscordSlot.voiceParticipantRow);
+  Color get voiceParticipantRowHover =>
+      slot(DiscordSlot.voiceParticipantRowHover);
+  Color get voiceControlBar => slot(DiscordSlot.voiceControlBar);
+  Color get voiceControlIcon => slot(DiscordSlot.voiceControlIcon);
+  Color get voiceControlIconActive => slot(DiscordSlot.voiceControlIconActive);
+  Color get voiceControlDanger => slot(DiscordSlot.voiceControlDanger);
+  Color get videoTileBackground => slot(DiscordSlot.videoTileBackground);
+  Color get videoTilePlaceholder => slot(DiscordSlot.videoTilePlaceholder);
+  Color get volumeSliderTrack => slot(DiscordSlot.volumeSliderTrack);
+  Color get volumeSliderActive => slot(DiscordSlot.volumeSliderActive);
 
   /// True when the palette reads as dark, used to pick a [Brightness].
   bool get isDark => chatBackground.computeLuminance() < 0.5;

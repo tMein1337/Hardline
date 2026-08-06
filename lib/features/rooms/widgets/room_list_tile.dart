@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
 import '../../common/unread_badge.dart';
+import '../../voice/call_controller_provider.dart';
+import '../../voice/join_voice_action.dart';
 import '../room_list_item.dart';
 
 /// One row in the channel column.
@@ -79,11 +82,65 @@ class RoomListTile extends StatelessWidget {
                   const SizedBox(width: 4),
                   Icon(Icons.lock, size: 12, color: colors.textFaint),
                 ],
+                if (room.canStartVoice) ...[
+                  const SizedBox(width: 4),
+                  _JoinCallIcon(room: room, rowHovered: hovered),
+                ],
                 if (room.hasMention) ...[
                   const SizedBox(width: 6),
                   UnreadBadge(count: room.highlightCount),
                 ],
               ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The green phone that joins this channel's call.
+///
+/// Sits beside the encryption padlock rather than in the chat header so the
+/// affordance is where the channel is — you can start a call without opening
+/// the room first, which is how a voice channel is supposed to behave.
+class _JoinCallIcon extends ConsumerWidget {
+  const _JoinCallIcon({required this.room, required this.rowHovered});
+
+  final RoomListItem room;
+
+  /// Dimmed until the row is hovered. A saturated green on every channel at
+  /// once would fight the unread badges for attention, which matter more.
+  final bool rowHovered;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final controller = ref.watch(callControllerProvider);
+
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        // Already in this room's call: leaving lives in the voice footer, so a
+        // second control here would be a green phone that does nothing.
+        if (controller.isInCallFor(room.id)) return const SizedBox.shrink();
+
+        return Hoverable(
+          onTap: () => joinVoiceCall(
+            context,
+            ref,
+            room.id,
+            room.voiceJoinability,
+          ),
+          builder: (context, iconHovered) => Padding(
+            // Widens the hit target without changing the row's height.
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Icon(
+              Icons.call,
+              size: 14,
+              color: iconHovered || rowHovered
+                  ? colors.voiceConnected
+                  : colors.voiceConnected.withValues(alpha: 0.5),
             ),
           ),
         );

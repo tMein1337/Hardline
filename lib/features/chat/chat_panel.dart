@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/theme_context.dart';
 import '../rooms/room_list_provider.dart';
 import '../shell/selection_providers.dart';
+import '../voice/widgets/call_stage.dart';
 import 'widgets/chat_header.dart';
 import 'widgets/empty_chat_view.dart';
 import 'widgets/message_composer.dart';
@@ -26,6 +27,9 @@ class ChatPanel extends ConsumerWidget {
       child: Column(
         children: [
           ChatHeader(header: header),
+          // Collapses to nothing unless this room's call is carrying video, so
+          // a text-only room renders exactly as it did before voice existed.
+          CallStage(roomId: roomId),
           Expanded(
             // Keyed by room so switching rooms rebuilds the list state
             // (scroll position, controller) instead of reusing the old one.

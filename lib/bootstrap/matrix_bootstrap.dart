@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../features/voice/matrix_rtc_membership.dart';
+
 /// Name used for both the SDK client identity and the database file.
 const _clientName = 'matrix_client';
 
@@ -54,6 +56,29 @@ Future<Client> buildMatrixClient({required bool encryptionAvailable}) async {
     _clientName,
     database: database,
     logLevel: kDebugMode ? Level.warning : Level.error,
+    // Rooms start out `partial` and stay that way until their timeline is
+    // opened. While partial, the SDK drops every state event that is not on
+    // this list (`client.dart`, `_updateRoomsByEventUpdate`), and the database
+    // only writes listed types to its preload table (`matrix_sdk_database.dart`)
+    // — so an unlisted type is invisible until `postLoad()` runs. That matters
+    // for two events:
+    //
+    //  * the MatrixRTC membership, or we could not show who is in a call in any
+    //    room the user has not opened, which is the whole point of the voice
+    //    participant list.
+    //  * `m.room.power_levels`, or the "can I join this call?" check would read
+    //    a missing state event and answer wrongly.
+    //
+    // Note this is deliberately NOT `EventTypes.GroupCallMember`: that constant
+    // is `com.famedly.call.member`, a Famedly-only parallel implementation that
+    // no Element client reads or writes. See `matrix_rtc_membership.dart`.
+    //
+    // The SDK adds its own defaults to whatever set we pass, so this extends
+    // rather than replaces them.
+    importantStateEvents: {
+      kCallMemberEventType,
+      EventTypes.RoomPowerLevels,
+    },
     // Moves Olm/Megolm work off the UI thread. The isolate has its own copy of
     // the Rust library state, hence the per-call init hook.
     nativeImplementations: encryptionAvailable

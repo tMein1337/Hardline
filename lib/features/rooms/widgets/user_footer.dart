@@ -5,6 +5,7 @@ import '../../../core/providers/own_profile_provider.dart';
 import '../../../theme/theme_context.dart';
 import '../../auth/session_controller.dart';
 import '../../common/mx_avatar.dart';
+import '../../voice/widgets/voice_settings_dialog.dart';
 
 /// The signed-in user's strip at the bottom of the channel column.
 class UserFooter extends ConsumerWidget {
@@ -51,6 +52,14 @@ class UserFooter extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Voice settings',
+            iconSize: 18,
+            visualDensity: VisualDensity.compact,
+            color: colors.textMuted,
+            onPressed: () => VoiceSettingsDialog.show(context),
+            icon: const Icon(Icons.settings),
           ),
           IconButton(
             tooltip: 'Sign out',

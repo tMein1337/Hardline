@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
+import '../voice/voice_joinability.dart';
+
 /// Everything the room list renders, and nothing else.
 ///
 /// Named `RoomListItem` rather than `RoomSummary` because the Matrix SDK
@@ -22,6 +24,7 @@ class RoomListItem {
     required this.isEncrypted,
     required this.notificationCount,
     required this.highlightCount,
+    required this.voiceJoinability,
   });
 
   final String id;
@@ -36,8 +39,22 @@ class RoomListItem {
   final int notificationCount;
   final int highlightCount;
 
+  /// Whether a call can be joined here, and at what cost.
+  ///
+  /// Part of the snapshot rather than something the tile derives itself: it
+  /// comes from power levels, so a tile computing it would have to watch
+  /// `matrixTickProvider` and every tile would repaint on every sync. Carried
+  /// here it is value-compared like everything else, and a sync that changed
+  /// no permissions notifies nobody.
+  final VoiceJoinability voiceJoinability;
+
   bool get hasUnread => notificationCount > 0;
   bool get hasMention => highlightCount > 0;
+
+  /// Whether to offer a call button at all.
+  bool get canStartVoice =>
+      voiceJoinability == VoiceJoinability.joinable ||
+      voiceJoinability == VoiceJoinability.needsEnabling;
 
   factory RoomListItem.from(Room room) => RoomListItem(
     id: room.id,
@@ -47,6 +64,7 @@ class RoomListItem {
     isEncrypted: room.encrypted,
     notificationCount: room.notificationCount,
     highlightCount: room.highlightCount,
+    voiceJoinability: joinabilityOf(room),
   );
 
   @override
@@ -59,7 +77,8 @@ class RoomListItem {
           isDirect == other.isDirect &&
           isEncrypted == other.isEncrypted &&
           notificationCount == other.notificationCount &&
-          highlightCount == other.highlightCount;
+          highlightCount == other.highlightCount &&
+          voiceJoinability == other.voiceJoinability;
 
   @override
   int get hashCode => Object.hash(
@@ -70,5 +89,6 @@ class RoomListItem {
     isEncrypted,
     notificationCount,
     highlightCount,
+    voiceJoinability,
   );
 }

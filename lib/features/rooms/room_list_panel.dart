@@ -5,6 +5,8 @@ import '../../theme/theme_context.dart';
 import '../shell/selection_providers.dart';
 import '../spaces/space_list_provider.dart';
 import '../spaces/space_summary.dart';
+import '../voice/widgets/voice_channel_participants.dart';
+import '../voice/widgets/voice_status_footer.dart';
 import 'room_list_provider.dart';
 import 'widgets/room_list_header.dart';
 import 'widgets/room_list_tile.dart';
@@ -42,16 +44,26 @@ class RoomListPanel extends ConsumerWidget {
                     itemCount: rooms.length,
                     itemBuilder: (context, index) {
                       final room = rooms[index];
-                      return RoomListTile(
-                        room: room,
-                        selected: room.id == selectedRoomId,
-                        onTap: () => ref
-                            .read(selectedRoomIdsProvider.notifier)
-                            .select(spaceId: spaceId, roomId: room.id),
+                      // The participant list collapses to nothing when no call
+                      // is running, so this Column is a plain tile in the
+                      // overwhelmingly common case.
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          RoomListTile(
+                            room: room,
+                            selected: room.id == selectedRoomId,
+                            onTap: () => ref
+                                .read(selectedRoomIdsProvider.notifier)
+                                .select(spaceId: spaceId, roomId: room.id),
+                          ),
+                          VoiceChannelParticipants(roomId: room.id),
+                        ],
                       );
                     },
                   ),
           ),
+          const VoiceStatusFooter(),
           const UserFooter(),
         ],
       ),
