@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
+import '../../activity/activity_prefs_controller.dart';
 import '../../common/mx_avatar.dart';
 import '../call_controller_provider.dart';
 import '../voice_participant.dart';
@@ -122,6 +123,26 @@ class UserAudioMenu extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 4),
+            // Not an audio control, but this is the menu people already
+            // right-click somebody from, and a second one beside it would be a
+            // menu nobody finds. Hidden for yourself, since following yourself
+            // is refused anyway.
+            if (!participant.isSelf)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: ref
+                    .watch(activityPrefsProvider)
+                    .isFollowing(participant.userId),
+                title: Text('Follow', style: context.text.messageBody),
+                subtitle: Text(
+                  'Show their calls and messages on the Home screen.',
+                  style: context.text.timestamp,
+                ),
+                onChanged: (_) => ref
+                    .read(activityPrefsProvider.notifier)
+                    .toggleFollow(participant.userId),
+              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,

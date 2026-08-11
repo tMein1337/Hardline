@@ -60,6 +60,22 @@ against Element:
 | Encrypted message-key backup | built (as part of setup) |
 | QR verification | out of scope until mobile |
 
+**Stage 5 — activity summary.** Built, awaiting a pass against a second person:
+
+| Feature | State |
+|---|---|
+| Follow people (chat right-click, voice menu, page, settings) | built |
+| Home shows followed people currently in a voice call | built |
+| Home shows followed people typing, live | built |
+| Home shows followed people who typed inside a set window | built |
+| Feed of recent messages from followed people | built |
+| Click an entry to join that call, or to jump to that message | built |
+| Each of the three lists switchable on its own | built |
+| Opt-in history fetch on start-up, plus *Catch up now* | built |
+| Reading a room marks it read, so unread counts can fall | built |
+| Call rings render in the timeline instead of badging invisibly | built |
+| Badges left behind by calls that ended clear themselves | built |
+
 ## Running
 
 ```
@@ -145,13 +161,73 @@ itself. What needs a second client:
    confirm the other participants see you leave. Sign out of one account and
    confirm the app moves to the remaining one rather than to the login screen.
 
-### 3. In the Home menu: Activity Summary
-- Users can Follow other users
-- In the Home menu there is a list of all people you followed which are currently in voicechannels or have recently typed in text channels.
-  - "recent" is defined by a custom set timer via settings
-  - each of this features can be turened off individually
-- Maybe also a list of recent messages sent in channels by followed people
-- every activity can be clicked to bring you directly to the content (connects you to voice call/shows the message in the channel and highlights it)
+### 3. Verify the activity summary
+
+Everything in stage 5 is implemented. What it needs is a second person, because
+almost nothing in it can be triggered by the account watching it — you cannot
+follow yourself, so every list is empty against a single account.
+
+1. **The four follow controls agree.** Follow somebody by right-clicking their
+   name in a chat, unfollow them from the voice participant menu, follow them
+   again from the Activity page, and remove them in Settings → Activity. The
+   four are one list; any of them disagreeing is the bug. Restart, and confirm
+   it survived. Switch accounts and back: the list is per account, and the other
+   account's must not appear.
+2. **Placement.** With Home selected and no channel open, the Activity page
+   fills the chat column. Clicking any channel replaces it. Inside a *space*
+   with no channel open, the old "No room selected" placeholder is still what
+   shows — the summary spans every room, so it belongs to Home alone.
+3. **Voice.** Have them join a call: they appear under *In voice* within a sync,
+   in a room you have never opened. The row's button says *Join* or *Enable &
+   join*, and the second one must still show the power-level consent dialog.
+   Join from there and the row switches to *You are here*.
+4. **Typing.** Have them start typing: the badge appears and clears on its own
+   when they stop, without anything else arriving. Have them send: the row
+   switches to a relative time and the message lands in the feed.
+5. **Jumping.** Click a message row. The channel opens — including switching the
+   rail to its space — scrolls to that message, and washes it in the accent
+   colour for a couple of seconds. Test three cases: a message in the room
+   already open, one in a room in another space, and one far enough back to need
+   a pagination step. A jump that cannot find the event must still mark it
+   rather than silently doing nothing.
+6. **The window really is a window.** Set it to 5 minutes and leave the app
+   alone. Rows must age out **without anything being clicked** — that is the
+   30 second sweep, and it is the only thing keeping "recently active" honest in
+   a room that has gone quiet.
+7. **Toggles.** Turn each of the three off and confirm the sections vanish
+   independently and stay off across a restart.
+8. **Backfill.** With it off, restart after they have said several things in
+   several rooms: only the newest message per room is there. Turn it on — the
+   catch-up runs at once, the progress line counts rooms, and the rest appears.
+   Restart again: complete from the first frame. Check an **encrypted** room
+   specifically — its history must arrive decrypted, and history no key is held
+   for must be absent rather than showing "unable to decrypt" rows. Press *Catch
+   up now* twice quickly and confirm the second press does nothing.
+9. **Nobody followed** is the explainer with an *Add people* button, not four
+   empty headings.
+10. **Read receipts.** Have them send a message that mentions you: a badge
+    appears. Open the room — it clears, and Element shows your read receipt
+    moving. Then scroll **up** into history, have them send another, and confirm
+    the badge does *not* clear until you scroll back down. Minimise the window,
+    have them send one more, and confirm it survives being minimised.
+11. **Dead call rings.** Have them start a call and leave without you joining.
+    The timeline shows *"imtolate started a call"* with a green handset — the
+    badge is now explicable rather than a red 1 over nothing — and within
+    20 seconds or so it clears itself, without the room being opened. Then the
+    safety case: have them send a real message **and** start a call, then leave
+    the call — the badge must **stay**, because a receipt would clear the
+    message too.
+12. **The timeline is not buried.** Join and leave a call a few times and sit in
+    one for several minutes. Exactly one line per call *start* appears; the
+    joins, leaves and two-minute heartbeats must not, or the conversation
+    disappears under call bookkeeping.
+
+### 4. Make custom Themes exportable by a File
+- Users can add/edit/remove themes in their "library" (the three current themes should also apear there by default)
+  - A theme has Information on all the colors and a name
+- Users can Generate ("export") a file with the information of a theme from their library
+- Users can Import such file to add it to their library of themes
+- The format of those files should be documented in this readme
 
 ### second to last Plattform Support
 - Linux
@@ -168,6 +244,192 @@ itself. What needs a second client:
   own database rather than re-authenticated, so the device id survives.
 - A hard kill (Task Manager) cannot withdraw the call membership; it expires on
   its own after a few hours.
+
+### ideas
+- Overlay (like discord overlay)
+- live indication of whos talking (like the circle around the Icon in Discord)
+
+## Activity summary
+
+Notes that are expensive to rediscover. Code lives in `lib/features/activity/`.
+
+### The log exists because the SDK cannot answer the question
+
+"What has been said recently, across every room" has no API. `Room.lastEvent`
+gives exactly one event per room, and anything richer means opening a `Timeline`
+per room — five live stream subscriptions each, for rooms nobody is looking at,
+with decryption running behind them.
+
+So `MessageActivityLog` accumulates the answer instead, from
+`client.onTimelineEvent`, which is every room's timeline **after decryption**.
+Three consequences worth knowing:
+
+- **It starts nearly empty.** Seeding from each room's `lastEvent` costs nothing
+  (the SDK already persists it for the room-list preview) and means a cold start
+  is not blank, but it is one message per room. Everything else fills in as the
+  app runs. That is what the opt-in backfill in settings is for.
+- **It is not persisted, deliberately.** Writing it would put decrypted message
+  bodies into `shared_preferences`. Re-asking the server is the better trade.
+- **The record holds no names.** `MessageRecord` stores ids and a preview;
+  display names and avatars are resolved when a row is drawn. Matrix loads room
+  members lazily, so a message captured during the first sync usually knows its
+  sender only as `@alice:example.org` — freezing that in would leave the summary
+  showing raw ids for the rest of the session.
+
+### The backfill filters server-side, which is what makes it cheap
+
+Each room gets one `/messages` call carrying a filter with **`senders`** set to
+the follow list, and `types` set to both `m.room.message` *and*
+`m.room.encrypted`. Both types are needed: in an encrypted room the wire type is
+the latter, so filtering on `m.room.message` alone comes back empty from exactly
+the rooms most worth fetching. Because the server does the filtering, a limit of
+20 events per room is spent entirely on people being followed rather than on the
+room's general traffic.
+
+Decryption is `Event.fromMatrixEvent` then `client.encryption.decryptRoomEvent`,
+the same sequence `Room._refreshLastEvent` uses internally. History no megolm
+session is held for comes back still typed `m.room.encrypted` and is dropped —
+an undecryptable placeholder in a summary is worse than an absence, because
+there is nothing to be done about it.
+
+The run is **sequential**. Tens of `/messages` calls fired at once is how you
+meet `M_LIMIT_EXCEEDED`; the user opted into a slower start, not into being
+rate-limited. Per-room failures log and continue.
+
+### Prefs are read once, not watched
+
+`MessageActivityLog.build()` uses `ref.read` on the activity prefs rather than
+`ref.watch`. Watching would tear the whole notifier down — subscription, records
+and all — every time a toggle was flipped in settings, which is the one moment
+somebody is definitely looking at the page. Live changes reach the feature
+through the derived providers, which do watch.
+
+### Something has to start it
+
+The log is not auto-dispose, but a Riverpod provider is still built lazily on
+first read. Without something reaching for it at start-up it would only begin
+collecting when the page was first opened, and so be empty every time anyone
+looked at it. `ActivityLogKeepAlive` is a zero-sized widget in the shell that
+does this with `ref.listen`, not `ref.watch`: watching would rebuild the shell
+on every message in every room, while listening still registers a real
+subscription — which is what makes the provider rebuild when the client is
+swapped on an account switch, and its `onDispose` fire to cancel the old stream.
+
+### Scrolling to a message without a positioned-list package
+
+The message list is a `ListView.builder` with no fixed extent, so there is no
+offset to scroll to. `MessageList._reveal` does it in three steps: wait for the
+timeline's first page (listener-driven, because opening a cold room takes a
+second and frame-polling would burn a core to learn nothing), paginate until the
+event is loaded (capped — a "recent" message is almost always on the first
+page), then aim at `maxScrollExtent * index / items.length` and let
+`Scrollable.ensureVisible` correct it once the real row exists.
+
+The estimate is the builder delegate's own extrapolation from the children built
+so far, which is exactly the average-row guess wanted here.
+
+An event that is never found is **still highlighted**. The wash is what
+identifies the message when the user scrolls to it themselves, and marking
+nothing would make a failed jump indistinguishable from a jump to the wrong
+place.
+
+The highlight is accent-coloured and deliberately **not** the mention slots:
+"someone said your name" and "this is the message you asked for" are different
+facts, and sharing a colour would make every jump look like a mention.
+
+### Unread counts come from the server, and only a receipt lowers them
+
+`room.highlightCount` is not computed here — it is `unread_notifications.
+highlight_count` off the sync, copied through by `RoomListItem.from`. The
+homeserver lowers it when a read receipt moves past the events that raised it,
+and at nothing else.
+
+Nothing in this app sent one until now, which made every count **monotonic**.
+Opening a room did nothing; a mention received once stayed badged until the same
+account read that room in another client. `ReadReceiptSender` fixes that, with
+two conditions that are the whole design:
+
+- **At the newest end of the list.** Somebody scrolled up into history has not
+  read what arrived underneath them.
+- **The window is not hidden.** An unfocused but visible window still counts —
+  on desktop that is a second monitor, which people do read — but a minimised or
+  tray-ed one does not.
+
+It also refuses to post a receipt for a room the server already considers read,
+or the app would fire one on every room switch.
+
+### A call ring is a doorbell that nobody withdraws
+
+This is what put a red 1 on a room where nothing was said.
+
+Starting a call sends **two** things. The membership state event is the one this
+app reads. The other is a ring — `org.matrix.msc4075.rtc.notification`, an
+ordinary timeline event carrying `m.mentions: {room: true}`. That mention is not
+decoration: it makes the homeserver's `@room` push rule fire, which sets a
+highlight tweak, which is a badge.
+
+Three facts then conspire:
+
+- **Leaving does not withdraw it.** Ending a call clears the *membership* to
+  `{}`. The ring stays in the timeline for good.
+- **Nothing rendered it.** `_isRenderable` in `message_grouping.dart` admitted
+  `m.room.message` and seven state types. A ring is neither, so the badge
+  counted an event the timeline refused to draw — a red 1 over an empty-looking
+  room, with nothing on screen to explain it.
+- **A ring has a lifetime.** MSC4075 has the sender state one; Element sends
+  30 s. Past that it is describing something that already happened.
+
+Two changes came out of that, and they are separate fixes to separate halves.
+
+**The ring is now drawn**, as a system line — *"Alice started a call"*, with the
+same green handset every other call affordance uses. The rule it establishes is
+that **an event which can badge a room has to be visible in it**.
+
+The call *membership* stays excluded, and that asymmetry is the point: it is
+state, it changes on every join, leave and two-minute heartbeat, and drawing it
+would bury the conversation under bookkeeping the room list already shows.
+`isRenderableType` was split out of `_isRenderable` so both halves can be
+pinned by a test without needing a `Room`, a `Client` and a database.
+
+The wording is ours because the SDK has none for the type — it renders "Unknown
+event org.matrix.msc4075.rtc.notification" — and, unlike a member event, the
+body carries no actor, so the name is prefixed by hand. It deliberately does not
+say *video* or *audio* call despite the ring carrying `m.call.intent`: in
+captured traffic that field regularly contradicts the sender's own call
+membership seconds later, so naming it would be confidently wrong about half the
+time.
+
+**The badge is now cleared** once the call is over, which is the rest of this
+section.
+
+`StaleRingSweeper` clears those. The delicate part is that a read receipt also
+clears everything *before* the event it points at, so guessing is not an option
+— which is why it asks **`/notifications`**, the one endpoint that says which
+events actually produced each badge. `staleRingReceiptTarget` then refuses
+unless it can prove the badge is only dead rings: nothing unread that is not a
+ring, no ring still inside its lifetime, no live call in the room, and the
+server's own highlight count no higher than the notifications it could see. Any
+one of those failing leaves the room alone.
+
+The receipt it sends is **private** (`m.read.private`). That clears our count
+server-side, which is the point, while announcing nothing to the room —
+broadcasting "read" for a doorbell nobody answered would be a claim about
+messages that were never sent — and leaving `m.fully_read` where it was, so the
+unread line in another client does not move.
+
+It runs off the two clocks that already exist: the sync tick catches a call
+*ending*, and the 30 second expiry tick catches a ring simply *aging out*, which
+arrives as nothing at all because the caller may never have hung up. It
+throttles itself to one request per 20 seconds and skips the network entirely
+unless some room actually has a highlight, which is almost always.
+
+### One timer, two questions
+
+`voiceExpiryTickProvider` was written so a call membership could expire without
+a sync arriving. "Spoke in the last 30 minutes" stops being true the same way —
+silently, in a room producing no traffic — so the activity providers watch the
+same 30 second sweep rather than adding a second timer. It remains the only
+timer-driven provider in the app.
 
 ## Accounts and verification
 

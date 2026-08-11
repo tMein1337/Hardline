@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/theme_context.dart';
+import '../activity/activity_page.dart';
 import '../rooms/room_list_provider.dart';
 import '../shell/selection_providers.dart';
+import '../spaces/space_summary.dart';
 import '../voice/widgets/call_stage.dart';
 import 'widgets/chat_drop_target.dart';
 import 'widgets/chat_header.dart';
@@ -18,10 +20,10 @@ class ChatPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final roomId = ref.watch(selectedRoomIdProvider);
-    if (roomId == null) return const EmptyChatView();
+    if (roomId == null) return const _NoRoomView();
 
     final header = ref.watch(roomHeaderProvider(roomId));
-    if (header == null) return const EmptyChatView();
+    if (header == null) return const _NoRoomView();
 
     return Container(
       color: context.colors.chatBackground,
@@ -59,5 +61,22 @@ class ChatPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// What fills the column when no room is open.
+///
+/// On Home that is the activity summary, which is the whole point of following
+/// people: the moment you have nothing else to look at is the moment you want
+/// to know where everyone is. Inside a space it stays the plain placeholder —
+/// the summary spans every room, so scoping it to one space would either lie
+/// about what it covers or repeat itself on every rail entry.
+class _NoRoomView extends ConsumerWidget {
+  const _NoRoomView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isHome = ref.watch(selectedSpaceIdProvider) == kHomeSpaceId;
+    return isHome ? const ActivityPage() : const EmptyChatView();
   }
 }

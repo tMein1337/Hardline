@@ -5,6 +5,7 @@ import '../chat/chat_panel.dart';
 import '../rooms/room_list_panel.dart';
 import '../settings/verification/incoming_verification.dart';
 import '../spaces/space_rail.dart';
+import 'widgets/background_workers.dart';
 import 'widgets/shell_divider.dart';
 
 /// The main three-column layout: space rail, room list, chat.
@@ -24,6 +25,11 @@ class HomeShell extends StatelessWidget {
         backgroundColor: context.colors.chatBackground,
         body: const Row(
           children: [
+            // Zero-sized. Starts the activity log so it collects from the first
+            // sync rather than from the first time somebody opens the Home
+            // screen, and drives the sweep that clears badges left behind by
+            // calls that have ended.
+            BackgroundWorkers(),
             SpaceRail(),
             ShellDivider(),
             RoomListPanel(),

@@ -41,6 +41,28 @@ String formatMessageTimestamp(DateTime time, {DateTime? now}) {
   return '${formatShortDate(time)} $clock';
 }
 
+/// `just now`, `4 min ago`, `2 h ago`, `yesterday`, or `04/08/2026`.
+///
+/// For lists that answer "how fresh is this" rather than "when exactly was
+/// this". Coarse on purpose: to the minute below an hour, to the hour below a
+/// day, and a date beyond that, because nobody reads "3 h 47 min ago" as
+/// anything more informative than "this afternoon".
+String formatRelativeTime(DateTime time, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final elapsed = reference.difference(time);
+
+  // A clock skewed against the homeserver's can put an event a few seconds in
+  // the future. "in 4 seconds" reads as a bug, where "just now" is both true
+  // enough and unremarkable.
+  if (elapsed.inSeconds < 60) return 'just now';
+  if (elapsed.inMinutes < 60) return '${elapsed.inMinutes} min ago';
+  if (elapsed.inHours < 24) return '${elapsed.inHours} h ago';
+  if (_isSameDay(time, reference.subtract(const Duration(days: 1)))) {
+    return 'yesterday';
+  }
+  return formatShortDate(time);
+}
+
 /// `Today`, `Yesterday`, or `4 August 2026` — for the date rule between days.
 String formatDateSeparator(DateTime date, {DateTime? now}) {
   final reference = now ?? DateTime.now();

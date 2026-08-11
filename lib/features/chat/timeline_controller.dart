@@ -107,6 +107,32 @@ class TimelineController extends ChangeNotifier {
     _items = timeline == null ? const [] : buildTimelineItems(timeline);
   }
 
+  /// The newest event a read receipt may point at, or null if there is none.
+  ///
+  /// Skips local echoes. Until the server has accepted a message its "event id"
+  /// is the transaction id we invented, and a receipt for one of those is
+  /// rejected — so the newest row on screen is regularly not the newest thing
+  /// that can be marked read.
+  String? get newestSyncedEventId {
+    for (final item in _items) {
+      final event = switch (item) {
+        MessageItem(:final event) => event,
+        SystemItem(:final event) => event,
+        DateSeparatorItem() => null,
+      };
+      if (event == null || !event.status.isSent) continue;
+      return event.eventId;
+    }
+    return null;
+  }
+
+  /// Where [eventId] sits in [items], or -1 if it is not loaded.
+  ///
+  /// Index into the *display* rows, not the timeline's events: the two differ
+  /// by the date separators, and a caller scrolling to a row needs the former.
+  int indexOfEvent(String eventId) =>
+      _items.indexWhere((item) => item.key == eventId);
+
   /// Loads an older page. Safe to call repeatedly; overlapping calls are
   /// ignored.
   Future<void> loadMore() async {

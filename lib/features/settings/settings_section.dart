@@ -10,6 +10,7 @@ enum SettingsSection {
   account('My Account', Icons.person_outline, group: SettingsGroup.user),
   sessions('Sessions & Security', Icons.devices, group: SettingsGroup.user),
   voice('Voice & Video', Icons.mic_none, group: SettingsGroup.app),
+  activity('Activity', Icons.bolt, group: SettingsGroup.app),
   appearance('Appearance', Icons.palette_outlined, group: SettingsGroup.app);
 
   const SettingsSection(this.label, this.icon, {required this.group});

@@ -3,6 +3,7 @@ import 'package:matrix/matrix.dart';
 
 import '../../../core/util/time_format.dart';
 import '../../../theme/theme_context.dart';
+import '../../voice/matrix_rtc_membership.dart';
 
 const _localizations = MatrixDefaultLocalizations();
 
@@ -12,19 +13,31 @@ class SystemEventTile extends StatelessWidget {
 
   final Event event;
 
+  bool get _isRing => kRtcRingEventTypes.contains(event.type);
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final metrics = context.metrics;
 
-    // The SDK phrases these ("Alice joined the chat"), including the actor.
-    final text = event.calcLocalizedBodyFallback(
-      _localizations,
-      withSenderNamePrefix: false,
-      hideReply: true,
-      hideEdit: true,
-      plaintextBody: true,
-    );
+    final text = _isRing
+        // The SDK has no phrasing for this — it would render "Unknown event
+        // org.matrix.msc4075.rtc.notification" — and unlike a member event the
+        // body carries no actor, so the name is prefixed here.
+        //
+        // Deliberately not "video call" or "audio call" even though the ring
+        // carries `m.call.intent`: it is regularly the opposite of what the
+        // sender's own call membership then advertises, so naming it would be
+        // confidently wrong about half the time.
+        ? '${event.senderFromMemoryOrFallback.calcDisplayname()} started a call'
+        // The SDK phrases the rest ("Alice joined the chat"), actor included.
+        : event.calcLocalizedBodyFallback(
+            _localizations,
+            withSenderNamePrefix: false,
+            hideReply: true,
+            hideEdit: true,
+            plaintextBody: true,
+          );
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -37,9 +50,12 @@ class SystemEventTile extends StatelessWidget {
           SizedBox(
             width: metrics.avatarSize,
             child: Icon(
-              _iconFor(event.type),
+              _isRing ? Icons.call : _iconFor(event.type),
               size: 16,
-              color: colors.textFaint,
+              // Tinted like every other call affordance in the app. A call
+              // starting is worth spotting while scrolling past, where a topic
+              // change is not.
+              color: _isRing ? colors.voiceConnected : colors.textFaint,
             ),
           ),
           SizedBox(width: metrics.avatarGutter),

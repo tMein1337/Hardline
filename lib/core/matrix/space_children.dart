@@ -30,3 +30,23 @@ Set<String> allSpaceChildIds(Client client) => {
   for (final room in client.rooms)
     if (room.isSpace) ...childRoomIdsOf(room),
 };
+
+/// The space claiming [roomId], or null when none does.
+///
+/// The inverse of how [allSpaceChildIds] builds the Home bucket, and the answer
+/// anything that wants to *select* a room needs: the room list is keyed by
+/// space, so opening a room means opening its space first, or the tile is not
+/// in the column at all.
+///
+/// A room claimed by several spaces resolves to the first, matching the rail's
+/// own ordering. Null covers a direct chat, and a room added to a space without
+/// a `via` list — both of which the room list files under Home. Callers
+/// substitute `kHomeSpaceId`; naming it here would make this core file depend
+/// on the space feature that defines it.
+String? spaceIdOfRoom(Client client, String roomId) {
+  for (final room in client.rooms) {
+    if (!room.isSpace) continue;
+    if (childRoomIdsOf(room).contains(roomId)) return room.id;
+  }
+  return null;
+}

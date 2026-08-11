@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
 import 'package:matrix_client/features/chat/message_grouping.dart';
+import 'package:matrix_client/features/voice/matrix_rtc_membership.dart';
 
 /// Base instant for readable relative timestamps.
 final _t0 = DateTime(2026, 8, 4, 12, 0);
@@ -130,6 +131,38 @@ void main() {
       ];
 
       expect(computeGroupingFlags(events), hasLength(events.length));
+    });
+  });
+
+  group('isRenderableType', () {
+    test('messages and the state events worth showing', () {
+      expect(isRenderableType(EventTypes.Message), isTrue);
+      expect(isRenderableType(EventTypes.RoomMember), isTrue);
+      expect(isRenderableType(EventTypes.RoomTopic), isTrue);
+      expect(isRenderableType(EventTypes.Encryption), isTrue);
+    });
+
+    // A ring badges the room via `m.mentions: {room: true}`. Drawing nothing
+    // for it is what produced a red 1 over an apparently empty conversation,
+    // with nothing on screen to explain it. All three spellings, because the
+    // MSC was renamed twice and clients in the wild still send the old ones.
+    test('every spelling of the call ring renders', () {
+      for (final type in kRtcRingEventTypes) {
+        expect(isRenderableType(type), isTrue, reason: type);
+      }
+    });
+
+    // The one that must stay excluded. Memberships change on every join, leave
+    // and two-minute heartbeat; rendering them would bury the conversation
+    // under call bookkeeping the room list already shows.
+    test('the call membership stays out of the timeline', () {
+      expect(isRenderableType(kCallMemberEventType), isFalse);
+    });
+
+    test('ordinary room noise stays out', () {
+      expect(isRenderableType(EventTypes.RoomPowerLevels), isFalse);
+      expect(isRenderableType('m.reaction'), isFalse);
+      expect(isRenderableType('m.receipt'), isFalse);
     });
   });
 }

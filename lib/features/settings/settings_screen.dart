@@ -6,6 +6,7 @@ import '../../theme/theme_context.dart';
 import '../accounts/account_actions.dart';
 import '../shell/widgets/shell_divider.dart';
 import 'panes/account_pane.dart';
+import 'panes/activity_pane.dart';
 import 'panes/appearance_pane.dart';
 import 'panes/sessions_pane.dart';
 import 'panes/voice_pane.dart';
@@ -95,6 +96,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     SettingsSection.account => const AccountPane(),
     SettingsSection.sessions => const SessionsPane(),
     SettingsSection.voice => const VoicePane(),
+    SettingsSection.activity => const ActivityPane(),
     SettingsSection.appearance => const AppearancePane(),
   };
 }

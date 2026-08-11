@@ -12,6 +12,59 @@ const String kCallMemberEventType = 'org.matrix.msc3401.call.member';
 /// The MatrixRTC "slot"/application id for ordinary voice+video calls.
 const String kCallApplication = 'm.call';
 
+/// The timeline events a client sends to make everyone else's phone ring.
+///
+/// Three spellings because the MSC was renamed twice and clients in the wild
+/// still send all of them. This is **not** the membership: a ring is an
+/// ordinary timeline event that says "a call is starting, now", and it is what
+/// actually produces the unread badge — Element sends it carrying
+/// `m.mentions: {room: true}`, so the homeserver's `@room` push rule gives it a
+/// highlight tweak and counts it against the room.
+///
+/// Nothing here renders them, which is why a call can leave a room showing a
+/// red 1 with an apparently empty timeline.
+const Set<String> kRtcRingEventTypes = {
+  'org.matrix.msc4075.rtc.notification',
+  'org.matrix.msc4075.call.notify',
+  'm.call.notify',
+};
+
+/// How long a ring is meant to stand, absent an explicit `lifetime`.
+///
+/// MSC4075 has the sender state it; Element sends 30 s. A ring is a *doorbell*,
+/// not a message — past its lifetime it is describing an event that has already
+/// happened, and there is nothing left to answer.
+const Duration kDefaultRingLifetime = Duration(seconds: 30);
+
+/// Whether a ring has stopped meaning anything.
+///
+/// True once its own lifetime has run out. Note this deliberately takes the
+/// content rather than an `Event`: the ring usually has to be judged from a
+/// `/notifications` response, where there is no `Room` to hang an `Event` on.
+///
+/// `sender_ts` is preferred over the event's `origin_server_ts` because it is
+/// what MSC4075 defines the lifetime against, but it is optional, so the
+/// caller's timestamp is the fallback.
+bool isRingExpired(
+  Map<String, Object?> content, {
+  required DateTime originServerTs,
+  DateTime? now,
+}) {
+  final reference = now ?? DateTime.now();
+
+  final senderTs = content['sender_ts'];
+  final sent = senderTs is int
+      ? DateTime.fromMillisecondsSinceEpoch(senderTs)
+      : originServerTs;
+
+  final lifetimeMs = content['lifetime'];
+  final lifetime = lifetimeMs is int && lifetimeMs > 0
+      ? Duration(milliseconds: lifetimeMs)
+      : kDefaultRingLifetime;
+
+  return reference.isAfter(sent.add(lifetime));
+}
+
 /// How long a published membership stays valid, absent an explicit `expires`.
 const Duration kDefaultMembershipLifetime = Duration(hours: 4);
 

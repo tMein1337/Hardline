@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
+import '../voice/matrix_rtc_membership.dart';
 import 'message_item.dart';
 
 /// How far apart two messages from the same sender may be and still be drawn as
@@ -106,9 +107,30 @@ bool _isRenderable(Event event) {
   }
   if (event.redacted) return false;
 
-  return event.type == EventTypes.Message ||
-      _systemEventTypes.contains(event.type);
+  return isRenderableType(event.type);
 }
+
+/// Whether an event of this type gets a row at all.
+///
+/// Split from [_isRenderable] so it can be tested without a `Room`, a `Client`
+/// and a database, the same reason [computeGroupingFlags] takes plain records.
+///
+/// The MatrixRTC ring is here for a specific reason. It carries
+/// `m.mentions: {room: true}`, so the homeserver gives it a highlight and the
+/// room gets an unread badge — while this list, which admitted only messages
+/// and state, drew nothing. The result was a red 1 over an apparently empty
+/// conversation, with no way to find out what caused it. An event that can
+/// badge a room has to be visible in it.
+///
+/// The call **membership** is deliberately still excluded. It is state, it
+/// changes on every join, leave and two-minute heartbeat, and rendering it
+/// would bury the conversation under call bookkeeping — the room list already
+/// shows who is in a call.
+@visibleForTesting
+bool isRenderableType(String type) =>
+    type == EventTypes.Message ||
+    _systemEventTypes.contains(type) ||
+    kRtcRingEventTypes.contains(type);
 
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;

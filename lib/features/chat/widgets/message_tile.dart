@@ -3,9 +3,13 @@ import 'package:matrix/matrix.dart';
 
 import '../../../core/util/time_format.dart';
 import '../../../theme/theme_context.dart';
+import '../../activity/widgets/user_context_menu.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
 import 'message_body.dart';
+
+/// How long the jump-to wash takes to appear and to fade.
+const _highlightFade = Duration(milliseconds: 400);
 
 /// A chat message row.
 ///
@@ -18,10 +22,22 @@ class MessageTile extends StatelessWidget {
     super.key,
     required this.event,
     required this.showHeader,
+    this.highlighted = false,
+    this.anchorKey,
   });
 
   final Event event;
   final bool showHeader;
+
+  /// Whether this is the message somebody jumped to. Washed rather than
+  /// outlined, and fades on its own — see `message_list.dart`.
+  final bool highlighted;
+
+  /// Scroll target, set only on the highlighted row.
+  ///
+  /// Cannot be the widget's own `key`: that is already the event id, which is
+  /// what keeps element identity stable as the list is rebuilt.
+  final GlobalKey? anchorKey;
 
   @override
   Widget build(BuildContext context) {
@@ -36,10 +52,20 @@ class MessageTile extends StatelessWidget {
     return Hoverable(
       cursor: SystemMouseCursors.basic,
       builder: (context, hovered) {
-        return Container(
-          color: isMention
-              ? (hovered ? colors.mentionHoverBackground : colors.mentionBackground)
-              : (hovered ? colors.messageHover : Colors.transparent),
+        // Deliberately not the mention slots. "Someone said your name" and
+        // "this is the message you asked for" are different facts, and sharing
+        // a colour would make a jump look like a mention.
+        final background = highlighted
+            ? colors.accent.withValues(alpha: hovered ? 0.22 : 0.16)
+            : isMention
+            ? (hovered ? colors.mentionHoverBackground : colors.mentionBackground)
+            : (hovered ? colors.messageHover : Colors.transparent);
+
+        return AnimatedContainer(
+          key: anchorKey,
+          duration: _highlightFade,
+          curve: Curves.easeOut,
+          color: background,
           padding: EdgeInsets.only(
             left: metrics.contentPadding,
             right: metrics.contentPadding,
@@ -49,22 +75,28 @@ class MessageTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // The mention bar Discord draws down the left edge.
-              if (isMention)
+              // The mention bar Discord draws down the left edge, reused for the
+              // jump target so the row is findable while scrolling past.
+              if (isMention || highlighted)
                 Container(
                   width: 2,
                   constraints: const BoxConstraints(minHeight: 20),
-                  color: colors.mentionBar,
+                  color: highlighted ? colors.accent : colors.mentionBar,
                   margin: const EdgeInsets.only(right: 6),
                 ),
               SizedBox(
                 width: metrics.avatarSize,
                 child: showHeader
-                    ? MxAvatar(
-                        name: senderName,
-                        seed: event.senderId,
-                        mxcUri: sender.avatarUrl?.toString(),
-                        size: metrics.avatarSize,
+                    ? _SenderTarget(
+                        event: event,
+                        senderName: senderName,
+                        sender: sender,
+                        child: MxAvatar(
+                          name: senderName,
+                          seed: event.senderId,
+                          mxcUri: sender.avatarUrl?.toString(),
+                          size: metrics.avatarSize,
+                        ),
                       )
                     // Continuation: the gutter shows the time on hover only.
                     : Opacity(
@@ -87,11 +119,16 @@ class MessageTile extends StatelessWidget {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Flexible(
-                            child: Text(
-                              senderName,
-                              style: context.text.username,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            child: _SenderTarget(
+                              event: event,
+                              senderName: senderName,
+                              sender: sender,
+                              child: Text(
+                                senderName,
+                                style: context.text.username,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -113,6 +150,38 @@ class MessageTile extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Right-click on a sender's avatar or name opens what can be done about them.
+///
+/// Secondary tap only: left-clicking a name is how you select text, and taking
+/// that over to open a dialog would break copying a message.
+class _SenderTarget extends StatelessWidget {
+  const _SenderTarget({
+    required this.event,
+    required this.senderName,
+    required this.sender,
+    required this.child,
+  });
+
+  final Event event;
+  final String senderName;
+  final User sender;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTap: () => UserContextMenu.show(
+        context,
+        userId: event.senderId,
+        displayName: senderName,
+        avatarMxc: sender.avatarUrl?.toString(),
+      ),
+      child: child,
     );
   }
 }
