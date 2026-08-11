@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
-import '../audio_devices_provider.dart';
-import '../call_controller_provider.dart';
-import '../voice_prefs_controller.dart';
-import '../voice_prefs_state.dart';
+import '../../voice/audio_devices_provider.dart';
+import '../../voice/call_controller_provider.dart';
+import '../../voice/voice_prefs_controller.dart';
+import '../../voice/voice_prefs_state.dart';
+import '../widgets/settings_layout.dart';
 
 /// Voice & video settings: which microphone to capture and where to play.
 ///
@@ -15,95 +16,89 @@ import '../voice_prefs_state.dart';
 /// while every other part of the stack reports success. Being able to choose,
 /// and having that choice remembered, is what makes calls work at all on a
 /// machine with more than one sound device.
-class VoiceSettingsDialog extends ConsumerWidget {
-  const VoiceSettingsDialog({super.key});
-
-  static Future<void> show(BuildContext context) => showDialog(
-    context: context,
-    builder: (context) => const VoiceSettingsDialog(),
-  );
+class VoicePane extends ConsumerWidget {
+  const VoicePane({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
     final devices = ref.watch(audioDevicesProvider);
     final prefs = ref.watch(voicePrefsProvider);
 
-    return AlertDialog(
-      backgroundColor: colors.floatingSurface,
-      title: Text('Voice Settings', style: context.text.title),
-      content: SizedBox(
-        width: 420,
-        child: devices.when(
+    return SettingsPane(
+      title: 'Voice & Video',
+      children: [
+        devices.when(
           loading: () => const Padding(
             padding: EdgeInsets.all(24),
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (error, _) => Text(
-            'Could not read the audio devices.\n$error',
-            style: context.text.subtitle,
+          error: (error, _) => SettingsCard(
+            child: Text(
+              'Could not read the audio devices.\n$error',
+              style: context.text.subtitle,
+            ),
           ),
-          data: (data) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _DeviceSection(
-                label: 'Microphone',
-                icon: Icons.mic,
-                devices: data.inputs.items,
-                selected: resolveDevice(prefs.inputDevice, data.inputs.items),
-                onChanged: (device) async {
-                  await ref
-                      .read(voicePrefsProvider.notifier)
-                      .setInputDevice(device);
-                  await ref.read(callControllerProvider).applyAudioDevices();
-                },
-              ),
-              const SizedBox(height: 16),
-              _DeviceSection(
-                label: 'Output',
-                icon: Icons.headphones,
-                devices: data.outputs.items,
-                selected: resolveDevice(prefs.outputDevice, data.outputs.items),
-                onChanged: (device) async {
-                  await ref
-                      .read(voicePrefsProvider.notifier)
-                      .setOutputDevice(device);
-                  await ref.read(callControllerProvider).applyAudioDevices();
-                },
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Changing the microphone during a call republishes it, so '
-                'others may hear a brief gap.',
-                style: context.text.timestamp,
-              ),
-              const Divider(height: 24),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                value: prefs.shareSystemAudio,
-                title: Text(
-                  'Share system audio when sharing a screen',
-                  style: context.text.messageBody,
+          data: (data) => SettingsCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DeviceSection(
+                  label: 'Microphone',
+                  icon: Icons.mic,
+                  devices: data.inputs.items,
+                  selected: resolveDevice(prefs.inputDevice, data.inputs.items),
+                  onChanged: (device) async {
+                    await ref
+                        .read(voicePrefsProvider.notifier)
+                        .setInputDevice(device);
+                    await ref.read(callControllerProvider).applyAudioDevices();
+                  },
                 ),
-                subtitle: Text(
-                  'Sends the audio of what you share. On speakers this can '
-                  'echo the others back to them — headphones avoid that.',
+                const SizedBox(height: 16),
+                _DeviceSection(
+                  label: 'Output',
+                  icon: Icons.headphones,
+                  devices: data.outputs.items,
+                  selected: resolveDevice(
+                    prefs.outputDevice,
+                    data.outputs.items,
+                  ),
+                  onChanged: (device) async {
+                    await ref
+                        .read(voicePrefsProvider.notifier)
+                        .setOutputDevice(device);
+                    await ref.read(callControllerProvider).applyAudioDevices();
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Changing the microphone during a call republishes it, so '
+                  'others may hear a brief gap.',
                   style: context.text.timestamp,
                 ),
-                onChanged: (value) => ref
-                    .read(voicePrefsProvider.notifier)
-                    .setShareSystemAudio(value),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text('Close', style: TextStyle(color: colors.textMuted)),
+        const SizedBox(height: 24),
+        const SettingsLabel('Screen sharing'),
+        SettingsCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: SwitchListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            value: prefs.shareSystemAudio,
+            title: Text(
+              'Share system audio when sharing a screen',
+              style: context.text.messageBody,
+            ),
+            subtitle: Text(
+              'Sends the audio of what you share. On speakers this can echo '
+              'the others back to them — headphones avoid that.',
+              style: context.text.timestamp,
+            ),
+            onChanged: (value) =>
+                ref.read(voicePrefsProvider.notifier).setShareSystemAudio(value),
+          ),
         ),
       ],
     );

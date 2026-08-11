@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/injected_providers.dart';
 import '../../theme/theme_context.dart';
+import '../accounts/account_actions.dart';
+import '../accounts/active_client.dart';
 import 'login_controller.dart';
 import 'widgets/login_card.dart';
 import 'widgets/login_text_field.dart';
@@ -12,7 +14,33 @@ import 'widgets/login_text_field.dart';
 const _lastHomeserverKey = 'last_homeserver';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.pending});
+
+  /// Set when this screen is adding a *second* account rather than signing in.
+  ///
+  /// The difference is which client the credentials go to: an added account
+  /// authenticates into a database of its own, built before the login, so that
+  /// the account being left keeps its session intact.
+  final PendingLogin? pending;
+
+  /// Pushes the add-account flow, tearing the throwaway session down again if
+  /// the user backs out.
+  static Future<void> addAccount(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final actions = ref.read(accountActionsProvider.notifier);
+    final pending = await actions.beginAddAccount();
+    if (!context.mounted) {
+      await actions.cancelAddAccount(pending);
+      return;
+    }
+
+    final added = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => LoginScreen(pending: pending)),
+    );
+    if (added != true) await actions.cancelAddAccount(pending);
+  }
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -40,18 +68,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
+    final pending = widget.pending;
     final homeserver = _homeserver.text.trim();
-    await ref
+    final ok = await ref
         .read(loginControllerProvider.notifier)
         .signIn(
           homeserver: homeserver,
           username: _username.text,
           password: _password.text,
+          target: pending?.client,
         );
 
     if (homeserver.isNotEmpty) {
       await ref.read(prefsProvider).setString(_lastHomeserverKey, homeserver);
     }
+
+    // A first login moves the router on its own, driven by the login-state
+    // stream. An *added* account does not: the live client has not changed
+    // until we say so.
+    if (!ok || pending == null) return;
+    await ref.read(accountActionsProvider.notifier).completeAddAccount(pending);
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -59,6 +96,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final colors = context.colors;
     final state = ref.watch(loginControllerProvider);
     final encryptionAvailable = ref.watch(encryptionAvailableProvider);
+    final adding = widget.pending != null;
 
     return Scaffold(
       backgroundColor: colors.chatBackground,
@@ -68,13 +106,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Welcome back!',
+              adding ? 'Add an account' : 'Welcome back!',
               textAlign: TextAlign.center,
               style: context.text.title.copyWith(fontSize: 24),
             ),
             const SizedBox(height: 8),
             Text(
-              "We're so excited to see you again",
+              adding
+                  ? 'Signing in here does not sign you out of the account you '
+                        'are using now.'
+                  : "We're so excited to see you again",
               textAlign: TextAlign.center,
               style: context.text.subtitle,
             ),
@@ -123,6 +164,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     )
                   : const Text('Log In'),
             ),
+
+            if (adding) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: state.busy
+                    ? null
+                    : () => Navigator.of(context).pop(false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: colors.textMuted),
+                ),
+              ),
+            ],
 
             if (!encryptionAvailable) ...[
               const SizedBox(height: 20),

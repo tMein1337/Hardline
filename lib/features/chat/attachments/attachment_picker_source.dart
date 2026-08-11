@@ -19,6 +19,23 @@ Future<List<String>> pickAttachmentPaths() async {
   return [for (final file in files) file.path];
 }
 
+/// Opens the system file dialog filtered to images. Null when the user cancels.
+///
+/// Used by the avatar picker rather than [pickAttachmentPaths] because a
+/// homeserver rejects a non-image avatar after the upload has already happened —
+/// filtering here turns that into a dialog that simply does not offer the file.
+Future<String?> pickImagePath() async {
+  final file = await openFile(
+    acceptedTypeGroups: const [
+      XTypeGroup(
+        label: 'Images',
+        extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+      ),
+    ],
+  );
+  return file?.path;
+}
+
 /// Asks where to save a downloaded attachment. Null when the user cancels.
 Future<String?> chooseSaveLocation({required String suggestedName}) async {
   final location = await getSaveLocation(

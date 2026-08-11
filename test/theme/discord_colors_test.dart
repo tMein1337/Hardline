@@ -118,6 +118,7 @@ void main() {
       const state = AppThemeState(
         presetId: 'discord_light',
         overrides: {DiscordSlot.accent: 0xFF00FF00},
+        tooltipDelay: Duration(milliseconds: 850),
       );
 
       expect(AppThemeState.fromJson(state.toJson()), state);
@@ -138,10 +139,31 @@ void main() {
       final state = AppThemeState.fromJson({
         'presetId': 42,
         'overrides': 'not a map',
+        'tooltipDelayMs': 'soon',
       });
 
       expect(state.presetId, DiscordPalettes.defaultId);
       expect(state.overrides, isEmpty);
+      expect(state.tooltipDelay, kDefaultTooltipDelay);
+    });
+
+    test('a blob written before tooltips existed still loads', () {
+      final state = AppThemeState.fromJson({
+        'presetId': 'discord_light',
+        'overrides': <String, int>{},
+      });
+
+      expect(state.tooltipDelay, kDefaultTooltipDelay);
+    });
+
+    // Clamped at parse time so a hand-edited value cannot produce tooltips that
+    // never appear, which is indistinguishable from tooltips being broken.
+    test('an absurd stored delay is clamped rather than obeyed', () {
+      final state = AppThemeState.fromJson({'tooltipDelayMs': 600000});
+      expect(state.tooltipDelay, kMaxTooltipDelay);
+
+      final negative = AppThemeState.fromJson({'tooltipDelayMs': -5});
+      expect(negative.tooltipDelay, Duration.zero);
     });
 
     test('overrides survive a preset change', () {

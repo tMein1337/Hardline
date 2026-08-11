@@ -48,11 +48,28 @@ class ThemeController extends Notifier<AppThemeState> {
   Future<void> clearAllOverrides() =>
       _persist(state.copyWith(overrides: const {}));
 
+  /// [commit] false while the slider is being dragged: state updates so the
+  /// preview follows the thumb, but the write waits for `onChangeEnd`. Same
+  /// deliberate exception `VoicePrefsController` makes for volumes.
+  Future<void> setTooltipDelay(Duration delay, {bool commit = true}) {
+    final clamped = Duration(
+      milliseconds: delay.inMilliseconds.clamp(
+        0,
+        kMaxTooltipDelay.inMilliseconds,
+      ),
+    );
+    return _persist(state.copyWith(tooltipDelay: clamped), write: commit);
+  }
+
   Future<void> resetToDefaults() => _persist(const AppThemeState());
 
-  Future<void> _persist(AppThemeState next) async {
+  /// [write] false defers the disk write to the caller's next committing call.
+  /// Used while a slider is dragged, where every frame would otherwise be a
+  /// separate write of a value the user has not settled on yet.
+  Future<void> _persist(AppThemeState next, {bool write = true}) async {
     // Set state first so the repaint is immediate; the write can lag a frame.
     state = next;
+    if (!write) return;
     await ref
         .read(prefsProvider)
         .setString(_themePrefsKey, jsonEncode(next.toJson()));
@@ -73,5 +90,8 @@ final themeDataProvider = Provider<ThemeData>(
   (ref) => buildThemeData(
     ref.watch(discordColorsProvider),
     DiscordMetrics.standard,
+    tooltipDelay: ref.watch(
+      themeControllerProvider.select((state) => state.tooltipDelay),
+    ),
   ),
 );

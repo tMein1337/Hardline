@@ -38,7 +38,13 @@ class ChatHeader extends StatelessWidget {
           ),
           if (header.isEncrypted) ...[
             const SizedBox(width: 8),
-            Icon(Icons.lock, size: 14, color: colors.success),
+            // A padlock is only reassuring if you know what it claims. Saying
+            // it out loud also distinguishes "encrypted" from "verified",
+            // which the icon cannot.
+            Tooltip(
+              message: 'Messages in this room are end-to-end encrypted',
+              child: Icon(Icons.lock, size: 14, color: colors.success),
+            ),
           ],
           if (header.topic.isNotEmpty) ...[
             const SizedBox(width: 12),

@@ -68,16 +68,23 @@ class LoginController extends Notifier<LoginFormState> {
   /// On success nothing is set here: `login()` calls `Client.init()` internally,
   /// which emits `LoginState.loggedIn`, and the router swaps the screen out from
   /// under this form.
-  Future<void> signIn({
+  ///
+  /// [target] is the client to authenticate. It is not the live one when an
+  /// account is being *added*: that login has to land in a database of its own,
+  /// which exists before the account does. Returns whether it worked, because
+  /// the add-account caller has follow-up work and cannot infer success from a
+  /// router that has not moved.
+  Future<bool> signIn({
     required String homeserver,
     required String username,
     required String password,
+    Client? target,
   }) async {
-    if (state.busy) return;
+    if (state.busy) return false;
     state = const LoginFormState(busy: true);
 
     try {
-      final client = ref.read(clientProvider);
+      final Client client = target ?? ref.read(clientProvider);
 
       // Resolves .well-known, checks supported versions and login flows.
       await client.checkHomeserver(normalizeHomeserver(homeserver));
@@ -90,8 +97,10 @@ class LoginController extends Notifier<LoginFormState> {
       );
 
       state = const LoginFormState();
+      return true;
     } catch (error) {
       state = LoginFormState(error: describeAuthError(error));
+      return false;
     }
   }
 

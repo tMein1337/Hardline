@@ -7,6 +7,7 @@ import '../../common/mx_avatar.dart';
 import '../../common/unread_badge.dart';
 import '../../voice/call_controller_provider.dart';
 import '../../voice/join_voice_action.dart';
+import '../../voice/voice_joinability.dart';
 import '../room_list_item.dart';
 
 /// One row in the channel column.
@@ -80,7 +81,10 @@ class RoomListTile extends StatelessWidget {
                 ),
                 if (room.isEncrypted) ...[
                   const SizedBox(width: 4),
-                  Icon(Icons.lock, size: 12, color: colors.textFaint),
+                  Tooltip(
+                    message: 'End-to-end encrypted',
+                    child: Icon(Icons.lock, size: 12, color: colors.textFaint),
+                  ),
                 ],
                 if (room.canStartVoice) ...[
                   const SizedBox(width: 4),
@@ -132,15 +136,28 @@ class _JoinCallIcon extends ConsumerWidget {
             room.id,
             room.voiceJoinability,
           ),
-          builder: (context, iconHovered) => Padding(
-            // Widens the hit target without changing the row's height.
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-            child: Icon(
-              Icons.call,
-              size: 14,
-              color: iconHovered || rowHovered
-                  ? colors.voiceConnected
-                  : colors.voiceConnected.withValues(alpha: 0.5),
+          builder: (context, iconHovered) => Tooltip(
+            // The glyph is identical whether joining is one click or needs the
+            // room's power levels changed first. Saying which is the only way
+            // to know before pressing it.
+            message: switch (room.voiceJoinability) {
+              VoiceJoinability.joinable => 'Join voice call',
+              VoiceJoinability.needsEnabling =>
+                'Enable calls in this channel, then join',
+              VoiceJoinability.forbidden =>
+                'Calls are not enabled here and you cannot enable them',
+              VoiceJoinability.notJoined => 'Join the room first',
+            },
+            child: Padding(
+              // Widens the hit target without changing the row's height.
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: Icon(
+                Icons.call,
+                size: 14,
+                color: iconHovered || rowHovered
+                    ? colors.voiceConnected
+                    : colors.voiceConnected.withValues(alpha: 0.5),
+              ),
             ),
           ),
         );

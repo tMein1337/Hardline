@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_theme_state.dart';
 import 'discord_colors.dart';
 import 'discord_spacing.dart';
 import 'discord_typography.dart';
@@ -9,7 +10,15 @@ import 'discord_typography.dart';
 /// The three extensions attached here are what `context.colors`,
 /// `context.metrics` and `context.text` resolve against, so swapping the
 /// palette recolors every widget without any of them being modified.
-ThemeData buildThemeData(DiscordColors colors, DiscordMetrics metrics) {
+///
+/// [tooltipDelay] arrives the same way and for the same reason: setting it on
+/// `TooltipThemeData` means every `Tooltip` in the app follows the preference
+/// without a single one of them naming it.
+ThemeData buildThemeData(
+  DiscordColors colors,
+  DiscordMetrics metrics, {
+  Duration tooltipDelay = kDefaultTooltipDelay,
+}) {
   final typography = DiscordTypography.from(colors);
   final brightness = colors.isDark ? Brightness.dark : Brightness.light;
 
@@ -69,7 +78,14 @@ ThemeData buildThemeData(DiscordColors colors, DiscordMetrics metrics) {
         fontWeight: FontWeight.w600,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      waitDuration: const Duration(milliseconds: 400),
+      // Set here rather than on each `Tooltip`, which is what lets the settings
+      // slider change every tooltip in the app at once. Flutter's own default
+      // is `Duration.zero` — tooltips firing the moment the pointer crosses
+      // anything, which in a window this dense is unusable.
+      waitDuration: tooltipDelay,
+      // Only applies to touch/long-press; a hovered tooltip stays until the
+      // pointer leaves. Long enough to finish reading a device id.
+      showDuration: const Duration(seconds: 4),
     ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: colors.textHeader,
@@ -112,7 +128,17 @@ ThemeData buildThemeData(DiscordColors colors, DiscordMetrics metrics) {
         disabledBackgroundColor: colors.accent.withValues(alpha: 0.5),
         disabledForegroundColor: colors.textOnAccent.withValues(alpha: 0.6),
         textStyle: typography.buttonLabel,
-        minimumSize: const Size.fromHeight(44),
+        // Height only. `Size.fromHeight(44)` looks like it says that but is
+        // `Size(double.infinity, 44)` — an infinite *minimum width*, which is
+        // invisible wherever a bounded width clamps it (a stretched Column, as
+        // on the login screen) and fatal wherever nothing does. A Row lays out
+        // non-flex children with unbounded main-axis constraints, so a
+        // FilledButton in a Row threw "BoxConstraints forces an infinite
+        // width", aborting layout for the whole subtree — which renders as a
+        // blank pane and a cascade of "render box was not laid out" errors.
+        //
+        // 64 is Material's own default minimum width.
+        minimumSize: const Size(64, 44),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(metrics.rowRadius),
         ),

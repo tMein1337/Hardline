@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/own_profile_provider.dart';
 import '../../../theme/theme_context.dart';
-import '../../auth/session_controller.dart';
+import '../../accounts/account_entry.dart';
 import '../../common/mx_avatar.dart';
-import '../../voice/widgets/voice_settings_dialog.dart';
+import '../../settings/settings_screen.dart';
 
 /// The signed-in user's strip at the bottom of the channel column.
+///
+/// The gear is the only button here. Signing out moved into settings when the
+/// unified screen landed: it sat one pixel from the settings icon, is
+/// irreversible, and Discord — whose layout this follows — does not put it in
+/// the footer either.
 class UserFooter extends ConsumerWidget {
   const UserFooter({super.key});
 
@@ -16,9 +21,8 @@ class UserFooter extends ConsumerWidget {
     final colors = context.colors;
     final userId = ref.watch(ownUserIdProvider);
     final profile = ref.watch(ownProfileProvider).value;
-    final signingOut = ref.watch(sessionControllerProvider);
 
-    final displayName = profile?.displayName ?? _localpart(userId);
+    final displayName = profile?.displayName ?? localpartOf(userId);
 
     return Container(
       height: 52,
@@ -54,37 +58,15 @@ class UserFooter extends ConsumerWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Voice settings',
+            tooltip: 'Settings',
             iconSize: 18,
             visualDensity: VisualDensity.compact,
             color: colors.textMuted,
-            onPressed: () => VoiceSettingsDialog.show(context),
+            onPressed: () => SettingsScreen.open(context),
             icon: const Icon(Icons.settings),
-          ),
-          IconButton(
-            tooltip: 'Sign out',
-            iconSize: 18,
-            visualDensity: VisualDensity.compact,
-            color: colors.textMuted,
-            onPressed: signingOut
-                ? null
-                : () => ref.read(sessionControllerProvider.notifier).signOut(),
-            icon: signingOut
-                ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.textMuted,
-                    ),
-                  )
-                : const Icon(Icons.logout),
           ),
         ],
       ),
     );
   }
-
-  static String _localpart(String userId) =>
-      userId.startsWith('@') ? userId.substring(1).split(':').first : userId;
 }

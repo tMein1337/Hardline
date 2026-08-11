@@ -93,10 +93,16 @@ class VoiceParticipantRow extends ConsumerWidget {
                   // reach room state and so cannot be shown here at all.
                   if (audio.locallyMuted) ...[
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.volume_off,
-                      size: 13,
-                      color: colors.voiceMutedIcon,
+                    Tooltip(
+                      // Spelling out whose decision this was: the icon looks
+                      // identical to "they muted themselves", which is a
+                      // different fact and not one we can even observe.
+                      message: 'Muted for you only',
+                      child: Icon(
+                        Icons.volume_off,
+                        size: 13,
+                        color: colors.voiceMutedIcon,
+                      ),
                     ),
                   ] else if (adjustedVolume != null) ...[
                     const SizedBox(width: 4),
@@ -110,10 +116,13 @@ class VoiceParticipantRow extends ConsumerWidget {
                   // for someone whose call we have not joined.
                   if (participant.isScreensharing) ...[
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.screen_share,
-                      size: 14,
-                      color: colors.voiceControlIconActive,
+                    Tooltip(
+                      message: 'Sharing their screen',
+                      child: Icon(
+                        Icons.screen_share,
+                        size: 14,
+                        color: colors.voiceControlIconActive,
+                      ),
                     ),
                   ],
                 ],
