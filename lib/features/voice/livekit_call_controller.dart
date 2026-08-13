@@ -9,6 +9,7 @@ import 'package:matrix/matrix.dart';
 
 import 'audio_devices_provider.dart';
 import 'call_encryption_manager.dart';
+import 'delayed_leave.dart';
 import 'livekit_token_service.dart';
 import 'matrix_rtc_membership.dart';
 import 'voice_joinability.dart';
@@ -145,6 +146,9 @@ class LiveKitCallController extends ChangeNotifier {
   lk.EventsListener<lk.RoomEvent>? _listener;
   Timer? _refreshTimer;
   bool _disposed = false;
+
+  /// Null when no call is up, or when the homeserver has no MSC4140 support.
+  DelayedLeave? _delayedLeave;
 
   /// Null in unencrypted rooms, where there are no media keys to exchange.
   CallEncryptionManager? _encryption;
@@ -291,9 +295,9 @@ class LiveKitCallController extends ChangeNotifier {
 
       // Before publishing, not after: the track captures from whichever device
       // is selected at the moment it is created, so selecting afterwards would
-      // require republishing and the first seconds would come from the wrong
+      // require restarting it and the first seconds would come from the wrong
       // microphone.
-      await applyAudioDevices(republish: false);
+      await applyAudioDevices();
 
       // Microphone only. Camera and screenshare are opt-in later; grabbing the
       // camera to join a voice channel would light the hardware indicator for
@@ -316,6 +320,7 @@ class LiveKitCallController extends ChangeNotifier {
       // cannot see is a better failure than the reverse.
       await _publishMembership(room, focus);
       _scheduleMembershipRefresh(room, focus);
+      await _armDelayedLeave(room, focus);
 
       if (_disposed) {
         await leave();
@@ -375,6 +380,19 @@ class LiveKitCallController extends ChangeNotifier {
     _refreshTimer?.cancel();
     _refreshTimer = null;
 
+    // Before the membership is cleared, not after. A withdrawal left scheduled
+    // fires against whatever the state looks like ~20 s from now, and if the
+    // user rejoins in the meantime that is a membership they want to keep.
+    final delayedLeave = _delayedLeave;
+    _delayedLeave = null;
+    if (delayedLeave != null) {
+      try {
+        await delayedLeave.disarm();
+      } catch (error, stack) {
+        debugPrint('[voice] disarming the delayed leave failed: $error\n$stack');
+      }
+    }
+
     if (matrixRoomId != null) {
       try {
         await _clearMembership(matrixRoomId);
@@ -408,14 +426,12 @@ class LiveKitCallController extends ChangeNotifier {
     final participant = _room?.localParticipant;
     if (participant == null) return;
     try {
-      if (muted) {
-        await participant.setMicrophoneEnabled(false);
-      } else {
-        await participant.setMicrophoneEnabled(
-          true,
-          audioCaptureOptions: await _micCaptureOptions(),
-        );
-      }
+      // No `audioCaptureOptions` on the unmute: livekit reads them only for
+      // `stopAudioCaptureOnMute` once a publication exists, and restarts the
+      // track from the options it already holds. Passing them here looked like
+      // it pinned the device and did nothing. `applyAudioDevices` is what
+      // keeps those options current, including while muted.
+      await participant.setMicrophoneEnabled(!muted);
       _micMuted = muted;
       if (persist) onSelfMuteChanged?.call(muted);
       notifyListeners();
@@ -757,6 +773,33 @@ class LiveKitCallController extends ChangeNotifier {
     );
   }
 
+  /// Asks the homeserver to withdraw our membership if we stop checking in.
+  ///
+  /// The counterpart to `_clearMembership`, for the exits that run no code:
+  /// a Task Manager kill, a crash, a power cut. Best-effort — a homeserver
+  /// without MSC4140 simply leaves us with `expires` as before. See
+  /// `delayed_leave.dart`.
+  Future<void> _armDelayedLeave(Room room, LiveKitFocus focus) async {
+    final userId = client.userID;
+    final deviceId = client.deviceID;
+    if (userId == null || deviceId == null) return;
+
+    final delayedLeave = DelayedLeave(
+      client: client,
+      roomId: room.id,
+      stateKey: MatrixRtcMembership.stateKeyFor(
+        userId: userId,
+        deviceId: deviceId,
+      ),
+      // Only reached when the server withdrew us despite our still being in the
+      // call, which means the state event it wrote is wrong and we have to put
+      // it back rather than quietly disappear from the channel.
+      onServerWithdrewMembership: () => _publishMembership(room, focus),
+    );
+    _delayedLeave = delayedLeave;
+    await delayedLeave.arm();
+  }
+
   void _scheduleMembershipRefresh(Room room, LiveKitFocus focus) {
     _refreshTimer?.cancel();
     final period = kDefaultMembershipLifetime - _membershipRefreshLead;
@@ -852,13 +895,11 @@ class LiveKitCallController extends ChangeNotifier {
   /// is listening to — while connection, publication and subscription all
   /// report success.
   ///
-  /// Safe to call outside a call; selecting a device is global state in
-  /// livekit_client, not a property of the room.
-  ///
-  /// [republish] is false during joining, where the microphone has not been
-  /// published yet and the caller publishes it immediately afterwards with the
-  /// right options — republishing here would publish it twice.
-  Future<void> applyAudioDevices({bool republish = true}) async {
+  /// Safe to call outside a call, and safe to call when only the *output*
+  /// changed: selecting a device is global state in livekit_client rather than
+  /// a property of the room, and the microphone half below no-ops unless the
+  /// input actually moved.
+  Future<void> applyAudioDevices() async {
     final prefs = readPrefs();
 
     try {
@@ -883,20 +924,41 @@ class LiveKitCallController extends ChangeNotifier {
       debugPrint('[voice] selecting output failed: $error\n$stack');
     }
 
-    // A microphone change only reaches other people once the track is
-    // republished — the existing publication keeps capturing from the old
-    // device otherwise, so the setting would appear to do nothing.
-    final participant = _room?.localParticipant;
-    if (republish && participant != null && !_micMuted) {
-      try {
-        await participant.setMicrophoneEnabled(false);
-        await participant.setMicrophoneEnabled(
-          true,
-          audioCaptureOptions: await _micCaptureOptions(),
-        );
-      } catch (error, stack) {
-        debugPrint('[voice] republishing microphone failed: $error\n$stack');
-      }
+    // `selectAudioInput` above moved the native device module's recording
+    // index, which is not enough on its own: a capture already running was
+    // opened by `getUserMedia` and keeps reading the old endpoint until the
+    // track is recreated. So the live track has to be pointed at the new
+    // device explicitly, or the setting appears to do nothing mid-call.
+    final track = _room?.localParticipant
+        ?.getTrackPublicationBySource(lk.TrackSource.microphone)
+        ?.track;
+    // Also the "nothing published yet" case, which is every call to this
+    // during joining — the caller publishes the microphone right afterwards
+    // with these same options.
+    if (track is! lk.LocalAudioTrack) return;
+
+    final deviceId = (await _micCaptureOptions()).deviceId;
+    // Null means the user has not chosen a microphone, or the one they chose
+    // is not plugged in. Neither is a reason to disturb a working capture.
+    if (deviceId == null) return;
+
+    try {
+      // Deliberately **not** a mute/unmute cycle, which is what this used to
+      // be. `setMicrophoneEnabled(false)` mutes the publication and signals
+      // that to the SFU, so everyone else watched us go muted and back for a
+      // device change they should never have noticed — and worse,
+      // `setMicrophoneEnabled(true, audioCaptureOptions: …)` *ignores* those
+      // options when a publication already exists, so the new device never
+      // reached the track at all.
+      //
+      // `setDeviceId` updates the capture options and restarts the track in
+      // place: `replaceTrack` on the existing sender, so the publication, its
+      // sid and its frame cryptor all survive and nothing renegotiates. It
+      // no-ops when the device is unchanged, and while muted it records the
+      // choice without reopening the hardware — unmuting restarts from it.
+      await track.setDeviceId(deviceId);
+    } catch (error, stack) {
+      debugPrint('[voice] switching microphone failed: $error\n$stack');
     }
   }
 
@@ -1007,6 +1069,10 @@ class LiveKitCallController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _refreshTimer?.cancel();
+    // Stops the heartbeat but deliberately leaves the scheduled withdrawal
+    // standing. `_teardown` below cancels it properly if it gets that far; if
+    // it does not, having the server withdraw us is precisely what we want.
+    _delayedLeave?.dispose();
     // Best effort: without this a hard exit leaves our membership advertised
     // until it expires, showing us in a channel we are not in.
     unawaited(_teardown(_roomId));

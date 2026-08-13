@@ -68,6 +68,26 @@ bool isRingExpired(
 /// How long a published membership stays valid, absent an explicit `expires`.
 const Duration kDefaultMembershipLifetime = Duration(hours: 4);
 
+/// How long after our last heartbeat the server withdraws our membership.
+///
+/// This is the MSC4140 delay: the withdrawal is scheduled on the homeserver at
+/// join time and pushed back every [kDelayedLeaveHeartbeat] while we are alive,
+/// so a process that dies without running any code — a Task Manager kill, a
+/// power cut — still disappears from the channel about this long afterwards
+/// instead of lingering until `expires`.
+///
+/// Long enough to survive a stalled request or a brief network blip, short
+/// enough that nobody is left staring at a participant who is not there. The
+/// SDK's own VoIP layer uses 18 s for the same purpose.
+const Duration kDelayedLeaveAfter = Duration(seconds: 20);
+
+/// How often the pending withdrawal is pushed back.
+///
+/// Four heartbeats per delay window, so three can be lost in a row before the
+/// server acts. These are POSTs to the delayed-events endpoint, not room
+/// events, so unlike the membership itself they cost the timeline nothing.
+const Duration kDelayedLeaveHeartbeat = Duration(seconds: 5);
+
 /// Where a call's media is relayed.
 ///
 /// Only LiveKit is modelled: it is what this homeserver deploys and what

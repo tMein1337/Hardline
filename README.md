@@ -223,6 +223,58 @@ follow yourself, so every list is empty against a single account.
     joins, leaves and two-minute heartbeats must not, or the conversation
     disappears under call bookkeeping.
 
+### 4. Verify the microphone switch and the hard-kill withdrawal
+
+Two of the "Smaller things" below are fixed but unobserved. Both are I/O against
+real hardware and a real homeserver, so nothing in the test suite covers them.
+
+**Preflight, once.** The hard-kill fix has two independent halves and the first
+only exists on a homeserver configured for it. Fetch
+`/_matrix/client/versions` and look for `org.matrix.msc4140` in
+`unstable_features`. Synapse advertises it **only** when
+`max_event_delay_duration` is set in `homeserver.yaml` (e.g. `24h`). If it is
+absent, steps 2 and 3 will not pass and are not supposed to — skip to step 4,
+which is the half that works everywhere. The log says which path was taken:
+*"delayed leave armed"* or *"homeserver does not support MSC4140"*.
+
+**The microphone.** Needs a second person listening, and two physically
+different microphones.
+
+1. **Output is silent.** Join a call, talk, and change the *output* device
+   mid-sentence. The other side must hear **no** interruption at all and see no
+   mute indicator flicker. This used to republish the microphone for a change
+   that has nothing to do with it.
+2. **Input actually moves.** Change the *microphone* mid-call. Two separate
+   things to confirm, and the second is the one that was broken: they keep
+   hearing you across the switch, **and** they are now hearing the new
+   microphone. Speak into only one of the two to tell. `logDiagnostics` prints
+   `settings:` from the local track's `getSettings()` — it must name the new
+   device. Before this fix the audio stayed on the old microphone while the
+   settings dialog showed the new one, silently.
+3. **Muted switching works.** Mute, change the microphone, unmute. The new
+   device must be live. This never worked before.
+
+**The hard kill.** Needs Element open on another account watching the channel.
+
+1. **The graceful case still works.** Join, leave normally, and confirm you
+   disappear at once — then that nothing is left scheduled behind you
+   (`GET /_matrix/client/unstable/org.matrix.msc4140/delayed_events` empty).
+   Regression check: the delayed leave must not outlive a clean leave.
+2. **Killed mid-call.** Join, then end the process from Task Manager — not a
+   window close, which runs the graceful path. Element must drop you from the
+   participant list within ~20 s, with the app not running.
+3. **Relaunch inside the window.** Join, kill, and relaunch and rejoin the *same
+   call within 20 seconds*. You must **stay** in the participant list. This is
+   the orphan-cancellation path, and if it is broken you will appear, sit there,
+   and then silently vanish a few seconds later while still in the call.
+4. **The sweep, on any homeserver.** Join, kill, relaunch and then leave the app
+   alone — do not rejoin. The stale membership must clear itself shortly after
+   the first sync, and Element must show you gone. This is what covers a
+   homeserver without MSC4140.
+5. **Another device is not collateral.** With a call joined on a *second* device
+   or in Element, hard-kill this one and relaunch. The sweep must clear only
+   this device's membership and leave the other call running.
+
 ### second to last Plattform Support
 - Linux
 - Macos
@@ -231,13 +283,23 @@ follow yourself, so every list is empty against a single account.
 
 ### last: Smaller things
 
-- Renegotiating the microphone mid-call briefly drops audio for others.
 - Matrix device ids change on every logout/login, so per-device volumes are
-  forgotten when someone re-authenticates. Inherent to keying by device.
-  Switching accounts does **not** lose them: the session is restored from its
-  own database rather than re-authenticated, so the device id survives.
-- A hard kill (Task Manager) cannot withdraw the call membership; it expires on
-  its own after a few hours.
+  forgotten when someone re-authenticates. Inherent to keying by device — the
+  LiveKit identity carries `@user:server:DEVICEID` and nothing else about the
+  far end is stable, so there is nothing better to key on. Switching accounts
+  does **not** lose them: the session is restored from its own database rather
+  than re-authenticated, so the device id survives.
+
+Fixed in code, **unobserved** — see test 4 above before believing either:
+
+- ~~Renegotiating the microphone mid-call briefly drops audio for others.~~ Now
+  a track restart in place rather than a mute/unmute cycle. The investigation
+  found the switch was not taking effect at all; see "Switching the microphone
+  mid-call is `setDeviceId`" below.
+- ~~A hard kill (Task Manager) cannot withdraw the call membership.~~ Now
+  withdrawn by the homeserver via MSC4140, with a startup sweep behind it for
+  servers that do not offer it. See "A hard kill needs the server to withdraw
+  the membership" below.
 
 ### ideas
 - Overlay (like discord overlay)
@@ -934,6 +996,82 @@ Two separate mechanisms are needed, and using only one is a silent half-failure:
   created. `Hardware.selectAudioInput()` alone is *not* enough: capture comes
   from `getUserMedia` constraints, so without a `deviceId` there is no
   constraint and the platform default wins.
+
+### Switching the microphone mid-call is `setDeviceId`, not mute/unmute
+
+`applyAudioDevices` used to swap devices by calling
+`setMicrophoneEnabled(false)` then `setMicrophoneEnabled(true,
+audioCaptureOptions: …)`. Reading what livekit_client does with that when a
+publication already exists (`participant/local.dart`, `setSourceEnabled`) turns
+up two problems rather than one:
+
+- `false` is `publication.mute(stopOnMute: true)` — it **signals mute to the
+  SFU**, so every remote peer watched us go muted and back for a change they
+  should never have noticed.
+- **`audioCaptureOptions` is ignored on that path.** It is read only for
+  `stopAudioCaptureOnMute`; the unmute calls `restartTrack()` with the options
+  the track already holds. So the `deviceId` constraint never arrived and the
+  switch **did not actually work** — capture stayed on the old microphone.
+  `Hardware.selectAudioInput` moved the native ADM's recording index, but
+  libwebrtc applies that at `InitRecording`, not to a capture already running,
+  so the settings dialog and the audio disagreed with nothing logging anything.
+
+`LocalAudioTrack.setDeviceId()` is the API for this. It updates `currentOptions`
+and restarts the track in place — `replaceTrack` on the existing sender, so the
+publication, its sid and its frame cryptor all survive and nothing renegotiates.
+The remaining gap is one `getUserMedia`, which is unavoidable: the device cannot
+be changed under a live capture.
+
+Two behaviours fall out of it for free, which is why there is no longer a
+`republish` flag or any special-casing at the call sites:
+
+- It **no-ops when the id is unchanged**, so changing the *output* device no
+  longer disturbs the microphone.
+- While **muted** it records the choice without opening the hardware, and
+  `unmute()` restarts from it. Picking a microphone while muted now works.
+
+For the same reason, `setMicMuted` passes no `audioCaptureOptions` — it would
+be dead there too.
+
+### A hard kill needs the server to withdraw the membership
+
+Leaving a call is a client writing `{}` over its own membership. Every exit that
+runs no Dart code — Task Manager, a crash, a power cut — therefore leaves us
+advertised in a channel we are not in until `expires`, which is hours. The
+`AppLifecycleListener` in `call_controller_provider.dart` covers only the
+graceful close.
+
+Two mechanisms, because neither is sufficient alone:
+
+- **MSC4140 delayed events** (`delayed_leave.dart`). The `{}` write is scheduled
+  on the homeserver at join time with a 20 s delay and its timer pushed back
+  every 5 s. While we are alive it never fires; the moment we stop, it does.
+  That inverts the failure mode — the *absence* of a client is now what removes
+  us. Restarts are POSTs to the delayed-events endpoint, not room events, so
+  unlike the membership itself they add nothing to the timeline.
+- **A sweep** (`stale_membership_sweeper.dart`), for every homeserver that does
+  not offer the above. It enforces one invariant off the sync tick: *if we are
+  not in a call in room X, our device must not hold a live membership there.*
+
+Three things are load-bearing:
+
+- **Orphans are cancelled before a new withdrawal is scheduled.** A run that was
+  killed leaves its withdrawal pending; rejoining inside the delay window would
+  let it fire a few seconds later and clear the membership just published —
+  vanishing from a channel while sitting in the call. (The SDK's own version of
+  this loop in `famedly_call_extension.dart` never passes `from` when
+  paginating, so do not copy it verbatim.)
+- **Disarm happens before `_clearMembership`, not after.** Same reason in the
+  other direction.
+- **The sweep only touches our own user *and* our own device id**, and only
+  while the controller is completely idle. `join()` publishes the membership
+  before the status reaches `connected`, so a sweep in that window would clear
+  a call being joined; another device of the same user may legitimately be in
+  the call, which is what MSC3757 per-device state keys are for.
+
+Synapse advertises `org.matrix.msc4140` **only when `max_event_delay_duration`
+is set** in `homeserver.yaml` (e.g. `24h`). Unset, the delayed-leave half is
+inert — it logs once and returns — and the sweep is what covers this.
 
 ### Audio state has one owner
 

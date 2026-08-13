@@ -72,8 +72,8 @@ class VoicePane extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Changing the microphone during a call republishes it, so '
-                  'others may hear a brief gap.',
+                  'Changing the microphone during a call reopens it, so others '
+                  'may miss a moment. Changing the output is silent.',
                   style: context.text.timestamp,
                 ),
               ],
