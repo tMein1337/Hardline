@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../theme/discord_colors.dart';
+import '../../../theme/hex_color.dart';
 import '../../../theme/theme_context.dart';
 
 /// Edits one theme slot: HSV sliders plus a hex field, no package involved.
@@ -10,34 +11,38 @@ import '../../../theme/theme_context.dart';
 /// hex field is the part people actually use — it is how a palette gets copied
 /// out of a design tool.
 ///
-/// Returns the chosen color, `_cleared` via [SlotColorResult.reset] when the
-/// user asks for the preset's value back, or null on cancel.
+/// Returns the chosen color, the built-in value via [SlotColorResult.reset]
+/// when the user asks for it back, or null on cancel.
 class SlotColorEditor extends StatefulWidget {
   const SlotColorEditor({
     super.key,
     required this.slot,
     required this.initial,
-    required this.hasOverride,
+    required this.canRevert,
   });
 
   final String slot;
   final Color initial;
 
-  /// Whether this slot currently differs from the preset, which is the only
-  /// case where "Reset" means anything.
-  final bool hasOverride;
+  /// Whether this theme still tracks a built-in palette *and* has moved this
+  /// slot away from it — the only case where "Reset" has a value to name.
+  ///
+  /// False for a theme the user made or imported: it was never a copy of
+  /// anything, so there is nothing to go back to. Duplicating before
+  /// experimenting is what covers that case.
+  final bool canRevert;
 
   static Future<SlotColorResult?> show(
     BuildContext context, {
     required String slot,
     required Color initial,
-    required bool hasOverride,
+    required bool canRevert,
   }) => showDialog<SlotColorResult>(
     context: context,
     builder: (_) => SlotColorEditor(
       slot: slot,
       initial: initial,
-      hasOverride: hasOverride,
+      canRevert: canRevert,
     ),
   );
 
@@ -58,7 +63,7 @@ class SlotColorResult {
 class _SlotColorEditorState extends State<SlotColorEditor> {
   late HSVColor _hsv = HSVColor.fromColor(widget.initial);
   late final TextEditingController _hex = TextEditingController(
-    text: _hexOf(widget.initial),
+    text: hexRgbOf(widget.initial),
   );
 
   @override
@@ -74,7 +79,7 @@ class _SlotColorEditorState extends State<SlotColorEditor> {
       _hsv = value;
       // Keeps the field in step without fighting the user: it is only rewritten
       // when a slider moved, never while they are typing into it.
-      _hex.text = _hexOf(value.toColor());
+      _hex.text = hexRgbOf(value.toColor());
     });
   }
 
@@ -152,12 +157,12 @@ class _SlotColorEditorState extends State<SlotColorEditor> {
         ),
       ),
       actions: [
-        if (widget.hasOverride)
+        if (widget.canRevert)
           TextButton(
             onPressed: () =>
                 Navigator.of(context).pop(const SlotColorResult.reset()),
             child: Text(
-              'Reset',
+              'Reset to built-in',
               style: TextStyle(color: colors.textMuted),
             ),
           ),
@@ -204,20 +209,3 @@ class _Slider extends StatelessWidget {
   }
 }
 
-/// `#RRGGBB`, as a design tool would write it.
-String _hexOf(Color color) =>
-    '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
-
-/// Parses `#RGB`-less hex in the two shapes people actually paste.
-///
-/// Null for anything unparseable, so a half-typed value leaves the preview
-/// alone instead of flashing black on every keystroke.
-Color? parseHexColor(String raw) {
-  final text = raw.trim().replaceFirst('#', '');
-  if (text.length != 6 && text.length != 8) return null;
-  final value = int.tryParse(text, radix: 16);
-  if (value == null) return null;
-  // Six digits mean the user gave no alpha, and a theme slot is opaque unless
-  // it says otherwise — defaulting to transparent would blank a whole surface.
-  return Color(text.length == 6 ? 0xFF000000 | value : value);
-}

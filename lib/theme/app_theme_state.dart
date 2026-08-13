@@ -15,13 +15,12 @@ const kDefaultTooltipDelay = Duration(milliseconds: 400);
 /// than deliberate.
 const kMaxTooltipDelay = Duration(seconds: 3);
 
-/// The user's theme choice: a named preset, any per-slot overrides, and the
-/// handful of interface preferences that reach every widget through
-/// `ThemeData`.
+/// Which theme is selected, and the handful of interface preferences that
+/// reach every widget through `ThemeData`.
 ///
-/// Overrides are stored sparsely (only the slots actually changed) so that
-/// switching presets still shows through for every slot the user has not
-/// explicitly customised.
+/// The theme itself lives in the library (`theme_library.dart`); this only
+/// names it. Keeping the selection here rather than in the library is what
+/// gives the question "which theme is active" a single answer.
 @immutable
 class AppThemeState {
   const AppThemeState({
@@ -30,9 +29,22 @@ class AppThemeState {
     this.tooltipDelay = kDefaultTooltipDelay,
   });
 
+  /// The id of the active theme — a key into the library, which seeds itself
+  /// with the built-in ids this field held before the library existed.
   final String presetId;
 
   /// Slot name (see `DiscordSlot`) to packed ARGB.
+  ///
+  /// **Legacy.** Before themes were a library, colours were customised as a
+  /// sparse patch over whichever preset was selected, so that switching preset
+  /// showed through for every slot left alone. Editing now happens *in* a theme
+  /// instead, and nothing writes here any more.
+  ///
+  /// It is still read and still applied, so an installation that upgrades looks
+  /// exactly as it did. The appearance pane offers to turn a non-empty patch
+  /// into a real theme, or to discard it, and after that it stays empty
+  /// forever. Removing the field outright would have silently reverted those
+  /// users' colours on first launch.
   final Map<String, int> overrides;
 
   /// Hover time before a tooltip shows. `Duration.zero` means immediately.
@@ -43,8 +55,13 @@ class AppThemeState {
   final Duration tooltipDelay;
 
   /// The palette the app should actually render with.
-  DiscordColors resolve() =>
-      DiscordPalettes.byId(presetId).applyOverrides(overrides);
+  ///
+  /// [base] is the active theme's colours, which only the library can supply —
+  /// see `discordColorsProvider`. Omitting it falls back to the built-in
+  /// palette of the same id, which is what keeps this method usable from a
+  /// test, and what renders if the library somehow does not know the id.
+  DiscordColors resolve({DiscordColors? base}) =>
+      (base ?? DiscordPalettes.byId(presetId)).applyOverrides(overrides);
 
   AppThemeState copyWith({
     String? presetId,

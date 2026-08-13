@@ -8,6 +8,7 @@ import 'app_theme_state.dart';
 import 'discord_colors.dart';
 import 'discord_spacing.dart';
 import 'theme_builder.dart';
+import 'theme_library.dart';
 
 const _themePrefsKey = 'app_theme_v1';
 
@@ -30,21 +31,14 @@ class ThemeController extends Notifier<AppThemeState> {
     }
   }
 
-  /// Switches preset while keeping any per-slot customisations.
+  /// Selects a theme from the library by id.
   Future<void> setPreset(String presetId) =>
       _persist(state.copyWith(presetId: presetId));
 
-  Future<void> setOverride(String slot, Color color) => _persist(
-    state.copyWith(
-      overrides: {...state.overrides, slot: color.toARGB32()},
-    ),
-  );
-
-  Future<void> clearOverride(String slot) => _persist(
-    state.copyWith(overrides: {...state.overrides}..remove(slot)),
-  );
-
-  /// Drops all customisations but keeps the chosen preset.
+  /// Drops the legacy override patch — see [AppThemeState.overrides].
+  ///
+  /// The only writer left, and it only ever writes empty: the appearance pane
+  /// calls it once the patch has been saved as a theme, or discarded.
   Future<void> clearAllOverrides() =>
       _persist(state.copyWith(overrides: const {}));
 
@@ -81,9 +75,15 @@ final themeControllerProvider =
 
 /// The resolved palette. Watch this (rather than the raw state) anywhere the
 /// actual colors are needed outside the widget tree.
-final discordColorsProvider = Provider<DiscordColors>(
-  (ref) => ref.watch(themeControllerProvider).resolve(),
-);
+///
+/// The join between the two halves of theming: `themeControllerProvider` says
+/// *which* theme, `themeLibraryProvider` says what it looks like. Watching both
+/// is what makes editing a slot recolor the app on the next frame.
+final discordColorsProvider = Provider<DiscordColors>((ref) {
+  final state = ref.watch(themeControllerProvider);
+  final library = ref.watch(themeLibraryProvider);
+  return state.resolve(base: library.byId(state.presetId)?.toColors());
+});
 
 /// What `MaterialApp.theme` consumes.
 final themeDataProvider = Provider<ThemeData>(

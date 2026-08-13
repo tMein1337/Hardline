@@ -6,23 +6,31 @@ import '../../../theme/discord_colors.dart';
 import '../../../theme/discord_palettes.dart';
 import '../../../theme/theme_context.dart';
 import '../../../theme/theme_controller.dart';
+import '../../../theme/theme_entry.dart';
+import '../../../theme/theme_library.dart';
 import '../widgets/settings_layout.dart';
 import '../widgets/slot_color_editor.dart';
+import '../widgets/theme_library_card.dart';
 
-/// Preset picker and per-slot color overrides.
+/// The theme library, and the colours of whichever theme is selected.
 ///
-/// Renders from [DiscordSlot.all] rather than a hardcoded list, so a slot added
-/// to the palette becomes editable here without anyone remembering to come
-/// back. That property is inherited from the development swatch page this
-/// replaces, and is the reason it was written that way in the first place.
+/// The grid renders from [DiscordSlot.all] rather than a hardcoded list, so a
+/// slot added to the palette becomes editable here without anyone remembering
+/// to come back. That property is inherited from the development swatch page
+/// this replaces, and is the reason it was written that way in the first place.
+///
+/// Edits land in the active theme itself, not in a patch on top of it: what is
+/// on screen is what an export writes out.
 class AppearancePane extends ConsumerWidget {
   const AppearancePane({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeControllerProvider);
-    final controller = ref.read(themeControllerProvider.notifier);
-    final overrides = theme.overrides;
+    final library = ref.watch(themeLibraryProvider);
+    // The library keeps itself non-empty, so the fallback is a formality —
+    // but `presetId` can name a theme that was deleted in the same frame.
+    final active = library.byId(theme.presetId) ?? library.entries.firstOrNull;
 
     return SettingsPane(
       title: 'Appearance',
@@ -30,93 +38,151 @@ class AppearancePane extends ConsumerWidget {
           'Changes apply immediately across the whole app and are remembered '
           'on this computer.',
       children: [
-        const SettingsLabel('Theme'),
-        SettingsCard(
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final entry in DiscordPalettes.labels.entries)
-                _PresetButton(
-                  label: entry.value,
-                  selected: theme.presetId == entry.key,
-                  onTap: () => controller.setPreset(entry.key),
-                ),
-            ],
-          ),
-        ),
+        const ThemeLibraryCard(),
+        if (theme.overrides.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _LegacyOverridesCard(count: theme.overrides.length),
+        ],
         const SizedBox(height: 24),
         const SettingsLabel('Tooltips'),
         _TooltipDelayCard(delay: theme.tooltipDelay),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: SettingsLabel(
-                overrides.isEmpty
-                    ? 'Colors'
-                    : 'Colors · ${overrides.length} customised',
-              ),
+        if (active != null) ...[
+          SettingsLabel('Colors · ${active.name}'),
+          GridView.builder(
+            shrinkWrap: true,
+            // The pane already scrolls; a second scrollable inside it would
+            // trap the wheel over the grid.
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 300,
+              mainAxisExtent: 64,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
             ),
-            if (overrides.isNotEmpty)
-              TextButton(
-                onPressed: controller.clearAllOverrides,
-                child: Text(
-                  'Reset all',
-                  style: TextStyle(color: context.colors.textMuted),
-                ),
-              ),
-          ],
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          // The pane already scrolls; a second scrollable inside it would trap
-          // the wheel over the grid.
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 300,
-            mainAxisExtent: 64,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+            itemCount: DiscordSlot.all.length,
+            itemBuilder: (context, index) {
+              final slot = DiscordSlot.all[index];
+              return _SwatchTile(
+                slot: slot,
+                changed: _divergesFromBuiltIn(active, slot),
+                onEdit: () => _edit(context, ref, active.id, slot),
+              );
+            },
           ),
-          itemCount: DiscordSlot.all.length,
-          itemBuilder: (context, index) {
-            final slot = DiscordSlot.all[index];
-            return _SwatchTile(
-              slot: slot,
-              overridden: overrides.containsKey(slot),
-              onEdit: () => _edit(context, ref, slot),
-            );
-          },
-        ),
+        ],
       ],
     );
+  }
+
+  /// Whether [slot] has moved away from the built-in palette this theme was
+  /// seeded from. False for a theme the user made or imported — it was never a
+  /// copy of anything, so "changed" would have nothing to mean.
+  static bool _divergesFromBuiltIn(ThemeEntry entry, String slot) {
+    final builtIn = DiscordPalettes.byIdMap[entry.id];
+    if (builtIn == null) return false;
+    return entry.colors[slot] != builtIn.slot(slot).toARGB32();
   }
 
   Future<void> _edit(
     BuildContext context,
     WidgetRef ref,
+    String themeId,
     String slot,
   ) async {
-    final controller = ref.read(themeControllerProvider.notifier);
-    final overridden = ref
-        .read(themeControllerProvider)
-        .overrides
-        .containsKey(slot);
+    final library = ref.read(themeLibraryProvider);
+    final entry = library.byId(themeId);
+    if (entry == null) return;
 
     final result = await SlotColorEditor.show(
       context,
       slot: slot,
       initial: ref.read(discordColorsProvider).slot(slot),
-      hasOverride: overridden,
+      canRevert: _divergesFromBuiltIn(entry, slot),
     );
     if (result == null) return;
 
+    final controller = ref.read(themeLibraryProvider.notifier);
     if (result.reset) {
-      await controller.clearOverride(slot);
+      await controller.revertSlot(themeId, slot);
     } else if (result.color case final color?) {
-      await controller.setOverride(slot, color);
+      await controller.setSlot(themeId, slot, color);
     }
+  }
+}
+
+/// The one-time offer to keep colours customised before themes were saveable.
+///
+/// Shows only while `AppThemeState.overrides` is non-empty, which after this is
+/// answered is never again — see the field's own comment. Without it, upgrading
+/// would either silently revert those colours or leave them editable from
+/// nowhere, with the grid showing values that no theme in the list contains.
+class _LegacyOverridesCard extends ConsumerWidget {
+  const _LegacyOverridesCard({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+
+    return SettingsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SettingsRow(
+            leading: Icon(Icons.info_outline, color: colors.warning, size: 20),
+            title: count == 1
+                ? '1 colour customisation from an earlier version'
+                : '$count colour customisations from an earlier version',
+            subtitle:
+                'These were made before themes could be named and saved, and '
+                'currently sit on top of whichever theme is selected. Keep '
+                'them as a theme of their own, or drop them.',
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () =>
+                    ref.read(themeControllerProvider.notifier).clearAllOverrides(),
+                child: Text('Discard', style: TextStyle(color: colors.textMuted)),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () => _save(ref),
+                child: const Text('Save as a theme'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Snapshots what is *currently on screen* — preset plus patch — so the new
+  /// theme is indistinguishable from what the user has been looking at.
+  Future<void> _save(WidgetRef ref) async {
+    final library = ref.read(themeLibraryProvider);
+    final presetId = ref.read(themeControllerProvider).presetId;
+    final source = library.byId(presetId);
+
+    final id = ref
+        .read(themeLibraryProvider.notifier)
+        .add(
+          ThemeEntry.fromColors(
+            id: generateThemeId(),
+            name: '${source?.name ?? 'Theme'} (customised)',
+            colors: ref.read(discordColorsProvider),
+          ),
+        );
+
+    await ref.read(themeControllerProvider.notifier).setPreset(id);
+    // Last, and only once the theme exists: clearing first would repaint the
+    // app without the customisations, and the snapshot would be of the wrong
+    // colours.
+    await ref.read(themeControllerProvider.notifier).clearAllOverrides();
   }
 }
 
@@ -193,12 +259,16 @@ class _TooltipDelayCard extends ConsumerWidget {
 class _SwatchTile extends ConsumerWidget {
   const _SwatchTile({
     required this.slot,
-    required this.overridden,
+    required this.changed,
     required this.onEdit,
   });
 
   final String slot;
-  final bool overridden;
+
+  /// Whether this slot has been moved away from the built-in palette the theme
+  /// was seeded from. Always false once the theme is one of the user's own.
+  final bool changed;
+
   final VoidCallback onEdit;
 
   @override
@@ -221,8 +291,8 @@ class _SwatchTile extends ConsumerWidget {
               // The marker is a border rather than a badge so a customised slot
               // is findable by scanning the grid, which is how someone hunts
               // down the one change they regret.
-              color: overridden ? colors.accent : colors.divider,
-              width: overridden ? 2 : 1,
+              color: changed ? colors.accent : colors.divider,
+              width: changed ? 2 : 1,
             ),
           ),
           padding: const EdgeInsets.all(8),
@@ -257,40 +327,6 @@ class _SwatchTile extends ConsumerWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PresetButton extends StatelessWidget {
-  const _PresetButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Material(
-      color: selected ? colors.accent : colors.floatingSurface,
-      borderRadius: BorderRadius.circular(context.metrics.rowRadius),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(context.metrics.rowRadius),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Text(
-            label,
-            style: context.text.buttonLabel.copyWith(
-              color: selected ? colors.textOnAccent : colors.textPrimary,
-            ),
           ),
         ),
       ),

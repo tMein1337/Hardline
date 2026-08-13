@@ -166,6 +166,31 @@ void main() {
       expect(negative.tooltipDelay, Duration.zero);
     });
 
+    // How the app actually resolves: the palette comes from the library, not
+    // from the `const` map, so a theme the user built is reachable by an id
+    // `DiscordPalettes` has never heard of.
+    test('resolve prefers the base it is given over the preset id', () {
+      const state = AppThemeState(presetId: 'discord_light');
+      final base = DiscordPalettes.dark.copyWith(
+        slots: {DiscordSlot.accent: const Color(0xFF00FF00)},
+      );
+
+      final colors = state.resolve(base: base);
+      expect(colors.accent, const Color(0xFF00FF00));
+      expect(colors.chatBackground, DiscordPalettes.dark.chatBackground);
+    });
+
+    test('a legacy override still applies on top of a library theme', () {
+      const state = AppThemeState(
+        presetId: 'a_theme_the_user_made',
+        overrides: {DiscordSlot.accent: 0xFF00FF00},
+      );
+
+      final colors = state.resolve(base: DiscordPalettes.light);
+      expect(colors.accent, const Color(0xFF00FF00));
+      expect(colors.chatBackground, DiscordPalettes.light.chatBackground);
+    });
+
     test('overrides survive a preset change', () {
       const state = AppThemeState(
         overrides: {DiscordSlot.accent: 0xFF00FF00},

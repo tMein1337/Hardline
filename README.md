@@ -49,7 +49,8 @@ against Element:
 |---|---|
 | Unified full-screen settings (gear in the user footer) | built |
 | Voice & video settings, moved in from their own dialog | built |
-| Appearance: presets and per-slot color overrides | built |
+| Appearance: theme library, per-slot colour editing | built |
+| Appearance: duplicate, import and export themes as files | built |
 | Appearance: tooltip hover delay | built |
 | Profile: display name and avatar | built |
 | Several accounts, one signed in at a time, fast switching | built |
@@ -221,13 +222,6 @@ follow yourself, so every list is empty against a single account.
     one for several minutes. Exactly one line per call *start* appears; the
     joins, leaves and two-minute heartbeats must not, or the conversation
     disappears under call bookkeeping.
-
-### 4. Make custom Themes exportable by a File
-- Users can add/edit/remove themes in their "library" (the three current themes should also apear there by default)
-  - A theme has Information on all the colors and a name
-- Users can Generate ("export") a file with the information of a theme from their library
-- Users can Import such file to add it to their library of themes
-- The format of those files should be documented in this readme
 
 ### second to last Plattform Support
 - Linux
@@ -786,6 +780,106 @@ If that ever stops being true, the three `attachment_*_source.dart` files are
 the only ones that import an input package; `desktop_drop` + `pasteboard` is a
 two-file swap. The cost of that route is no iOS support and no virtual files
 (an attachment dragged straight out of Outlook or a zip viewer has no path).
+
+## Custom themes
+
+Settings → Appearance holds a **library** of themes. Each one is a name and a
+value for every colour slot, and each can be applied, renamed, edited,
+duplicated, exported to a file, or deleted. The three palettes the app ships
+with are *seeded* into the library on first launch and are ordinary entries from
+then on — there is no second, privileged kind of theme.
+
+### The file format
+
+An exported theme is UTF-8 JSON named `<theme name>.theme.json`. It ends in
+`.json` because it *is* JSON: hand-editing one should get syntax highlighting
+for free.
+
+```json
+{
+  "format": "matrix_client.theme",
+  "version": 1,
+  "name": "Midnight",
+  "colors": {
+    "serverRail": "#FF1E1F22",
+    "channelSidebar": "#FF2B2D31",
+    "chatBackground": "#FF313338",
+    "accent": "#FF5865F2"
+  },
+  "avatarPalette": ["#FF5865F2", "#FF3BA55D"]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `format` | Always `matrix_client.theme`. Anything else is refused. |
+| `version` | Format version, currently `1`. A higher number is refused. |
+| `name` | The theme's name. Trimmed, and capped at 60 characters. |
+| `colors` | Slot name → `#AARRGGBB`. The slot names are the constants in `DiscordSlot`; an export writes all of them, in that order. |
+| `avatarPalette` | The ramp used for users with no profile picture. Optional. |
+
+Colours are written `#AARRGGBB` and read as either `#AARRGGBB` or `#RRGGBB`,
+where the short form is taken as fully opaque. Alpha is always *written*,
+because a handful of slots (`scrim`, `dropOverlay`, `voiceParticipantRow`) are
+deliberately translucent and would import as solid blocks without it.
+
+### Reading is deliberately forgiving
+
+A file that declares itself a theme is read as far as it can be:
+
+- **An unknown slot is ignored.** A theme written by a later version of the app
+  can name slots this build has never heard of.
+- **A missing slot is filled from the built-in dark palette.** A hand-written
+  file listing four colours is a valid theme; the alternative is refusing
+  somebody's work over a slot that was added after they saved it.
+- **A single unparseable colour costs only that colour**, and is filled the same
+  way.
+
+What is *not* forgiven is identity: a file without the right `format`, without a
+readable `version`, or without a `colors` object is refused outright, with a
+sentence explaining which. Without that check any JSON object with a `colors`
+key would silently become a theme.
+
+### The file carries no id
+
+Ids are local to an installation. Importing mints a fresh one, so an import can
+never overwrite a theme already in the library — importing the same file twice
+gives two entries, which is visible and undoable, rather than a silent
+replacement. Name collisions are disambiguated (`Midnight (2)`) for the same
+reason.
+
+### What a theme is not
+
+`tooltipDelay` is a setting, not a colour, and stays out of the file. The avatar
+ramp *is* carried through export, import and duplication, but has no editor —
+the colour grid renders `DiscordSlot.all`, and the ramp is a list rather than a
+slot. Anyone who wants to change it can edit an exported file and import it
+back.
+
+### Where the code lives
+
+- `theme_entry.dart` — one theme, and the library's state. Storage shape only.
+- `theme_file.dart` — the format above, as a pure codec. No `dart:io`, which is
+  what lets every rule here be tested by handing a string to `decodeThemeFile`.
+- `theme_file_io.dart` — the save/open dialogs and the disk. Isolates
+  `file_selector` the way `attachment_picker_source.dart` does.
+- `theme_library.dart` — the `Notifier` that owns the stored list.
+
+Export is deliberately not a method on the library: it neither reads nor writes
+the stored list, it serialises one entry the caller already has.
+
+### The upgrade path from per-slot overrides
+
+Before the library, colours were customised as a sparse patch over whichever
+preset was selected — `AppThemeState.overrides`. Editing now happens *in* a
+theme, so what is on screen is exactly what an export writes out, and nothing
+writes to that field any more.
+
+It is still read and still applied, so an installation that upgrades looks
+identical to how it did. The appearance pane shows a one-time card offering to
+save the patch as a theme of its own or to discard it, and after that it stays
+empty forever. Removing the field outright would have silently reverted those
+users' colours on first launch.
 
 ## Voice architecture
 
