@@ -275,6 +275,25 @@ different microphones.
    or in Element, hard-kill this one and relaunch. The sweep must clear only
    this device's membership and leave the other call running.
 
+### 5. Fix the Riverpod `ref`-after-unmount exception on start-up
+
+Launching throws once, before the first frame:
+
+```
+Unhandled Exception: Bad state: Using "ref" when a widget is about to or has
+been unmounted is unsafe.
+```
+
+A `ref` is used from an async callback after the widget that owns it has already
+unmounted — a start-up lifecycle race. The window still renders, so it is
+non-fatal today, but an unhandled exception on every launch should not stay.
+
+Not yet traced to a widget: it surfaced the moment the app first ran on **Linux**
+(past the Nix build/runtime fixes — it is app logic, not the environment). The
+fix is the shape the activity providers already use: guard on `mounted`, capture
+the value before the `await`, or move the subscription to something that outlives
+the widget (`ref.listen` in a keep-alive, not a `ref.read` in `build`/`initState`).
+
 ### second to last Plattform Support
 - Linux
 - Macos
