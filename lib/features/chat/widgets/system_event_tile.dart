@@ -7,6 +7,7 @@ import 'package:matrix/matrix.dart';
 import '../../../core/util/time_format.dart';
 import '../../../theme/theme_context.dart';
 import '../../voice/matrix_rtc_membership.dart';
+import '../../../core/util/display_name.dart';
 
 const _localizations = MatrixDefaultLocalizations();
 
@@ -32,7 +33,7 @@ class SystemEventTile extends StatelessWidget {
         // carries `m.call.intent`: it is regularly the opposite of what the
         // sender's own call membership then advertises, so naming it would be
         // confidently wrong about half the time.
-        ? '${event.senderFromMemoryOrFallback.calcDisplayname()} started a call'
+        ? '${displaySafeName(event.senderFromMemoryOrFallback.calcDisplayname())} started a call'
         // The SDK phrases the rest ("Alice joined the chat"), actor included.
         : event.calcLocalizedBodyFallback(
             _localizations,

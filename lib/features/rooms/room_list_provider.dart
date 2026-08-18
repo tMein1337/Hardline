@@ -12,6 +12,7 @@ import '../../core/providers/matrix_tick_provider.dart';
 import '../../core/util/snapshot_list.dart';
 import '../spaces/space_summary.dart';
 import 'room_list_item.dart';
+import '../../core/util/display_name.dart';
 
 /// The rooms shown in the channel column for a given space.
 ///
@@ -67,7 +68,7 @@ class RoomHeader {
 
   factory RoomHeader.from(Room room) => RoomHeader(
     id: room.id,
-    name: room.getLocalizedDisplayname(),
+    name: displaySafeName(room.getLocalizedDisplayname()),
     topic: room.topic,
     isEncrypted: room.encrypted,
     isDirect: room.isDirectChat,

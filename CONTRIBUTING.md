@@ -66,8 +66,14 @@ A new dependency is a licensing decision, not just a technical one.
   dart run tool/generate_third_party_notices.dart
   ```
 
-  Commit the regenerated `THIRD_PARTY_NOTICES.md` with your change. CI and the
-  release checklist run the same tool with `--check`.
+  Commit the regenerated `THIRD_PARTY_NOTICES.md` with your change. The
+  release checklist runs the same tool with `--check`.
+
+- Check it for known advisories before proposing it:
+
+  ```sh
+  dart run tool/check_dependency_advisories.dart
+  ```
 
 ## Reporting a security issue
 
@@ -95,6 +101,13 @@ dart run tool/generate_third_party_notices.dart --check
 ```
 
 All three must pass.
+
+If you changed dependencies, also run the advisory check, which needs network
+access:
+
+```sh
+dart run tool/check_dependency_advisories.dart
+```
 
 ## House style
 

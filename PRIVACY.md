@@ -118,8 +118,9 @@ When you join a call, Hardline:
 
 1. Reads the call server ("focus") advertised in the room's MatrixRTC state, or
    falls back to `<your homeserver origin>/livekit-jwt-service`.
-2. Makes an HTTPS request to that JWT service to obtain a token, sending your
-   user id, device id and the room identifier.
+2. Asks your homeserver for a **Matrix OpenID token** for your account, and
+   sends it to that call server along with your user id, device id and the room
+   identifier, in exchange for a LiveKit access token.
 3. Connects to the LiveKit SFU named by that service and exchanges audio, video
    and screen-share media through it.
 
@@ -128,6 +129,21 @@ infrastructure for the room — **not** by the developer of Hardline. In an
 encrypted room, media is end-to-end encrypted and the SFU relays it without
 being able to decrypt it; the SFU still sees who is connected, from what IP
 address, and for how long.
+
+**What the OpenID token is, and is not.** It is not your access token and
+grants no access to your account — handing it to a third party is exactly what
+it is designed for. It is a short-lived, verifiable assertion of your Matrix
+identity, so whoever receives one can prove to other services that they were
+talking to you.
+
+**Who chooses that server matters.** The address comes from state events written
+by other members of the room, so joining a call in a room you do not control
+means an identity token and your IP address go to a server somebody else
+nominated. Hardline requires that address to use HTTPS (plain HTTP is accepted
+only for `localhost`), rejects URLs carrying embedded credentials, and prefers a
+call server on your own homeserver when the room offers one — but it cannot
+refuse third-party call servers outright, because everybody in a call has to
+reach the same one. If that matters for a given room, do not join its calls.
 
 Your IP address is visible to your homeserver and to the call server, as it is
 with any network client.

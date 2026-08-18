@@ -14,6 +14,7 @@ import 'activity_entries.dart';
 import 'activity_prefs_controller.dart';
 import 'activity_reducers.dart';
 import 'message_activity_log.dart';
+import '../../core/util/display_name.dart';
 
 /// Most rows the message feed will draw.
 ///
@@ -66,10 +67,10 @@ final followedVoiceActivityProvider = Provider<ListSnapshot<VoiceActivity>>((
       entries.add(
         VoiceActivity(
           userId: membership.userId,
-          displayName: user.calcDisplayname(),
+          displayName: displaySafeName(user.calcDisplayname()),
           avatarMxc: user.avatarUrl?.toString(),
           roomId: room.id,
-          roomName: room.getLocalizedDisplayname(),
+          roomName: displaySafeName(room.getLocalizedDisplayname()),
           joinability: joinabilityOf(room),
         ),
       );
@@ -137,10 +138,10 @@ final followedActiveUsersProvider = Provider<ListSnapshot<UserActivity>>((ref) {
     entries.add(
       UserActivity(
         userId: userId,
-        displayName: user.calcDisplayname(),
+        displayName: displaySafeName(user.calcDisplayname()),
         avatarMxc: user.avatarUrl?.toString(),
         roomId: room.id,
-        roomName: room.getLocalizedDisplayname(),
+        roomName: displaySafeName(room.getLocalizedDisplayname()),
         isTyping: typingRoom != null,
         lastSpokeAt: record?.timestamp,
         lastEventId: record?.eventId,
@@ -193,11 +194,13 @@ final followedMessagesProvider = Provider<ListSnapshot<MessageActivity>>((ref) {
         MessageActivity(
           eventId: record.eventId,
           roomId: record.roomId,
-          roomName: room.getLocalizedDisplayname(),
+          roomName: displaySafeName(room.getLocalizedDisplayname()),
           userId: record.userId,
-          displayName: room
-              .unsafeGetUserFromMemoryOrFallback(record.userId)
-              .calcDisplayname(),
+          displayName: displaySafeName(
+            room
+                .unsafeGetUserFromMemoryOrFallback(record.userId)
+                .calcDisplayname(),
+          ),
           avatarMxc: room
               .unsafeGetUserFromMemoryOrFallback(record.userId)
               .avatarUrl
@@ -230,7 +233,7 @@ final followCandidatesProvider = Provider<ListSnapshot<FollowCandidate>>((ref) {
         user.id,
         () => FollowCandidate(
           userId: user.id,
-          displayName: user.calcDisplayname(),
+          displayName: displaySafeName(user.calcDisplayname()),
           avatarMxc: user.avatarUrl?.toString(),
         ),
       );
@@ -274,7 +277,7 @@ final followingProvider = Provider<ListSnapshot<FollowCandidate>>((ref) {
 String _displayNameOf(Client client, String userId) {
   for (final room in _activeRooms(client)) {
     final user = room.getParticipants().where((u) => u.id == userId).firstOrNull;
-    if (user != null) return user.calcDisplayname();
+    if (user != null) return displaySafeName(user.calcDisplayname());
   }
   return userId;
 }

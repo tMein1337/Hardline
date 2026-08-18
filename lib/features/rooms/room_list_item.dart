@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
 import '../voice/voice_joinability.dart';
+import '../../core/util/display_name.dart';
 
 /// Everything the room list renders, and nothing else.
 ///
@@ -61,7 +62,7 @@ class RoomListItem {
 
   factory RoomListItem.from(Room room) => RoomListItem(
     id: room.id,
-    name: room.getLocalizedDisplayname(),
+    name: displaySafeName(room.getLocalizedDisplayname()),
     avatarMxc: room.avatar?.toString(),
     isDirect: room.isDirectChat,
     isEncrypted: room.encrypted,

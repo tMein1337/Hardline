@@ -137,9 +137,13 @@ class LiveKitTokenService {
 
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
+      // The body is summarised rather than interpolated whole. It comes from a
+      // host the room chose, it ends up in an error the user may paste into a
+      // bug report, and a megabyte of it would be neither readable nor safe to
+      // pass on.
       throw Exception(
         'SFU token request to $url failed: '
-        '${response.statusCode} ${response.body}',
+        '${response.statusCode} ${_summarise(response.body)}',
       );
     }
 
@@ -153,6 +157,15 @@ class LiveKitTokenService {
     }
     return LiveKitCredentials(url: sfuUrl, token: jwt);
   }
+
+  /// At most [_maxBodyInError] characters of [body], on one line.
+  static String _summarise(String body) {
+    final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (flat.length <= _maxBodyInError) return flat;
+    return '${flat.substring(0, _maxBodyInError)}… (truncated)';
+  }
+
+  static const _maxBodyInError = 200;
 
   void dispose() => _http.close();
 }

@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:matrix/matrix.dart';
 
 import 'attachment_picker_source.dart';
+import 'safe_filename.dart';
 
 /// Saves an attachment to a location the user chooses.
 ///
@@ -17,10 +18,14 @@ import 'attachment_picker_source.dart';
 /// and it must not have cost a 50 MB transfer first. The trade-off is that the
 /// wait happens after the click rather than before it.
 Future<bool> saveAttachment(Event event) async {
-  final suggested =
-      event.content.tryGet<String>('filename') ??
-      event.content.tryGet<String>('body') ??
-      'attachment';
+  // Both of these are written by the sender, so neither is a filename until
+  // `safeFilename` has had a look at it. See that library for what an
+  // unsanitised one can do to a save dialog.
+  final suggested = safeFilename(
+    event.content.tryGet<String>('filename') ??
+        event.content.tryGet<String>('body') ??
+        kFallbackFilename,
+  );
 
   final path = await chooseSaveLocation(suggestedName: suggested);
   if (path == null) return false;

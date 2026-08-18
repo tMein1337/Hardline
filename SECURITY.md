@@ -87,3 +87,12 @@ Stated plainly, because they are design positions rather than oversights:
 - **Release signing:** see [`RELEASING.md`](RELEASING.md) for the signing and
   checksum status of the current release, and always verify the published
   SHA-256 checksum of what you downloaded.
+- **Call servers are nominated by the room, not by you.** Joining a call sends
+  a Matrix OpenID token for your account to the SFU token service advertised in
+  the room's MatrixRTC state, which any room member can set. That token grants
+  no account access, but it is a verifiable assertion of your identity and it
+  reveals your IP address. Hardline requires HTTPS for that address, rejects
+  embedded credentials, and prefers a call server on your own homeserver when
+  one is offered; it cannot refuse third-party call servers outright, because a
+  call is hosted on exactly one SFU and everybody in it must reach the same
+  one. See `lib/features/voice/focus_policy.dart`.

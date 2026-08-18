@@ -9,6 +9,7 @@ import '../../core/util/snapshot_list.dart';
 import 'matrix_rtc_membership.dart';
 import 'voice_expiry_tick_provider.dart';
 import 'voice_participant.dart';
+import '../../core/util/display_name.dart';
 
 /// Who is in this room's call, whether or not we have joined it.
 ///
@@ -45,9 +46,11 @@ final voiceParticipantsProvider =
             // same reason the user list is sorted.
             deviceIds:
                 byUser[userId]!.map((m) => m.deviceId).toSet().toList()..sort(),
-            displayName: room
-                .unsafeGetUserFromMemoryOrFallback(userId)
-                .calcDisplayname(),
+            displayName: displaySafeName(
+              room
+                  .unsafeGetUserFromMemoryOrFallback(userId)
+                  .calcDisplayname(),
+            ),
             avatarMxc: room
                 .unsafeGetUserFromMemoryOrFallback(userId)
                 .avatarUrl

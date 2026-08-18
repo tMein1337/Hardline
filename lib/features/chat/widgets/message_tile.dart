@@ -10,6 +10,7 @@ import '../../activity/widgets/user_context_menu.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
 import 'message_body.dart';
+import '../../../core/util/display_name.dart';
 
 /// How long the jump-to wash takes to appear and to fade.
 const _highlightFade = Duration(milliseconds: 400);
@@ -47,7 +48,7 @@ class MessageTile extends StatelessWidget {
     final colors = context.colors;
     final metrics = context.metrics;
     final sender = event.senderFromMemoryOrFallback;
-    final senderName = sender.calcDisplayname();
+    final senderName = displaySafeName(sender.calcDisplayname());
 
     final isPending = !event.status.isSent;
     final isMention = event.mentions.userIds.contains(event.room.client.userID);

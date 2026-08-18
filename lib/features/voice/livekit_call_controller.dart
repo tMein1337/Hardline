@@ -14,6 +14,7 @@ import 'audio_devices_provider.dart';
 import 'call_encryption_manager.dart';
 import 'delayed_leave.dart';
 import 'livekit_token_service.dart';
+import 'focus_policy.dart';
 import 'matrix_rtc_membership.dart';
 import 'voice_joinability.dart';
 import 'voice_prefs_state.dart';
@@ -709,14 +710,33 @@ class LiveKitCallController extends ChangeNotifier {
   /// Picks the SFU to use.
   ///
   /// Prefers whatever a live participant already advertises, so we join the
-  /// call rather than starting a parallel one. Only when the room is empty do
-  /// we fall back to our own homeserver's well-known service.
+  /// call rather than starting a parallel one. Only when the room offers
+  /// nothing usable do we fall back to our own homeserver's well-known service.
+  ///
+  /// Every candidate goes through [chooseFocus] first. These URLs come out of
+  /// state events written by other people in the room, and joining sends the
+  /// chosen host an OpenID token for our account — see `focus_policy.dart` for
+  /// what is enforced and what remains the user's exposure.
   LiveKitFocus? _resolveFocus(Room room) {
-    for (final membership in liveMembershipsOf(room)) {
-      final focus = membership.focusPreferred.firstOrNull;
-      if (focus != null) return focus;
+    final advertised = [
+      for (final membership in liveMembershipsOf(room))
+        ...membership.focusPreferred,
+    ];
+
+    final chosen = chooseFocus(
+      advertised: advertised,
+      homeserverOrigin: client.homeserver?.origin,
+      fallback: _fallbackFocus(room.id),
+    );
+
+    if (chosen == null && advertised.isNotEmpty) {
+      debugPrint(
+        '[voice] every focus advertised in ${room.id} was rejected; '
+        'an SFU must be reachable over https. Advertised: '
+        '${advertised.map((f) => f.serviceUrl).join(", ")}',
+      );
     }
-    return _fallbackFocus(room.id);
+    return chosen;
   }
 
   /// Best-effort default when nobody is in the call yet.

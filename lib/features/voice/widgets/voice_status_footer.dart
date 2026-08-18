@@ -11,6 +11,7 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 import '../call_controller_provider.dart';
 import '../livekit_call_controller.dart';
 import '../voice_prefs_controller.dart';
+import '../../../core/util/display_name.dart';
 
 /// Connection status and call controls, above the user footer.
 ///
@@ -94,7 +95,8 @@ class VoiceStatusFooter extends ConsumerWidget {
   String? _roomName(WidgetRef ref, String? roomId) {
     if (roomId == null) return null;
     final room = ref.read(clientProvider).getRoomById(roomId);
-    return room?.getLocalizedDisplayname();
+    final name = room?.getLocalizedDisplayname();
+    return name == null ? null : displaySafeName(name);
   }
 }
 

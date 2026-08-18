@@ -3,6 +3,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
+import '../../core/util/display_name.dart';
 
 /// Identifier for the pseudo-space holding rooms that belong to no real space.
 const kHomeSpaceId = '@home';
@@ -40,7 +41,7 @@ class SpaceSummary {
 
   factory SpaceSummary.from(Room space) => SpaceSummary(
     id: space.id,
-    name: space.getLocalizedDisplayname(),
+    name: displaySafeName(space.getLocalizedDisplayname()),
     avatarMxc: space.avatar?.toString(),
     notificationCount: space.notificationCount,
     highlightCount: space.highlightCount,

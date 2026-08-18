@@ -39,7 +39,12 @@ flutter pub get
 flutter analyze                 # must be clean
 flutter test                    # must be green
 dart run tool/generate_third_party_notices.dart --check
+dart run tool/check_dependency_advisories.dart   # needs network
 ```
+
+The advisory check queries OSV for every package resolved in `pubspec.lock` and
+exits non-zero on a hit. Do not tag a release without running it online — a
+package can pick up an advisory without its version changing.
 
 If the notices check fails, regenerate and commit before continuing:
 
