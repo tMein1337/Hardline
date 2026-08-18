@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
@@ -12,7 +15,7 @@ import '../livekit_call_controller.dart';
 /// actually sending video — a voice-only call leaves the chat exactly as it was.
 ///
 /// Bounded in height rather than expanded so the conversation never disappears
-/// behind a shared screen; Discord makes the same trade.
+/// behind a shared screen.
 class CallStage extends ConsumerWidget {
   const CallStage({super.key, required this.roomId});
 

@@ -1,9 +1,18 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/matrix/avatar_uri_provider.dart';
 import '../../core/util/initials.dart';
 import '../../theme/theme_context.dart';
+
+/// Corner radius as a fraction of the avatar's edge, used when a caller does
+/// not name one. Rounded squares, not circles: it is the shape the space rail,
+/// the room list and the attachment cards all share, and the one thing that
+/// most decides the interface's silhouette.
+const _radiusFraction = 0.28;
 
 /// An avatar for a room, space or user.
 ///
@@ -31,13 +40,14 @@ class MxAvatar extends ConsumerWidget {
   final String? mxcUri;
   final double size;
 
-  /// Defaults to a circle. Discord's space rail animates this towards a
-  /// squircle when idle.
+  /// Defaults to a rounded square of [_radiusFraction]. Callers override it
+  /// only where a different shape is part of the surrounding design.
   final BorderRadius? borderRadius;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final radius = borderRadius ?? BorderRadius.circular(size / 2);
+    final radius =
+        borderRadius ?? BorderRadius.circular(size * _radiusFraction);
     final fallback = _Fallback(
       name: name,
       seed: seed,

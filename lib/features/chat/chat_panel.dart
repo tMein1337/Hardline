@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,7 +29,7 @@ class ChatPanel extends ConsumerWidget {
     if (header == null) return const _NoRoomView();
 
     return Container(
-      color: context.colors.chatBackground,
+      color: context.colors.timelineBackground,
       child: Column(
         children: [
           ChatHeader(header: header),

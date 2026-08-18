@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,8 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers/injected_providers.dart';
 import 'app_theme_state.dart';
-import 'discord_colors.dart';
-import 'discord_spacing.dart';
+import 'color_slots.dart';
+import 'metrics.dart';
 import 'theme_builder.dart';
 import 'theme_library.dart';
 
@@ -79,7 +82,7 @@ final themeControllerProvider =
 /// The join between the two halves of theming: `themeControllerProvider` says
 /// *which* theme, `themeLibraryProvider` says what it looks like. Watching both
 /// is what makes editing a slot recolor the app on the next frame.
-final discordColorsProvider = Provider<DiscordColors>((ref) {
+final paletteProvider = Provider<AppPalette>((ref) {
   final state = ref.watch(themeControllerProvider);
   final library = ref.watch(themeLibraryProvider);
   return state.resolve(base: library.byId(state.presetId)?.toColors());
@@ -88,8 +91,8 @@ final discordColorsProvider = Provider<DiscordColors>((ref) {
 /// What `MaterialApp.theme` consumes.
 final themeDataProvider = Provider<ThemeData>(
   (ref) => buildThemeData(
-    ref.watch(discordColorsProvider),
-    DiscordMetrics.standard,
+    ref.watch(paletteProvider),
+    AppMetrics.standard,
     tooltipDelay: ref.watch(
       themeControllerProvider.select((state) => state.tooltipDelay),
     ),

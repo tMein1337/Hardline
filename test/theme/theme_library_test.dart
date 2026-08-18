@@ -1,13 +1,16 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/core/providers/injected_providers.dart';
-import 'package:matrix_client/theme/discord_colors.dart';
-import 'package:matrix_client/theme/discord_palettes.dart';
-import 'package:matrix_client/theme/theme_entry.dart';
-import 'package:matrix_client/theme/theme_library.dart';
+import 'package:hardline/core/providers/injected_providers.dart';
+import 'package:hardline/theme/color_slots.dart';
+import 'package:hardline/theme/palettes.dart';
+import 'package:hardline/theme/theme_entry.dart';
+import 'package:hardline/theme/theme_library.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -34,10 +37,10 @@ void main() {
     test('a fresh install starts with the three built-in themes', () async {
       await open();
 
-      expect(read().entries.map((e) => e.id), DiscordPalettes.byIdMap.keys);
+      expect(read().entries.map((e) => e.id), AppPalettes.byIdMap.keys);
       expect(
         read().entries.map((e) => e.name),
-        DiscordPalettes.labels.values,
+        AppPalettes.labels.values,
       );
     });
 
@@ -46,16 +49,16 @@ void main() {
     test('seeded themes keep the ids the app already persisted', () async {
       await open();
 
-      expect(read().byId(DiscordPalettes.defaultId), isNotNull);
-      expect(read().byId(DiscordPalettes.defaultId)!.isSeeded, isTrue);
+      expect(read().byId(AppPalettes.defaultId), isNotNull);
+      expect(read().byId(AppPalettes.defaultId)!.isSeeded, isTrue);
     });
 
     test('a seeded theme carries every slot', () async {
       await open();
-      final entry = read().byId('discord_light')!;
+      final entry = read().byId('hardline_day')!;
 
-      expect(entry.colors.keys.toSet(), DiscordSlot.all.toSet());
-      expect(entry.toColors(), DiscordPalettes.light);
+      expect(entry.colors.keys.toSet(), ColorSlot.all.toSet());
+      expect(entry.toColors(), AppPalettes.day);
     });
 
     test('a corrupt stored library degrades to the seeded three', () async {
@@ -76,7 +79,7 @@ void main() {
 
     test('a stored library is used as-is', () async {
       await open();
-      final id = notifier().duplicate('discord_dark');
+      final id = notifier().duplicate('hardline_dark');
       final stored = container.read(prefsProvider).getString('theme_library_v1');
 
       await open({'theme_library_v1': stored!});
@@ -89,8 +92,8 @@ void main() {
   group('duplicate', () {
     test('copies every colour and the avatar ramp verbatim', () async {
       await open();
-      final source = read().byId('discord_dark')!;
-      final id = notifier().duplicate('discord_dark');
+      final source = read().byId('hardline_dark')!;
+      final id = notifier().duplicate('hardline_dark');
       final copy = read().byId(id)!;
 
       expect(copy.colors, source.colors);
@@ -102,10 +105,10 @@ void main() {
 
     test('the copy is its own theme, not a built-in', () async {
       await open();
-      final id = notifier().duplicate('discord_dark');
+      final id = notifier().duplicate('hardline_dark');
       final copy = read().byId(id)!;
 
-      expect(copy.id, isNot('discord_dark'));
+      expect(copy.id, isNot('hardline_dark'));
       // False even though it was copied from Dark: the original stays
       // revertible and restorable, the copy is freely editable.
       expect(copy.isSeeded, isFalse);
@@ -113,40 +116,40 @@ void main() {
 
     test('lands directly below its source', () async {
       await open();
-      final id = notifier().duplicate('discord_dark');
+      final id = notifier().duplicate('hardline_dark');
 
-      expect(read().indexOf(id), read().indexOf('discord_dark') + 1);
+      expect(read().indexOf(id), read().indexOf('hardline_dark') + 1);
     });
 
     test('names disambiguate rather than collide', () async {
       await open();
-      final first = notifier().duplicate('discord_dark');
-      final second = notifier().duplicate('discord_dark');
+      final first = notifier().duplicate('hardline_dark');
+      final second = notifier().duplicate('hardline_dark');
 
-      expect(read().byId(first)!.name, 'Dark (copy)');
-      expect(read().byId(second)!.name, 'Dark (copy) (2)');
+      expect(read().byId(first)!.name, 'Flight Deck (copy)');
+      expect(read().byId(second)!.name, 'Flight Deck (copy) (2)');
     });
 
     // The failure this guards against is invisible until somebody duplicates a
     // theme and watches both of them change together.
     test('editing the copy leaves the source untouched', () async {
       await open();
-      final id = notifier().duplicate('discord_dark');
-      await notifier().setSlot(id, DiscordSlot.accent, const Color(0xFF00FF00));
+      final id = notifier().duplicate('hardline_dark');
+      await notifier().setSlot(id, ColorSlot.accent, const Color(0xFF00FF00));
 
       expect(read().byId(id)!.toColors().accent, const Color(0xFF00FF00));
       expect(
-        read().byId('discord_dark')!.toColors().accent,
-        DiscordPalettes.dark.accent,
+        read().byId('hardline_dark')!.toColors().accent,
+        AppPalettes.dark.accent,
       );
     });
 
     test('duplicating a copy works, and is independent again', () async {
       await open();
-      final first = notifier().duplicate('discord_dark');
+      final first = notifier().duplicate('hardline_dark');
       await notifier().setSlot(
         first,
-        DiscordSlot.accent,
+        ColorSlot.accent,
         const Color(0xFF00FF00),
       );
       final second = notifier().duplicate(first);
@@ -155,7 +158,7 @@ void main() {
 
       await notifier().setSlot(
         second,
-        DiscordSlot.accent,
+        ColorSlot.accent,
         const Color(0xFF0000FF),
       );
       expect(read().byId(first)!.toColors().accent, const Color(0xFF00FF00));
@@ -174,17 +177,17 @@ void main() {
     test('setSlot changes only the named slot of the named theme', () async {
       await open();
       await notifier().setSlot(
-        'discord_dark',
-        DiscordSlot.accent,
+        'hardline_dark',
+        ColorSlot.accent,
         const Color(0xFF00FF00),
       );
 
-      final entry = read().byId('discord_dark')!;
+      final entry = read().byId('hardline_dark')!;
       expect(entry.toColors().accent, const Color(0xFF00FF00));
-      expect(entry.toColors().chatBackground, DiscordPalettes.dark.chatBackground);
+      expect(entry.toColors().timelineBackground, AppPalettes.dark.timelineBackground);
       expect(
-        read().byId('discord_light')!.toColors().accent,
-        DiscordPalettes.light.accent,
+        read().byId('hardline_day')!.toColors().accent,
+        AppPalettes.day.accent,
       );
     });
 
@@ -193,26 +196,26 @@ void main() {
     test('editing does not reorder the list', () async {
       await open();
       await notifier().setSlot(
-        'discord_dark',
-        DiscordSlot.accent,
+        'hardline_dark',
+        ColorSlot.accent,
         const Color(0xFF00FF00),
       );
 
-      expect(read().indexOf('discord_dark'), 0);
+      expect(read().indexOf('hardline_dark'), 0);
     });
 
     test('a dragged slider does not write until it is released', () async {
       await open();
       await notifier().setSlot(
-        'discord_dark',
-        DiscordSlot.accent,
+        'hardline_dark',
+        ColorSlot.accent,
         const Color(0xFF00FF00),
         commit: false,
       );
 
       // State moves so the app repaints under the pointer...
       expect(
-        read().byId('discord_dark')!.toColors().accent,
+        read().byId('hardline_dark')!.toColors().accent,
         const Color(0xFF00FF00),
       );
       // ...but nothing has been persisted yet.
@@ -225,23 +228,23 @@ void main() {
     test('revertSlot puts a built-in slot back', () async {
       await open();
       await notifier().setSlot(
-        'discord_dark',
-        DiscordSlot.accent,
+        'hardline_dark',
+        ColorSlot.accent,
         const Color(0xFF00FF00),
       );
-      await notifier().revertSlot('discord_dark', DiscordSlot.accent);
+      await notifier().revertSlot('hardline_dark', ColorSlot.accent);
 
       expect(
-        read().byId('discord_dark')!.toColors().accent,
-        DiscordPalettes.dark.accent,
+        read().byId('hardline_dark')!.toColors().accent,
+        AppPalettes.dark.accent,
       );
     });
 
     test('revertSlot is a no-op on a theme of the user’s own', () async {
       await open();
-      final id = notifier().duplicate('discord_dark');
-      await notifier().setSlot(id, DiscordSlot.accent, const Color(0xFF00FF00));
-      await notifier().revertSlot(id, DiscordSlot.accent);
+      final id = notifier().duplicate('hardline_dark');
+      await notifier().setSlot(id, ColorSlot.accent, const Color(0xFF00FF00));
+      await notifier().revertSlot(id, ColorSlot.accent);
 
       // Nothing to go back to, so the colour stays as the user set it rather
       // than snapping to a palette they never chose.
@@ -250,9 +253,9 @@ void main() {
 
     test('renaming disambiguates against the existing names', () async {
       await open();
-      await notifier().rename('discord_light', 'Dark');
+      await notifier().rename('hardline_day', 'Flight Deck');
 
-      expect(read().byId('discord_light')!.name, 'Dark (2)');
+      expect(read().byId('hardline_day')!.name, 'Flight Deck (2)');
     });
 
     // A theme does not clash with itself. Without this, confirming the rename
@@ -260,26 +263,26 @@ void main() {
     // "X (copy)" as its initial value — bumps the number every time.
     test('renaming a theme to the name it already has changes nothing', () async {
       await open();
-      await notifier().rename('discord_dark', 'Dark');
+      await notifier().rename('hardline_dark', 'Flight Deck');
 
-      expect(read().byId('discord_dark')!.name, 'Dark');
+      expect(read().byId('hardline_dark')!.name, 'Flight Deck');
     });
 
     test('creating a theme under the name duplicate already gave it', () async {
       await open();
-      final id = notifier().duplicate('discord_dark');
-      await notifier().rename(id, 'Dark (copy)');
+      final id = notifier().duplicate('hardline_dark');
+      await notifier().rename(id, 'Flight Deck (copy)');
 
-      expect(read().byId(id)!.name, 'Dark (copy)');
+      expect(read().byId(id)!.name, 'Flight Deck (copy)');
     });
   });
 
   group('remove and restore', () {
     test('removes the named theme and leaves the rest', () async {
       await open();
-      await notifier().remove('discord_light');
+      await notifier().remove('hardline_day');
 
-      expect(read().byId('discord_light'), isNull);
+      expect(read().byId('hardline_day'), isNull);
       expect(read().entries.length, 2);
     });
 
@@ -287,28 +290,28 @@ void main() {
     // library there is no theme to select and no way back.
     test('the last theme cannot be removed', () async {
       await open();
-      await notifier().remove('discord_light');
-      await notifier().remove('discord_dark_classic');
-      await notifier().remove('discord_dark');
+      await notifier().remove('hardline_day');
+      await notifier().remove('hardline_night');
+      await notifier().remove('hardline_dark');
 
       expect(read().entries.length, 1);
     });
 
     test('restoreBuiltIns puts back only what is missing', () async {
       await open();
-      await notifier().remove('discord_light');
+      await notifier().remove('hardline_day');
       await notifier().setSlot(
-        'discord_dark',
-        DiscordSlot.accent,
+        'hardline_dark',
+        ColorSlot.accent,
         const Color(0xFF00FF00),
       );
       await notifier().restoreBuiltIns();
 
-      expect(read().byId('discord_light')!.toColors(), DiscordPalettes.light);
+      expect(read().byId('hardline_day')!.toColors(), AppPalettes.day);
       // It restores what is gone rather than resetting everything — edits to a
       // built-in that is still present survive.
       expect(
-        read().byId('discord_dark')!.toColors().accent,
+        read().byId('hardline_dark')!.toColors().accent,
         const Color(0xFF00FF00),
       );
     });
@@ -323,10 +326,10 @@ void main() {
 
     test('missingSeededIds reports in the built-in order', () async {
       await open();
-      await notifier().remove('discord_light');
-      await notifier().remove('discord_dark');
+      await notifier().remove('hardline_day');
+      await notifier().remove('hardline_dark');
 
-      expect(read().missingSeededIds, ['discord_dark', 'discord_light']);
+      expect(read().missingSeededIds, ['hardline_dark', 'hardline_day']);
     });
   });
 
@@ -336,7 +339,7 @@ void main() {
       final entry = ThemeEntry.fromColors(
         id: generateThemeId(),
         name: 'Imported',
-        colors: DiscordPalettes.light,
+        colors: AppPalettes.day,
       );
       final id = notifier().add(entry);
 
@@ -349,7 +352,7 @@ void main() {
       ThemeEntry incoming() => ThemeEntry.fromColors(
         id: generateThemeId(),
         name: 'Midnight',
-        colors: DiscordPalettes.light,
+        colors: AppPalettes.day,
       );
 
       final first = notifier().add(incoming());
@@ -365,7 +368,7 @@ void main() {
       final entry = ThemeEntry.fromColors(
         id: 'x',
         name: 'Midnight',
-        colors: DiscordPalettes.light,
+        colors: AppPalettes.day,
       );
 
       expect(ThemeEntry.fromJson(entry.toJson()), entry);
@@ -376,13 +379,13 @@ void main() {
       final entry = ThemeEntry.fromJson({
         'id': 'x',
         'name': 'Midnight',
-        'colors': {DiscordSlot.accent: 0xFF00FF00},
+        'colors': {ColorSlot.accent: 0xFF00FF00},
         'avatarPalette': <int>[],
       })!;
 
-      expect(entry.colors.keys.toSet(), DiscordSlot.all.toSet());
+      expect(entry.colors.keys.toSet(), ColorSlot.all.toSet());
       expect(entry.toColors().accent, const Color(0xFF00FF00));
-      expect(entry.toColors().chatBackground, DiscordPalettes.dark.chatBackground);
+      expect(entry.toColors().timelineBackground, AppPalettes.dark.timelineBackground);
       expect(entry.avatarPalette, defaultAvatarPalette);
     });
 
@@ -409,7 +412,7 @@ void main() {
       final source = ThemeEntry.fromColors(
         id: 'a',
         name: 'A',
-        colors: DiscordPalettes.dark,
+        colors: AppPalettes.dark,
       );
       final copy = source.copyAs(id: 'b', name: 'B');
 

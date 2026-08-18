@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import '../../theme/theme_context.dart';
@@ -23,7 +26,7 @@ class AppErrorView extends StatelessWidget {
     final colors = context.colors;
 
     return Scaffold(
-      backgroundColor: colors.chatBackground,
+      backgroundColor: colors.timelineBackground,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),

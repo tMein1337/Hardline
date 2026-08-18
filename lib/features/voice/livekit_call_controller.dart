@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -444,7 +447,7 @@ class LiveKitCallController extends ChangeNotifier {
   ///
   /// Nothing about this goes on the wire — deafening is a property of *our*
   /// playback, not of the call. It also mutes our own microphone, the way
-  /// Discord does, on the reasoning that someone who cannot hear the room
+  /// clients commonly do, on the reasoning that someone who cannot hear the room
   /// should not be talking into it.
   Future<void> setDeafened(bool deafened) async {
     if (deafened) {

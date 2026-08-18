@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,7 +35,7 @@ class ActivityPage extends ConsumerWidget {
     final prefs = ref.watch(activityPrefsProvider);
 
     return Container(
-      color: colors.chatBackground,
+      color: colors.timelineBackground,
       child: Column(
         children: [
           const _Header(),
@@ -63,7 +66,7 @@ class _Header extends ConsumerWidget {
       height: context.metrics.headerHeight,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: colors.chatBackground,
+        color: colors.timelineBackground,
         border: Border(bottom: BorderSide(color: colors.dividerStrong)),
       ),
       child: Row(

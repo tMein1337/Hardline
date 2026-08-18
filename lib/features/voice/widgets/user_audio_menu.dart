@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,7 +17,7 @@ import '../voice_prefs_state.dart';
 /// Nothing here is sent anywhere. Turning someone down is a property of your
 /// playback, and the homeserver never learns about it.
 ///
-/// Two independent volumes, as Discord has: someone's voice and the audio of
+/// Two independent volumes: someone's voice and the audio of
 /// the screen they are sharing are different things you want at different
 /// levels, and a single slider forces a compromise between hearing them speak
 /// and hearing what they are showing.

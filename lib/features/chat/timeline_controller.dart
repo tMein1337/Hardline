@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
@@ -202,7 +205,7 @@ class TimelineController extends ChangeNotifier {
     // first makes Element render it under whichever image happens to lead,
     // which reads as a label for that image rather than for the batch. So: one
     // file gets a real caption; several get the text as its own message ahead
-    // of them, which is what Discord shows too.
+    // of them.
     if (text.isNotEmpty && files.length > 1) {
       try {
         await room.sendTextEvent(text);

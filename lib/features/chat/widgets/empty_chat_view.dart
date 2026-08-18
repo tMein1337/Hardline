@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -11,7 +14,7 @@ class EmptyChatView extends StatelessWidget {
     final colors = context.colors;
 
     return Container(
-      color: colors.chatBackground,
+      color: colors.timelineBackground,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

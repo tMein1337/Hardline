@@ -1,8 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
 
-/// Discord-style labelled input: small bold label above a dark filled field.
+/// A labelled input: a small tracked-out legend above a filled field, the
+/// way a panel labels the control beneath it.
 class LoginTextField extends StatelessWidget {
   const LoginTextField({
     super.key,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -19,7 +22,7 @@ class LoginCard extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 480),
           child: Container(
             decoration: BoxDecoration(
-              color: colors.channelSidebar,
+              color: colors.roomSidebar,
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(

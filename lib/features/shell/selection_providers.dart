@@ -1,8 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../spaces/space_summary.dart';
 
-/// Which space (Discord "server") the rail has selected.
+/// Which space the rail has selected.
 class SelectedSpaceId extends Notifier<String> {
   @override
   String build() => kHomeSpaceId;
@@ -15,7 +18,7 @@ final selectedSpaceIdProvider = NotifierProvider<SelectedSpaceId, String>(
 );
 
 /// Remembers the open room per space, so switching away and back returns to
-/// where you were — as Discord does.
+/// where you were.
 class SelectedRoomIds extends Notifier<Map<String, String>> {
   @override
   Map<String, String> build() => const {};

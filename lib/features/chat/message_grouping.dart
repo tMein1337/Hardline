@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
@@ -5,7 +8,7 @@ import '../voice/matrix_rtc_membership.dart';
 import 'message_item.dart';
 
 /// How far apart two messages from the same sender may be and still be drawn as
-/// one block. This is Discord's actual threshold.
+/// one block.
 const kGroupWindow = Duration(minutes: 7);
 
 /// State events worth showing inline. Everything else is noise for a chat view.

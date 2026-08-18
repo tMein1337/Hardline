@@ -1,12 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/settings/widgets/settings_layout.dart';
-import 'package:matrix_client/theme/discord_palettes.dart';
-import 'package:matrix_client/theme/discord_spacing.dart';
-import 'package:matrix_client/theme/theme_builder.dart';
+import 'package:hardline/features/settings/widgets/settings_layout.dart';
+import 'package:hardline/theme/palettes.dart';
+import 'package:hardline/theme/metrics.dart';
+import 'package:hardline/theme/theme_builder.dart';
 
 void main() {
-  final theme = buildThemeData(DiscordPalettes.dark, DiscordMetrics.standard);
+  final theme = buildThemeData(AppPalettes.dark, AppMetrics.standard);
 
   Widget host(Widget child) =>
       MaterialApp(theme: theme, home: Scaffold(body: child));
@@ -46,11 +49,11 @@ void main() {
             .first,
       );
 
-      expect(material.color, DiscordPalettes.dark.elevatedSurface);
+      expect(material.color, AppPalettes.dark.elevatedSurface);
       expect(material.shape, isA<RoundedRectangleBorder>());
       expect(
         (material.shape! as RoundedRectangleBorder).side.color,
-        DiscordPalettes.dark.divider,
+        AppPalettes.dark.divider,
       );
     });
   });

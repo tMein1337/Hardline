@@ -1,10 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'discord_colors.dart';
-import 'discord_palettes.dart';
+import 'color_slots.dart';
+import 'palettes.dart';
 
 /// The longest a theme name may be.
 ///
@@ -15,14 +18,14 @@ const kMaxThemeNameLength = 60;
 
 /// One theme in the library: a name and a value for every colour slot.
 ///
-/// Unlike a palette in `discord_palettes.dart`, this is *data* — it is stored,
+/// Unlike a palette in `palettes.dart`, this is *data* — it is stored,
 /// edited, copied and written to files. The colours are packed ARGB ints rather
 /// than `Color`s because that is what both storage formats want, and converting
 /// once at the edge ([toColors]) is cheaper than converting on every read.
 ///
-/// [colors] is complete: every slot in [DiscordSlot.all] has a value. Nothing
+/// [colors] is complete: every slot in [ColorSlot.all] has a value. Nothing
 /// constructs a partial entry — [ThemeEntry.fromColors] takes a whole palette,
-/// and the file decoder fills any gap from [DiscordPalettes.dark] — so no
+/// and the file decoder fills any gap from [AppPalettes.dark] — so no
 /// consumer has to handle a missing slot and render magenta.
 @immutable
 class ThemeEntry {
@@ -35,14 +38,14 @@ class ThemeEntry {
 
   /// Local to this installation, and never written to an exported file.
   ///
-  /// The three seeded themes keep the preset ids the app already persisted
-  /// (`discord_dark` and friends), which is what lets an existing `presetId`
-  /// keep selecting the right theme across this change without a migration.
+  /// The three seeded themes carry the built-in ids, and an id persisted by an
+  /// older build is mapped forward by [migratePresetId], so an existing
+  /// `presetId` keeps selecting the right theme across a rename.
   final String id;
 
   final String name;
 
-  /// Slot name (see [DiscordSlot]) to packed ARGB. Treat as immutable.
+  /// Slot name (see [ColorSlot]) to packed ARGB. Treat as immutable.
   final Map<String, int> colors;
 
   /// Fallback avatar colours, packed ARGB. Carried faithfully through copies,
@@ -54,9 +57,9 @@ class ThemeEntry {
   ///
   /// False for a duplicate of a built-in: the copy gets a generated id, so the
   /// original stays revertible while the copy is freely editable.
-  bool get isSeeded => DiscordPalettes.byIdMap.containsKey(id);
+  bool get isSeeded => AppPalettes.byIdMap.containsKey(id);
 
-  DiscordColors toColors() => DiscordColors(
+  AppPalette toColors() => AppPalette(
     slots: {
       for (final entry in colors.entries) entry.key: Color(entry.value),
     },
@@ -66,7 +69,7 @@ class ThemeEntry {
   static ThemeEntry fromColors({
     required String id,
     required String name,
-    required DiscordColors colors,
+    required AppPalette colors,
   }) => ThemeEntry(
     id: id,
     name: name,
@@ -92,7 +95,7 @@ class ThemeEntry {
   ThemeEntry copyWith({String? name, Map<String, int>? colors}) => ThemeEntry(
     id: id,
     name: name ?? this.name,
-    // Merged, not replaced, matching `DiscordColors.copyWith`: callers pass
+    // Merged, not replaced, matching `AppPalette.copyWith`: callers pass
     // only the slot they are changing.
     colors: colors == null ? this.colors : {...this.colors, ...colors},
     avatarPalette: avatarPalette,
@@ -108,7 +111,7 @@ class ThemeEntry {
   /// Null for anything unusable, so one corrupt entry drops out of the library
   /// instead of taking the whole list — and with it every theme — down.
   ///
-  /// A stored entry missing slots is completed from [DiscordPalettes.dark]
+  /// A stored entry missing slots is completed from [AppPalettes.dark]
   /// rather than rejected: the alternative is losing a theme somebody built
   /// because a slot was added to the app after they saved it.
   static ThemeEntry? fromJson(Object? json) {
@@ -136,7 +139,7 @@ class ThemeEntry {
         : const <int>[];
 
     return ThemeEntry(
-      id: id,
+      id: migratePresetId(id),
       name: clampThemeName(name),
       colors: completeColors(colors),
       avatarPalette: ramp.isEmpty ? defaultAvatarPalette : ramp,
@@ -185,7 +188,7 @@ class ThemeLibraryState {
   /// Which of the three built-in themes are no longer in the library, in their
   /// original order. Drives the *Restore built-in themes* action.
   List<String> get missingSeededIds => [
-    for (final id in DiscordPalettes.byIdMap.keys)
+    for (final id in AppPalettes.byIdMap.keys)
       if (byId(id) == null) id,
   ];
 
@@ -235,10 +238,10 @@ class ThemeLibraryState {
   /// can be renamed, edited and deleted like anything else.
   static ThemeLibraryState seeded() => ThemeLibraryState(
     entries: [
-      for (final entry in DiscordPalettes.byIdMap.entries)
+      for (final entry in AppPalettes.byIdMap.entries)
         ThemeEntry.fromColors(
           id: entry.key,
-          name: DiscordPalettes.labels[entry.key] ?? entry.key,
+          name: AppPalettes.labels[entry.key] ?? entry.key,
           colors: entry.value,
         ),
     ],
@@ -254,23 +257,67 @@ class ThemeLibraryState {
 }
 
 /// A theme with every slot filled: [colors] where it has an answer, and
-/// [DiscordPalettes.dark] where it does not.
+/// [AppPalettes.dark] where it does not.
 ///
 /// Both readers need this. A stored theme predates any slot added since it was
 /// saved, and an imported file may have been hand-written — in either case an
 /// incomplete palette renders as magenta, which is worse than a colour the user
 /// did not choose.
-Map<String, int> completeColors(Map<String, int> colors) => {
-  for (final slot in DiscordSlot.all)
-    // Unknown keys in `colors` are dropped by iterating the slot list rather
-    // than the input: a file from a future version can name slots this build
-    // has never heard of, and they are not ours to keep.
-    slot: colors[slot] ?? DiscordPalettes.dark.slot(slot).toARGB32(),
+Map<String, int> completeColors(Map<String, int> colors) {
+  final migrated = migrateSlotNames(colors);
+  return {
+    for (final slot in ColorSlot.all)
+      // Unknown keys in `colors` are dropped by iterating the slot list rather
+      // than the input: a file from a future version can name slots this build
+      // has never heard of, and they are not ours to keep.
+      slot: migrated[slot] ?? AppPalettes.dark.slot(slot).toARGB32(),
+  };
+}
+
+/// Slot names that were renamed when the theme layer was given its own
+/// vocabulary, mapped old to new.
+///
+/// Kept because both stored libraries and exported `.theme.json` files carry
+/// these keys. Without the map, a theme saved before the rename would silently
+/// lose its three most visible colours to the defaults.
+const kRenamedSlots = <String, String>{
+  'serverRail': ColorSlot.spaceRail,
+  'channelSidebar': ColorSlot.roomSidebar,
+  'chatBackground': ColorSlot.timelineBackground,
 };
+
+/// [colors] with any [kRenamedSlots] key rewritten to its current name.
+///
+/// A value already stored under the new name wins, so a file carrying both
+/// spellings is not at the mercy of map order.
+Map<String, int> migrateSlotNames(Map<String, int> colors) {
+  if (!colors.keys.any(kRenamedSlots.containsKey)) return colors;
+  return {
+    // Renamed keys are written first so that a value already present under the
+    // current name overwrites them, rather than depending on iteration order.
+    for (final entry in colors.entries) ?kRenamedSlots[entry.key]: entry.value,
+    for (final entry in colors.entries)
+      if (!kRenamedSlots.containsKey(entry.key)) entry.key: entry.value,
+  };
+}
+
+/// Built-in theme ids that were renamed with the visual redesign.
+///
+/// The palettes behind these ids were replaced outright, so an installation
+/// that still names one is pointed at the equivalent new theme rather than
+/// falling back to the default and losing the user's choice of light or dark.
+const kRenamedPresetIds = <String, String>{
+  'discord_dark': 'hardline_dark',
+  'discord_dark_classic': 'hardline_night',
+  'discord_light': 'hardline_day',
+};
+
+/// [id] under its current name, or [id] unchanged.
+String migratePresetId(String id) => kRenamedPresetIds[id] ?? id;
 
 /// The built-in avatar ramp, for entries that carry none of their own.
 final List<int> defaultAvatarPalette = [
-  for (final color in DiscordPalettes.dark.avatarPalette) color.toARGB32(),
+  for (final color in AppPalettes.dark.avatarPalette) color.toARGB32(),
 ];
 
 /// Trimmed and capped, or a placeholder if there is nothing left.

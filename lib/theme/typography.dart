@@ -1,15 +1,18 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
-import 'discord_colors.dart';
+import 'color_slots.dart';
 
 /// Text styles, pre-colored from the active palette.
 ///
-/// Built by `buildThemeData` via [DiscordTypography.from] so widgets get a
+/// Built by `buildThemeData` via [AppTypography.from] so widgets get a
 /// ready-to-use style — `context.text.messageBody` already carries the right
 /// color, and recolors automatically when the palette changes.
 @immutable
-class DiscordTypography extends ThemeExtension<DiscordTypography> {
-  const DiscordTypography({
+class AppTypography extends ThemeExtension<AppTypography> {
+  const AppTypography({
     required this.messageBody,
     required this.username,
     required this.timestamp,
@@ -25,9 +28,22 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
     required this.fieldLabel,
   });
 
-  /// Discord ships "gg sans"; these are the closest stock Windows faces.
+  /// The interface face. Stock Windows, so a release carries no font licences
+  /// of its own and nothing has to be embedded.
   static const fontFamily = 'Segoe UI';
   static const fontFamilyFallback = ['Segoe UI Variable', 'Roboto', 'Arial'];
+
+  /// Used wherever a value is *read* rather than prose — timestamps, counts,
+  /// device ids. Monospaced digits keep a column of them from shifting as the
+  /// numbers change, which is the whole reason instrument readouts are set this
+  /// way.
+  static const monoFamily = 'Consolas';
+  static const monoFamilyFallback = [
+    'Cascadia Mono',
+    'Consolas',
+    'DejaVu Sans Mono',
+    'monospace',
+  ];
 
   final TextStyle messageBody;
   final TextStyle username;
@@ -43,11 +59,11 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
   final TextStyle buttonLabel;
   final TextStyle fieldLabel;
 
-  factory DiscordTypography.from(DiscordColors c) {
+  factory AppTypography.from(AppPalette c) {
     const family = fontFamily;
     const fallback = fontFamilyFallback;
 
-    return DiscordTypography(
+    return AppTypography(
       messageBody: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
@@ -64,9 +80,10 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
         color: c.textHeader,
       ),
       timestamp: TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12,
+        fontFamily: monoFamily,
+        fontFamilyFallback: monoFamilyFallback,
+        fontSize: 11,
+        letterSpacing: 0.2,
         color: c.textMuted,
       ),
       channelName: TextStyle(
@@ -83,12 +100,13 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
         fontWeight: FontWeight.w500,
         color: c.textHeader,
       ),
+      // Tracked out and set small, the way a panel legend is engraved.
       sectionHeader: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.4,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.9,
         color: c.textMuted,
       ),
       title: TextStyle(
@@ -105,9 +123,9 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
         color: c.textMuted,
       ),
       badge: TextStyle(
-        fontFamily: family,
-        fontFamilyFallback: fallback,
-        fontSize: 12,
+        fontFamily: monoFamily,
+        fontFamilyFallback: monoFamilyFallback,
+        fontSize: 11,
         fontWeight: FontWeight.w700,
         height: 1,
         color: c.unreadBadgeText,
@@ -135,16 +153,16 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
       fieldLabel: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: FontWeight.w700,
-        letterSpacing: 0.2,
+        letterSpacing: 0.8,
         color: c.textMuted,
       ),
     );
   }
 
   @override
-  DiscordTypography copyWith({
+  AppTypography copyWith({
     TextStyle? messageBody,
     TextStyle? username,
     TextStyle? timestamp,
@@ -159,7 +177,7 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
     TextStyle? buttonLabel,
     TextStyle? fieldLabel,
   }) {
-    return DiscordTypography(
+    return AppTypography(
       messageBody: messageBody ?? this.messageBody,
       username: username ?? this.username,
       timestamp: timestamp ?? this.timestamp,
@@ -177,10 +195,10 @@ class DiscordTypography extends ThemeExtension<DiscordTypography> {
   }
 
   @override
-  DiscordTypography lerp(covariant DiscordTypography? other, double t) {
+  AppTypography lerp(covariant AppTypography? other, double t) {
     if (other == null) return this;
     TextStyle l(TextStyle a, TextStyle b) => TextStyle.lerp(a, b, t)!;
-    return DiscordTypography(
+    return AppTypography(
       messageBody: l(messageBody, other.messageBody),
       username: l(username, other.username),
       timestamp: l(timestamp, other.timestamp),

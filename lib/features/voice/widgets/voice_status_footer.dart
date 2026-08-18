@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,7 +15,7 @@ import '../voice_prefs_controller.dart';
 /// Connection status and call controls, above the user footer.
 ///
 /// Collapses to nothing when not in a call, so the sidebar is unchanged for
-/// anyone who never joins one. This is where Discord puts it.
+/// anyone who never joins one.
 class VoiceStatusFooter extends ConsumerWidget {
   const VoiceStatusFooter({super.key});
 

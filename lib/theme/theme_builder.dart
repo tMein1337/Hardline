@@ -1,9 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import 'app_theme_state.dart';
-import 'discord_colors.dart';
-import 'discord_spacing.dart';
-import 'discord_typography.dart';
+import 'color_slots.dart';
+import 'metrics.dart';
+import 'typography.dart';
 
 /// Builds the [ThemeData] the app renders with.
 ///
@@ -15,11 +18,11 @@ import 'discord_typography.dart';
 /// `TooltipThemeData` means every `Tooltip` in the app follows the preference
 /// without a single one of them naming it.
 ThemeData buildThemeData(
-  DiscordColors colors,
-  DiscordMetrics metrics, {
+  AppPalette colors,
+  AppMetrics metrics, {
   Duration tooltipDelay = kDefaultTooltipDelay,
 }) {
-  final typography = DiscordTypography.from(colors);
+  final typography = AppTypography.from(colors);
   final brightness = colors.isDark ? Brightness.dark : Brightness.light;
 
   final scheme =
@@ -29,7 +32,7 @@ ThemeData buildThemeData(
       ).copyWith(
         primary: colors.accent,
         onPrimary: colors.textOnAccent,
-        surface: colors.chatBackground,
+        surface: colors.timelineBackground,
         onSurface: colors.textPrimary,
         error: colors.danger,
         onError: colors.textOnAccent,
@@ -40,14 +43,15 @@ ThemeData buildThemeData(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
-    scaffoldBackgroundColor: colors.chatBackground,
-    canvasColor: colors.chatBackground,
+    scaffoldBackgroundColor: colors.timelineBackground,
+    canvasColor: colors.timelineBackground,
     dividerColor: colors.divider,
-    fontFamily: DiscordTypography.fontFamily,
-    fontFamilyFallback: DiscordTypography.fontFamilyFallback,
+    fontFamily: AppTypography.fontFamily,
+    fontFamilyFallback: AppTypography.fontFamilyFallback,
 
-    // Discord has no ripples; hover and press states are drawn explicitly by
-    // the widgets that need them.
+    // No ripples anywhere: hover and press states are drawn explicitly by the
+    // widgets that need them, which is what keeps a press reading as a panel
+    // switch rather than as a Material surface.
     splashFactory: NoSplash.splashFactory,
     highlightColor: Colors.transparent,
     hoverColor: Colors.transparent,

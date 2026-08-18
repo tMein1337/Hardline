@@ -1,9 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/theme/app_theme_state.dart';
-import 'package:matrix_client/theme/discord_palettes.dart';
-import 'package:matrix_client/theme/discord_spacing.dart';
-import 'package:matrix_client/theme/theme_builder.dart';
+import 'package:hardline/theme/app_theme_state.dart';
+import 'package:hardline/theme/palettes.dart';
+import 'package:hardline/theme/metrics.dart';
+import 'package:hardline/theme/theme_builder.dart';
 
 /// The button theme once set `minimumSize: Size.fromHeight(44)`, which is
 /// `Size(double.infinity, 44)` — an infinite *minimum width*.
@@ -15,7 +18,7 @@ import 'package:matrix_client/theme/theme_builder.dart';
 /// like a button problem either — layout aborts for the entire subtree, so the
 /// symptom is a blank screen and a cascade of "render box was not laid out".
 void main() {
-  final theme = buildThemeData(DiscordPalettes.dark, DiscordMetrics.standard);
+  final theme = buildThemeData(AppPalettes.dark, AppMetrics.standard);
 
   Widget host(Widget child) =>
       MaterialApp(theme: theme, home: Scaffold(body: child));
@@ -101,8 +104,8 @@ void main() {
     testWidgets('the theme carries the configured hover delay', (tester) async {
       const delay = Duration(milliseconds: 900);
       final themed = buildThemeData(
-        DiscordPalettes.dark,
-        DiscordMetrics.standard,
+        AppPalettes.dark,
+        AppMetrics.standard,
         tooltipDelay: delay,
       );
 
@@ -123,8 +126,8 @@ void main() {
 
     testWidgets('defaults to the app default, not Flutter zero', (tester) async {
       final themed = buildThemeData(
-        DiscordPalettes.dark,
-        DiscordMetrics.standard,
+        AppPalettes.dark,
+        AppMetrics.standard,
       );
 
       await tester.pumpWidget(

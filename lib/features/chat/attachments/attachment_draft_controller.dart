@@ -1,8 +1,14 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pending_attachment.dart';
 
-/// How many attachments one message may carry. Discord's number.
+/// How many attachments one message may carry.
+///
+/// A staging tray is meant to be read at a glance; past this many chips it
+/// becomes a list to scroll, and the send is better split in two.
 ///
 /// A cap rather than a warning because the tray holds real bytes for clipboard
 /// blobs, and because ten preview chips already overflow the composer.

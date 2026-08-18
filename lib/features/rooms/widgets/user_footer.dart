@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +14,8 @@ import '../../settings/settings_screen.dart';
 ///
 /// The gear is the only button here. Signing out moved into settings when the
 /// unified screen landed: it sat one pixel from the settings icon, is
-/// irreversible, and Discord — whose layout this follows — does not put it in
+/// irreversible, and a footer this small is the wrong place for it, so it is
+/// not in
 /// the footer either.
 class UserFooter extends ConsumerWidget {
   const UserFooter({super.key});

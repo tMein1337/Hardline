@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// Reads and writes `.theme.json` files. The format is documented in the
 /// README, under "Custom themes".
 ///
@@ -9,13 +12,20 @@ library;
 
 import 'dart:convert';
 
-import 'discord_colors.dart';
+import 'color_slots.dart';
 import 'hex_color.dart';
 import 'theme_entry.dart';
 
 /// Marks a file as ours. Checked on import, because JSON alone says nothing:
 /// without it, any object with a `colors` key would silently become a theme.
-const kThemeFileFormat = 'matrix_client.theme';
+const kThemeFileFormat = 'hardline.theme';
+
+/// Format markers written by earlier builds, still accepted on import.
+///
+/// Exported themes live in people's file systems and outlive the name the app
+/// was released under; refusing one because the project was renamed would throw
+/// away work for no reason.
+const kLegacyThemeFileFormats = {'matrix_client.theme'};
 
 /// The format version this build writes and is the ceiling for reading.
 const kThemeFileVersion = 1;
@@ -42,7 +52,7 @@ class ThemeFileException implements Exception {
 
 /// Serialises [entry] as the contents of a `.theme.json` file.
 ///
-/// Slots are written in [DiscordSlot.all] order rather than map order so that
+/// Slots are written in [ColorSlot.all] order rather than map order so that
 /// two exported themes diff line for line, and so a hand-editor finds the
 /// surfaces grouped the way the palette file groups them.
 String encodeThemeFile(ThemeEntry entry) {
@@ -53,7 +63,7 @@ String encodeThemeFile(ThemeEntry entry) {
     'version': kThemeFileVersion,
     'name': entry.name,
     'colors': {
-      for (final slot in DiscordSlot.all) slot: hexOf(colors.slot(slot)),
+      for (final slot in ColorSlot.all) slot: hexOf(colors.slot(slot)),
     },
     'avatarPalette': [
       for (final color in colors.avatarPalette) hexOf(color),
@@ -92,7 +102,8 @@ ThemeEntry decodeThemeFile(String contents, {String? fallbackName}) {
     );
   }
 
-  if (decoded['format'] != kThemeFileFormat) {
+  final format = decoded['format'];
+  if (format != kThemeFileFormat && !kLegacyThemeFileFormats.contains(format)) {
     throw const ThemeFileException(
       'That is not a theme file. A theme exported from this app starts with '
       '"format": "$kThemeFileFormat".',

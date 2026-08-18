@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,7 +12,8 @@ import '../../../theme/theme_context.dart';
 import '../attachments/attachment_kind.dart';
 import 'attachment_icons.dart';
 
-/// Discord's inline preview ceiling.
+/// The inline preview ceiling. Past this an image is scaled down rather than
+/// allowed to push the rest of the timeline off screen.
 const _maxWidth = 400.0;
 const _maxHeight = 350.0;
 

@@ -1,9 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/app_theme_state.dart';
-import '../../../theme/discord_colors.dart';
-import '../../../theme/discord_palettes.dart';
+import '../../../theme/color_slots.dart';
+import '../../../theme/palettes.dart';
 import '../../../theme/theme_context.dart';
 import '../../../theme/theme_controller.dart';
 import '../../../theme/theme_entry.dart';
@@ -14,7 +17,7 @@ import '../widgets/theme_library_card.dart';
 
 /// The theme library, and the colours of whichever theme is selected.
 ///
-/// The grid renders from [DiscordSlot.all] rather than a hardcoded list, so a
+/// The grid renders from [ColorSlot.all] rather than a hardcoded list, so a
 /// slot added to the palette becomes editable here without anyone remembering
 /// to come back. That property is inherited from the development swatch page
 /// this replaces, and is the reason it was written that way in the first place.
@@ -60,9 +63,9 @@ class AppearancePane extends ConsumerWidget {
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
-            itemCount: DiscordSlot.all.length,
+            itemCount: ColorSlot.all.length,
             itemBuilder: (context, index) {
-              final slot = DiscordSlot.all[index];
+              final slot = ColorSlot.all[index];
               return _SwatchTile(
                 slot: slot,
                 changed: _divergesFromBuiltIn(active, slot),
@@ -79,7 +82,7 @@ class AppearancePane extends ConsumerWidget {
   /// seeded from. False for a theme the user made or imported — it was never a
   /// copy of anything, so "changed" would have nothing to mean.
   static bool _divergesFromBuiltIn(ThemeEntry entry, String slot) {
-    final builtIn = DiscordPalettes.byIdMap[entry.id];
+    final builtIn = AppPalettes.byIdMap[entry.id];
     if (builtIn == null) return false;
     return entry.colors[slot] != builtIn.slot(slot).toARGB32();
   }
@@ -97,7 +100,7 @@ class AppearancePane extends ConsumerWidget {
     final result = await SlotColorEditor.show(
       context,
       slot: slot,
-      initial: ref.read(discordColorsProvider).slot(slot),
+      initial: ref.read(paletteProvider).slot(slot),
       canRevert: _divergesFromBuiltIn(entry, slot),
     );
     if (result == null) return;
@@ -174,7 +177,7 @@ class _LegacyOverridesCard extends ConsumerWidget {
           ThemeEntry.fromColors(
             id: generateThemeId(),
             name: '${source?.name ?? 'Theme'} (customised)',
-            colors: ref.read(discordColorsProvider),
+            colors: ref.read(paletteProvider),
           ),
         );
 
@@ -314,7 +317,7 @@ class _SwatchTile extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      DiscordSlot.labelOf(slot),
+                      ColorSlot.labelOf(slot),
                       style: context.text.username,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

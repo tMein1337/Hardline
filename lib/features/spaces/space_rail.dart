@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,7 +22,7 @@ class SpaceRail extends ConsumerWidget {
 
     return Container(
       width: metrics.railWidth,
-      color: colors.serverRail,
+      color: colors.spaceRail,
       child: ScrollConfiguration(
         // The rail is narrow; a scrollbar here would crowd the icons.
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
@@ -27,7 +30,7 @@ class SpaceRail extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(vertical: 12),
           itemCount: spaces.length,
           separatorBuilder: (context, index) {
-            // Home is separated from real spaces by a rule, as in Discord.
+            // Home is separated from real spaces by a rule.
             if (index != 0) return const SizedBox(height: 8);
             return Padding(
               padding: const EdgeInsets.symmetric(

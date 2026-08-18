@@ -1,20 +1,23 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/theme/app_theme_state.dart';
-import 'package:matrix_client/theme/discord_colors.dart';
-import 'package:matrix_client/theme/discord_palettes.dart';
+import 'package:hardline/theme/app_theme_state.dart';
+import 'package:hardline/theme/color_slots.dart';
+import 'package:hardline/theme/palettes.dart';
 
 void main() {
   group('palettes', () {
     // The map-based design means a palette can omit a slot and still compile.
     // That renders as magenta at runtime, which is exactly the kind of bug
     // that survives review, so it is asserted here instead.
-    for (final entry in DiscordPalettes.byIdMap.entries) {
+    for (final entry in AppPalettes.byIdMap.entries) {
       test('"${entry.key}" defines every slot exactly once', () {
         expect(
           entry.value.slots.keys.toSet(),
-          DiscordSlot.all.toSet(),
-          reason: 'palette slots must match DiscordSlot.all',
+          ColorSlot.all.toSet(),
+          reason: 'palette slots must match ColorSlot.all',
         );
         expect(entry.value.avatarPalette, isNotEmpty);
       });
@@ -22,102 +25,102 @@ void main() {
 
     test('every preset id has a display label', () {
       expect(
-        DiscordPalettes.labels.keys.toSet(),
-        DiscordPalettes.byIdMap.keys.toSet(),
+        AppPalettes.labels.keys.toSet(),
+        AppPalettes.byIdMap.keys.toSet(),
       );
     });
 
     test('default id resolves to a real palette', () {
       expect(
-        DiscordPalettes.byIdMap.containsKey(DiscordPalettes.defaultId),
+        AppPalettes.byIdMap.containsKey(AppPalettes.defaultId),
         isTrue,
       );
     });
 
     test('unknown id falls back to dark rather than throwing', () {
-      expect(DiscordPalettes.byId('nope'), DiscordPalettes.dark);
+      expect(AppPalettes.byId('nope'), AppPalettes.dark);
     });
 
     test('dark palettes report isDark, light does not', () {
-      expect(DiscordPalettes.dark.isDark, isTrue);
-      expect(DiscordPalettes.darkClassic.isDark, isTrue);
-      expect(DiscordPalettes.light.isDark, isFalse);
+      expect(AppPalettes.dark.isDark, isTrue);
+      expect(AppPalettes.night.isDark, isTrue);
+      expect(AppPalettes.day.isDark, isFalse);
     });
   });
 
-  group('DiscordColors', () {
+  group('AppPalette', () {
     test('copyWith merges slots rather than replacing them', () {
       const red = Color(0xFFFF0000);
-      final patched = DiscordPalettes.dark.copyWith(
-        slots: {DiscordSlot.accent: red},
+      final patched = AppPalettes.dark.copyWith(
+        slots: {ColorSlot.accent: red},
       );
 
       expect(patched.accent, red);
       // Every other slot must survive the merge.
-      expect(patched.serverRail, DiscordPalettes.dark.serverRail);
-      expect(patched.slots.length, DiscordPalettes.dark.slots.length);
+      expect(patched.spaceRail, AppPalettes.dark.spaceRail);
+      expect(patched.slots.length, AppPalettes.dark.slots.length);
     });
 
     test('lerp returns the endpoints at t=0 and t=1', () {
-      const a = DiscordPalettes.dark;
-      const b = DiscordPalettes.light;
+      const a = AppPalettes.dark;
+      const b = AppPalettes.day;
 
       expect(a.lerp(b, 0), a);
       expect(a.lerp(b, 1), b);
     });
 
     test('lerp with a null other is a no-op', () {
-      expect(DiscordPalettes.dark.lerp(null, 0.5), DiscordPalettes.dark);
+      expect(AppPalettes.dark.lerp(null, 0.5), AppPalettes.dark);
     });
 
     test('equality is by value, not identity', () {
-      final copy = DiscordPalettes.dark.copyWith();
-      expect(copy, DiscordPalettes.dark);
-      expect(copy.hashCode, DiscordPalettes.dark.hashCode);
+      final copy = AppPalettes.dark.copyWith();
+      expect(copy, AppPalettes.dark);
+      expect(copy.hashCode, AppPalettes.dark.hashCode);
     });
 
     test('applyOverrides ignores unknown slot names', () {
-      final result = DiscordPalettes.dark.applyOverrides({
+      final result = AppPalettes.dark.applyOverrides({
         'notARealSlot': 0xFF00FF00,
       });
-      expect(result, DiscordPalettes.dark);
+      expect(result, AppPalettes.dark);
     });
 
     test('applyOverrides changes only the named slots', () {
       const green = Color(0xFF00FF00);
-      final result = DiscordPalettes.dark.applyOverrides({
-        DiscordSlot.accent: green.toARGB32(),
+      final result = AppPalettes.dark.applyOverrides({
+        ColorSlot.accent: green.toARGB32(),
       });
 
       expect(result.accent, green);
-      expect(result.chatBackground, DiscordPalettes.dark.chatBackground);
+      expect(result.timelineBackground, AppPalettes.dark.timelineBackground);
     });
 
     test('diffFrom reports only what actually differs', () {
       const green = Color(0xFF00FF00);
-      final patched = DiscordPalettes.dark.copyWith(
-        slots: {DiscordSlot.accent: green},
+      final patched = AppPalettes.dark.copyWith(
+        slots: {ColorSlot.accent: green},
       );
 
-      expect(patched.diffFrom(DiscordPalettes.dark), {
-        DiscordSlot.accent: green.toARGB32(),
+      expect(patched.diffFrom(AppPalettes.dark), {
+        ColorSlot.accent: green.toARGB32(),
       });
-      expect(DiscordPalettes.dark.diffFrom(DiscordPalettes.dark), isEmpty);
+      expect(AppPalettes.dark.diffFrom(AppPalettes.dark), isEmpty);
     });
 
     test('avatarColorFor is stable for the same seed', () {
-      final first = DiscordPalettes.dark.avatarColorFor('@alice:example.org');
-      final second = DiscordPalettes.dark.avatarColorFor('@alice:example.org');
+      final first = AppPalettes.dark.avatarColorFor('@alice:example.org');
+      final second = AppPalettes.dark.avatarColorFor('@alice:example.org');
       expect(first, second);
-      expect(DiscordPalettes.dark.avatarPalette, contains(first));
+      expect(AppPalettes.dark.avatarPalette, contains(first));
     });
   });
 
   group('AppThemeState', () {
     test('round-trips through JSON', () {
       const state = AppThemeState(
-        presetId: 'discord_light',
-        overrides: {DiscordSlot.accent: 0xFF00FF00},
+        presetId: 'hardline_day',
+        overrides: {ColorSlot.accent: 0xFF00FF00},
         tooltipDelay: Duration(milliseconds: 850),
       );
 
@@ -126,13 +129,13 @@ void main() {
 
     test('resolve applies overrides on top of the preset', () {
       const state = AppThemeState(
-        presetId: 'discord_light',
-        overrides: {DiscordSlot.accent: 0xFF00FF00},
+        presetId: 'hardline_day',
+        overrides: {ColorSlot.accent: 0xFF00FF00},
       );
 
       final colors = state.resolve();
       expect(colors.accent, const Color(0xFF00FF00));
-      expect(colors.chatBackground, DiscordPalettes.light.chatBackground);
+      expect(colors.timelineBackground, AppPalettes.day.timelineBackground);
     });
 
     test('malformed JSON degrades to defaults instead of throwing', () {
@@ -142,14 +145,14 @@ void main() {
         'tooltipDelayMs': 'soon',
       });
 
-      expect(state.presetId, DiscordPalettes.defaultId);
+      expect(state.presetId, AppPalettes.defaultId);
       expect(state.overrides, isEmpty);
       expect(state.tooltipDelay, kDefaultTooltipDelay);
     });
 
     test('a blob written before tooltips existed still loads', () {
       final state = AppThemeState.fromJson({
-        'presetId': 'discord_light',
+        'presetId': 'hardline_day',
         'overrides': <String, int>{},
       });
 
@@ -168,34 +171,34 @@ void main() {
 
     // How the app actually resolves: the palette comes from the library, not
     // from the `const` map, so a theme the user built is reachable by an id
-    // `DiscordPalettes` has never heard of.
+    // `AppPalettes` has never heard of.
     test('resolve prefers the base it is given over the preset id', () {
-      const state = AppThemeState(presetId: 'discord_light');
-      final base = DiscordPalettes.dark.copyWith(
-        slots: {DiscordSlot.accent: const Color(0xFF00FF00)},
+      const state = AppThemeState(presetId: 'hardline_day');
+      final base = AppPalettes.dark.copyWith(
+        slots: {ColorSlot.accent: const Color(0xFF00FF00)},
       );
 
       final colors = state.resolve(base: base);
       expect(colors.accent, const Color(0xFF00FF00));
-      expect(colors.chatBackground, DiscordPalettes.dark.chatBackground);
+      expect(colors.timelineBackground, AppPalettes.dark.timelineBackground);
     });
 
     test('a legacy override still applies on top of a library theme', () {
       const state = AppThemeState(
         presetId: 'a_theme_the_user_made',
-        overrides: {DiscordSlot.accent: 0xFF00FF00},
+        overrides: {ColorSlot.accent: 0xFF00FF00},
       );
 
-      final colors = state.resolve(base: DiscordPalettes.light);
+      final colors = state.resolve(base: AppPalettes.day);
       expect(colors.accent, const Color(0xFF00FF00));
-      expect(colors.chatBackground, DiscordPalettes.light.chatBackground);
+      expect(colors.timelineBackground, AppPalettes.day.timelineBackground);
     });
 
     test('overrides survive a preset change', () {
       const state = AppThemeState(
-        overrides: {DiscordSlot.accent: 0xFF00FF00},
+        overrides: {ColorSlot.accent: 0xFF00FF00},
       );
-      final switched = state.copyWith(presetId: 'discord_light');
+      final switched = state.copyWith(presetId: 'hardline_day');
 
       expect(switched.resolve().accent, const Color(0xFF00FF00));
     });

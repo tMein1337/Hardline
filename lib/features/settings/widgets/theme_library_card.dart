@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../theme/discord_colors.dart';
+import '../../../theme/color_slots.dart';
 import '../../../theme/theme_context.dart';
 import '../../../theme/theme_controller.dart';
 import '../../../theme/theme_entry.dart';
@@ -147,11 +150,11 @@ class _ThemeRow extends ConsumerWidget {
   /// The five slots that tell two themes apart at a glance: the three surfaces
   /// stacked left to right as they are on screen, then the accent and the text.
   static const _previewSlots = [
-    DiscordSlot.serverRail,
-    DiscordSlot.channelSidebar,
-    DiscordSlot.chatBackground,
-    DiscordSlot.accent,
-    DiscordSlot.textPrimary,
+    ColorSlot.spaceRail,
+    ColorSlot.roomSidebar,
+    ColorSlot.timelineBackground,
+    ColorSlot.accent,
+    ColorSlot.textPrimary,
   ];
 
   @override

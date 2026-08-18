@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -17,7 +20,7 @@ class ChatHeader extends StatelessWidget {
       height: context.metrics.headerHeight,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: colors.chatBackground,
+        color: colors.timelineBackground,
         border: Border(bottom: BorderSide(color: colors.dividerStrong)),
       ),
       child: Row(

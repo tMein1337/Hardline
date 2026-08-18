@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:matrix/matrix.dart';
 
 import 'space_children.dart';
@@ -14,7 +17,7 @@ List<Room> joinedSpaces(Client client) => [
     if (room.isSpace && room.membership == Membership.join) room,
 ];
 
-/// Rooms belonging to no space — Discord's "Direct Messages" home column.
+/// Rooms belonging to no space. These are what the home column lists.
 List<Room> homeRooms(Client client) {
   final claimed = allSpaceChildIds(client);
   return [

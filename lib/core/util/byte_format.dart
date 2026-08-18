@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// Human-readable file sizes.
 ///
 /// Hand-rolled for the same reason as `time_format.dart`: the app needs one
@@ -11,7 +14,7 @@ const _units = ['B', 'KB', 'MB', 'GB', 'TB'];
 /// Binary units (1024), matching what Windows Explorer reports, so a file's
 /// size in the tray agrees with its size on disk.
 ///
-/// One decimal below 10 and none above, which is how Discord shows it: `1.2 MB`
+/// One decimal below 10 and none above: `1.2 MB`
 /// is useful, `12.4 MB` is noise.
 String formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes B';

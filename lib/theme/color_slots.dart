@@ -1,20 +1,23 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Every semantic color slot the UI can ask for.
 ///
 /// Widgets never name a hex value; they name a *role* from this list. The
-/// concrete colors for each role live in `discord_palettes.dart`, which is the
+/// concrete colors for each role live in `palettes.dart`, which is the
 /// only file in the project allowed to contain hex literals.
 ///
 /// Adding a slot is a four-step change: add the constant here, add it to
-/// [DiscordSlot.all], add a typed accessor on [DiscordColors], and give it a
-/// value in every palette. `discord_colors_test.dart` enforces the last step.
-abstract final class DiscordSlot {
+/// [ColorSlot.all], add a typed accessor on [AppPalette], and give it a
+/// value in every palette. `color_slots_test.dart` enforces the last step.
+abstract final class ColorSlot {
   // Surfaces, darkest to lightest.
-  static const serverRail = 'serverRail';
-  static const channelSidebar = 'channelSidebar';
-  static const chatBackground = 'chatBackground';
+  static const spaceRail = 'spaceRail';
+  static const roomSidebar = 'roomSidebar';
+  static const timelineBackground = 'timelineBackground';
   static const elevatedSurface = 'elevatedSurface';
   static const floatingSurface = 'floatingSurface';
   static const scrim = 'scrim';
@@ -77,9 +80,10 @@ abstract final class DiscordSlot {
   // Voice and video.
   //
   // Kept separate from the semantic slots above (rather than reusing `success`
-  // and `danger`) so the call UI can be recolored on its own. Discord treats
-  // voice state as its own visual language, and folding it into the generic
-  // states would mean recoloring every success message to restyle a call.
+  // and `danger`) so the call UI can be recolored on its own. Call state is its
+  // own annunciator language here — green for a live call, amber for one
+  // connecting — and folding it into the generic states would mean recoloring
+  // every success message just to restyle a call.
   static const voiceConnected = 'voiceConnected';
   static const voiceConnecting = 'voiceConnecting';
   static const voiceError = 'voiceError';
@@ -99,9 +103,9 @@ abstract final class DiscordSlot {
 
   /// Drives the settings screen's picker list and validates palettes.
   static const List<String> all = [
-    serverRail,
-    channelSidebar,
-    chatBackground,
+    spaceRail,
+    roomSidebar,
+    timelineBackground,
     elevatedSurface,
     floatingSurface,
     scrim,
@@ -173,15 +177,15 @@ abstract final class DiscordSlot {
 
 /// The app's color palette, attached to [ThemeData.extensions].
 ///
-/// Colors are held in a map keyed by [DiscordSlot] rather than as individual
+/// Colors are held in a map keyed by [ColorSlot] rather than as individual
 /// fields. That keeps [lerp], [copyWith], [applyOverrides] and JSON generic, so
 /// adding a slot cannot silently miss one of them — a bug class that is
 /// invisible at runtime because the app keeps working with a stale color.
 @immutable
-class DiscordColors extends ThemeExtension<DiscordColors> {
-  const DiscordColors({required this.slots, required this.avatarPalette});
+class AppPalette extends ThemeExtension<AppPalette> {
+  const AppPalette({required this.slots, required this.avatarPalette});
 
-  /// Slot name (see [DiscordSlot]) to color. Treat as immutable.
+  /// Slot name (see [ColorSlot]) to color. Treat as immutable.
   final Map<String, Color> slots;
 
   /// Deterministic fallback colors for users with no avatar.
@@ -193,7 +197,7 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
 
   Color slot(String name) {
     final color = slots[name];
-    assert(color != null, 'DiscordColors is missing slot "$name"');
+    assert(color != null, 'AppPalette is missing slot "$name"');
     return color ?? _missing;
   }
 
@@ -202,86 +206,86 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
       avatarPalette[seed.hashCode.abs() % avatarPalette.length];
 
   // ── Typed accessors ────────────────────────────────────────────────────
-  Color get serverRail => slot(DiscordSlot.serverRail);
-  Color get channelSidebar => slot(DiscordSlot.channelSidebar);
-  Color get chatBackground => slot(DiscordSlot.chatBackground);
-  Color get elevatedSurface => slot(DiscordSlot.elevatedSurface);
-  Color get floatingSurface => slot(DiscordSlot.floatingSurface);
-  Color get scrim => slot(DiscordSlot.scrim);
+  Color get spaceRail => slot(ColorSlot.spaceRail);
+  Color get roomSidebar => slot(ColorSlot.roomSidebar);
+  Color get timelineBackground => slot(ColorSlot.timelineBackground);
+  Color get elevatedSurface => slot(ColorSlot.elevatedSurface);
+  Color get floatingSurface => slot(ColorSlot.floatingSurface);
+  Color get scrim => slot(ColorSlot.scrim);
 
-  Color get messageHover => slot(DiscordSlot.messageHover);
-  Color get listItemHover => slot(DiscordSlot.listItemHover);
-  Color get listItemSelected => slot(DiscordSlot.listItemSelected);
-  Color get railIdle => slot(DiscordSlot.railIdle);
-  Color get railHover => slot(DiscordSlot.railHover);
+  Color get messageHover => slot(ColorSlot.messageHover);
+  Color get listItemHover => slot(ColorSlot.listItemHover);
+  Color get listItemSelected => slot(ColorSlot.listItemSelected);
+  Color get railIdle => slot(ColorSlot.railIdle);
+  Color get railHover => slot(ColorSlot.railHover);
 
-  Color get textPrimary => slot(DiscordSlot.textPrimary);
-  Color get textHeader => slot(DiscordSlot.textHeader);
-  Color get textMuted => slot(DiscordSlot.textMuted);
-  Color get textFaint => slot(DiscordSlot.textFaint);
-  Color get textLink => slot(DiscordSlot.textLink);
-  Color get textOnAccent => slot(DiscordSlot.textOnAccent);
+  Color get textPrimary => slot(ColorSlot.textPrimary);
+  Color get textHeader => slot(ColorSlot.textHeader);
+  Color get textMuted => slot(ColorSlot.textMuted);
+  Color get textFaint => slot(ColorSlot.textFaint);
+  Color get textLink => slot(ColorSlot.textLink);
+  Color get textOnAccent => slot(ColorSlot.textOnAccent);
 
-  Color get accent => slot(DiscordSlot.accent);
-  Color get accentHover => slot(DiscordSlot.accentHover);
-  Color get accentPressed => slot(DiscordSlot.accentPressed);
-  Color get danger => slot(DiscordSlot.danger);
-  Color get success => slot(DiscordSlot.success);
-  Color get warning => slot(DiscordSlot.warning);
+  Color get accent => slot(ColorSlot.accent);
+  Color get accentHover => slot(ColorSlot.accentHover);
+  Color get accentPressed => slot(ColorSlot.accentPressed);
+  Color get danger => slot(ColorSlot.danger);
+  Color get success => slot(ColorSlot.success);
+  Color get warning => slot(ColorSlot.warning);
 
-  Color get mentionBackground => slot(DiscordSlot.mentionBackground);
-  Color get mentionHoverBackground => slot(DiscordSlot.mentionHoverBackground);
-  Color get mentionBar => slot(DiscordSlot.mentionBar);
-  Color get unreadBadge => slot(DiscordSlot.unreadBadge);
-  Color get unreadBadgeText => slot(DiscordSlot.unreadBadgeText);
-  Color get unreadDot => slot(DiscordSlot.unreadDot);
+  Color get mentionBackground => slot(ColorSlot.mentionBackground);
+  Color get mentionHoverBackground => slot(ColorSlot.mentionHoverBackground);
+  Color get mentionBar => slot(ColorSlot.mentionBar);
+  Color get unreadBadge => slot(ColorSlot.unreadBadge);
+  Color get unreadBadgeText => slot(ColorSlot.unreadBadgeText);
+  Color get unreadDot => slot(ColorSlot.unreadDot);
 
-  Color get divider => slot(DiscordSlot.divider);
-  Color get dividerStrong => slot(DiscordSlot.dividerStrong);
-  Color get scrollbarThumb => slot(DiscordSlot.scrollbarThumb);
-  Color get scrollbarTrack => slot(DiscordSlot.scrollbarTrack);
+  Color get divider => slot(ColorSlot.divider);
+  Color get dividerStrong => slot(ColorSlot.dividerStrong);
+  Color get scrollbarThumb => slot(ColorSlot.scrollbarThumb);
+  Color get scrollbarTrack => slot(ColorSlot.scrollbarTrack);
 
-  Color get inputBackground => slot(DiscordSlot.inputBackground);
-  Color get inputBackgroundAlt => slot(DiscordSlot.inputBackgroundAlt);
-  Color get inputBorder => slot(DiscordSlot.inputBorder);
-  Color get inputBorderFocused => slot(DiscordSlot.inputBorderFocused);
+  Color get inputBackground => slot(ColorSlot.inputBackground);
+  Color get inputBackgroundAlt => slot(ColorSlot.inputBackgroundAlt);
+  Color get inputBorder => slot(ColorSlot.inputBorder);
+  Color get inputBorderFocused => slot(ColorSlot.inputBorderFocused);
 
-  Color get attachmentCard => slot(DiscordSlot.attachmentCard);
-  Color get attachmentCardBorder => slot(DiscordSlot.attachmentCardBorder);
-  Color get attachmentPlaceholder => slot(DiscordSlot.attachmentPlaceholder);
-  Color get attachmentTray => slot(DiscordSlot.attachmentTray);
-  Color get attachmentChip => slot(DiscordSlot.attachmentChip);
-  Color get dropOverlay => slot(DiscordSlot.dropOverlay);
-  Color get dropBorder => slot(DiscordSlot.dropBorder);
+  Color get attachmentCard => slot(ColorSlot.attachmentCard);
+  Color get attachmentCardBorder => slot(ColorSlot.attachmentCardBorder);
+  Color get attachmentPlaceholder => slot(ColorSlot.attachmentPlaceholder);
+  Color get attachmentTray => slot(ColorSlot.attachmentTray);
+  Color get attachmentChip => slot(ColorSlot.attachmentChip);
+  Color get dropOverlay => slot(ColorSlot.dropOverlay);
+  Color get dropBorder => slot(ColorSlot.dropBorder);
 
-  Color get voiceConnected => slot(DiscordSlot.voiceConnected);
-  Color get voiceConnecting => slot(DiscordSlot.voiceConnecting);
-  Color get voiceError => slot(DiscordSlot.voiceError);
-  Color get voiceSpeakingRing => slot(DiscordSlot.voiceSpeakingRing);
-  Color get voiceMutedIcon => slot(DiscordSlot.voiceMutedIcon);
-  Color get voiceDeafenedIcon => slot(DiscordSlot.voiceDeafenedIcon);
-  Color get voiceParticipantRow => slot(DiscordSlot.voiceParticipantRow);
+  Color get voiceConnected => slot(ColorSlot.voiceConnected);
+  Color get voiceConnecting => slot(ColorSlot.voiceConnecting);
+  Color get voiceError => slot(ColorSlot.voiceError);
+  Color get voiceSpeakingRing => slot(ColorSlot.voiceSpeakingRing);
+  Color get voiceMutedIcon => slot(ColorSlot.voiceMutedIcon);
+  Color get voiceDeafenedIcon => slot(ColorSlot.voiceDeafenedIcon);
+  Color get voiceParticipantRow => slot(ColorSlot.voiceParticipantRow);
   Color get voiceParticipantRowHover =>
-      slot(DiscordSlot.voiceParticipantRowHover);
-  Color get voiceControlBar => slot(DiscordSlot.voiceControlBar);
-  Color get voiceControlIcon => slot(DiscordSlot.voiceControlIcon);
-  Color get voiceControlIconActive => slot(DiscordSlot.voiceControlIconActive);
-  Color get voiceControlDanger => slot(DiscordSlot.voiceControlDanger);
-  Color get videoTileBackground => slot(DiscordSlot.videoTileBackground);
-  Color get videoTilePlaceholder => slot(DiscordSlot.videoTilePlaceholder);
-  Color get volumeSliderTrack => slot(DiscordSlot.volumeSliderTrack);
-  Color get volumeSliderActive => slot(DiscordSlot.volumeSliderActive);
+      slot(ColorSlot.voiceParticipantRowHover);
+  Color get voiceControlBar => slot(ColorSlot.voiceControlBar);
+  Color get voiceControlIcon => slot(ColorSlot.voiceControlIcon);
+  Color get voiceControlIconActive => slot(ColorSlot.voiceControlIconActive);
+  Color get voiceControlDanger => slot(ColorSlot.voiceControlDanger);
+  Color get videoTileBackground => slot(ColorSlot.videoTileBackground);
+  Color get videoTilePlaceholder => slot(ColorSlot.videoTilePlaceholder);
+  Color get volumeSliderTrack => slot(ColorSlot.volumeSliderTrack);
+  Color get volumeSliderActive => slot(ColorSlot.volumeSliderActive);
 
   /// True when the palette reads as dark, used to pick a [Brightness].
-  bool get isDark => chatBackground.computeLuminance() < 0.5;
+  bool get isDark => timelineBackground.computeLuminance() < 0.5;
 
   // ── ThemeExtension ─────────────────────────────────────────────────────
   @override
-  DiscordColors copyWith({
+  AppPalette copyWith({
     Map<String, Color>? slots,
     List<Color>? avatarPalette,
   }) {
-    return DiscordColors(
+    return AppPalette(
       // Merged, not replaced: callers pass only the slots they are changing.
       slots: slots == null ? this.slots : {...this.slots, ...slots},
       avatarPalette: avatarPalette ?? this.avatarPalette,
@@ -289,9 +293,9 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
   }
 
   @override
-  DiscordColors lerp(covariant DiscordColors? other, double t) {
+  AppPalette lerp(covariant AppPalette? other, double t) {
     if (other == null) return this;
-    return DiscordColors(
+    return AppPalette(
       slots: {
         for (final name in slots.keys)
           name: Color.lerp(slot(name), other.slot(name), t)!,
@@ -313,7 +317,7 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
 
   /// Applies user overrides on top of this palette. Unknown slot names are
   /// ignored so a stale saved preference can never crash startup.
-  DiscordColors applyOverrides(Map<String, int> overrides) {
+  AppPalette applyOverrides(Map<String, int> overrides) {
     if (overrides.isEmpty) return this;
     final patch = <String, Color>{};
     for (final entry in overrides.entries) {
@@ -324,7 +328,7 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
 
   /// The sparse set of slots where this palette differs from [base] — what a
   /// settings screen persists, so preset changes still show through.
-  Map<String, int> diffFrom(DiscordColors base) => {
+  Map<String, int> diffFrom(AppPalette base) => {
     for (final name in slots.keys)
       if (slot(name) != base.slot(name)) name: slot(name).toARGB32(),
   };
@@ -336,7 +340,7 @@ class DiscordColors extends ThemeExtension<DiscordColors> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DiscordColors &&
+      other is AppPalette &&
           mapEquals(slots, other.slots) &&
           listEquals(avatarPalette, other.avatarPalette);
 

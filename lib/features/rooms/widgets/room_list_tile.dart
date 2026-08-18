@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,8 +15,8 @@ import '../room_list_item.dart';
 
 /// One row in the channel column.
 ///
-/// Group rooms get Discord's `#` prefix; direct chats get the other person's
-/// avatar instead, which is how Discord distinguishes DMs.
+/// Group rooms get a `#` prefix, which is what a Matrix room alias literally
+/// starts with; direct chats get the other person's avatar instead.
 class RoomListTile extends StatelessWidget {
   const RoomListTile({
     super.key,
@@ -40,7 +43,7 @@ class RoomListTile extends StatelessWidget {
             ? colors.listItemHover
             : Colors.transparent;
 
-        // Unread rooms read brighter and bolder, like Discord.
+        // Unread rooms read brighter and bolder.
         final showAsActive = selected || hovered || room.hasUnread;
         final labelStyle = showAsActive
             ? context.text.channelNameActive

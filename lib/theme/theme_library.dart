@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -5,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers/injected_providers.dart';
-import 'discord_palettes.dart';
+import 'palettes.dart';
 import 'theme_entry.dart';
 
 const _prefsKey = 'theme_library_v1';
@@ -106,7 +109,7 @@ class ThemeLibrary extends Notifier<ThemeLibraryState> {
   /// A no-op for a theme the user made or imported: it was never a copy of a
   /// built-in, so there is nothing to go back to.
   Future<void> revertSlot(String id, String slot) {
-    final builtIn = DiscordPalettes.byIdMap[id];
+    final builtIn = AppPalettes.byIdMap[id];
     if (builtIn == null) return Future.value();
     return setSlot(id, slot, builtIn.slot(slot));
   }
@@ -114,7 +117,7 @@ class ThemeLibrary extends Notifier<ThemeLibraryState> {
   /// Removes a theme. A no-op for the last one.
   ///
   /// The library is never allowed to empty: `presetId` would then name nothing,
-  /// and while `DiscordPalettes.byId` falls back to dark rather than crashing,
+  /// and while `AppPalettes.byId` falls back to dark rather than crashing,
   /// the appearance pane would offer an empty list and no way out of it. The
   /// pane disables the action too — this is the backstop, not the message.
   Future<void> remove(String id) {

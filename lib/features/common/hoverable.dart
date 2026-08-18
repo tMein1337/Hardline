@@ -1,8 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 /// Rebuilds its child with the current hover state.
 ///
-/// Discord leans heavily on hover — row backgrounds, revealed timestamps,
+/// The interface leans heavily on hover — row backgrounds, revealed timestamps,
 /// morphing rail icons. Material's own hover handling is disabled in
 /// `theme_builder.dart` (no ripples, transparent hover color) so those effects
 /// are drawn explicitly instead, via this widget.

@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../theme/discord_colors.dart';
+import '../../../theme/color_slots.dart';
 import '../../../theme/hex_color.dart';
 import '../../../theme/theme_context.dart';
 
@@ -95,7 +98,7 @@ class _SlotColorEditorState extends State<SlotColorEditor> {
 
     return AlertDialog(
       backgroundColor: colors.floatingSurface,
-      title: Text(DiscordSlot.labelOf(widget.slot), style: context.text.title),
+      title: Text(ColorSlot.labelOf(widget.slot), style: context.text.title),
       content: SizedBox(
         width: 360,
         child: Column(

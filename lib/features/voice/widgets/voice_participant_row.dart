@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +14,7 @@ import 'user_audio_menu.dart';
 /// One person inside a channel's voice call, drawn under the channel row.
 ///
 /// Indented past the channel's `#` glyph so the nesting reads at a glance, the
-/// way Discord shows voice members beneath their channel.
+/// way call members are listed beneath the room they are in.
 class VoiceParticipantRow extends ConsumerWidget {
   const VoiceParticipantRow({super.key, required this.participant});
 
@@ -38,7 +41,7 @@ class VoiceParticipantRow extends ConsumerWidget {
       cursor: SystemMouseCursors.basic,
       builder: (context, hovered) {
         return GestureDetector(
-          // Right-click, the way Discord opens per-user volume. Left-click is
+          // Right-click opens per-user volume. Left-click is
           // deliberately left free — the row is not a navigation target.
           onSecondaryTap: () => UserAudioMenu.show(context, participant),
           child: Padding(

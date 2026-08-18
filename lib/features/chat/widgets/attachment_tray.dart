@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,7 +11,7 @@ import 'attachment_chip.dart';
 /// Staged attachments, shown above the composer's input row.
 ///
 /// Lives *inside* the composer's container so the tray and the text field read
-/// as one surface, the way Discord draws it. Collapses to nothing when the room
+/// as one surface. Collapses to nothing when the room
 /// has no drafts, which keeps the composer byte-identical to before this
 /// feature for a plain text message.
 class AttachmentTray extends ConsumerWidget {

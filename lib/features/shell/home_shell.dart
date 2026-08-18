@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 
 import '../../theme/theme_context.dart';
@@ -22,7 +25,7 @@ class HomeShell extends StatelessWidget {
     // sessions.
     return IncomingVerificationListener(
       child: Scaffold(
-        backgroundColor: context.colors.chatBackground,
+        backgroundColor: context.colors.timelineBackground,
         body: const Row(
           children: [
             // Zero-sized. Starts the activity log so it collects from the first

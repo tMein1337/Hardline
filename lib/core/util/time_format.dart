@@ -1,4 +1,7 @@
-/// Discord-style time formatting.
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+/// Timeline time formatting.
 ///
 /// Hand-rolled rather than pulling in `intl`: the app needs three fixed shapes,
 /// and 24-hour time avoids a locale-dependent am/pm.

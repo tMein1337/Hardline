@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/foundation.dart';
 
-import 'discord_colors.dart';
-import 'discord_palettes.dart';
+import 'color_slots.dart';
+import 'palettes.dart';
+import 'theme_entry.dart';
 
 /// How long the pointer must rest on something before its tooltip appears.
 ///
@@ -24,7 +28,7 @@ const kMaxTooltipDelay = Duration(seconds: 3);
 @immutable
 class AppThemeState {
   const AppThemeState({
-    this.presetId = DiscordPalettes.defaultId,
+    this.presetId = AppPalettes.defaultId,
     this.overrides = const {},
     this.tooltipDelay = kDefaultTooltipDelay,
   });
@@ -33,7 +37,7 @@ class AppThemeState {
   /// with the built-in ids this field held before the library existed.
   final String presetId;
 
-  /// Slot name (see `DiscordSlot`) to packed ARGB.
+  /// Slot name (see `ColorSlot`) to packed ARGB.
   ///
   /// **Legacy.** Before themes were a library, colours were customised as a
   /// sparse patch over whichever preset was selected, so that switching preset
@@ -57,11 +61,11 @@ class AppThemeState {
   /// The palette the app should actually render with.
   ///
   /// [base] is the active theme's colours, which only the library can supply —
-  /// see `discordColorsProvider`. Omitting it falls back to the built-in
+  /// see `paletteProvider`. Omitting it falls back to the built-in
   /// palette of the same id, which is what keeps this method usable from a
   /// test, and what renders if the library somehow does not know the id.
-  DiscordColors resolve({DiscordColors? base}) =>
-      (base ?? DiscordPalettes.byId(presetId)).applyOverrides(overrides);
+  AppPalette resolve({AppPalette? base}) =>
+      (base ?? AppPalettes.byId(presetId)).applyOverrides(overrides);
 
   AppThemeState copyWith({
     String? presetId,
@@ -88,14 +92,14 @@ class AppThemeState {
 
     return AppThemeState(
       presetId: preset is String && preset.isNotEmpty
-          ? preset
-          : DiscordPalettes.defaultId,
+          ? migratePresetId(preset)
+          : AppPalettes.defaultId,
       overrides: raw is Map
-          ? {
+          ? migrateSlotNames({
               for (final entry in raw.entries)
                 if (entry.key is String && entry.value is int)
                   entry.key as String: entry.value as int,
-            }
+            })
           : const {},
       // Clamped at parse time rather than at use: a hand-edited value of a
       // minute would otherwise be indistinguishable from tooltips being broken,

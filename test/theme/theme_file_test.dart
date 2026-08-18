@@ -1,11 +1,14 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/theme/discord_colors.dart';
-import 'package:matrix_client/theme/discord_palettes.dart';
-import 'package:matrix_client/theme/theme_entry.dart';
-import 'package:matrix_client/theme/theme_file.dart';
+import 'package:hardline/theme/color_slots.dart';
+import 'package:hardline/theme/palettes.dart';
+import 'package:hardline/theme/theme_entry.dart';
+import 'package:hardline/theme/theme_file.dart';
 
 /// A theme file body, so each test can name only the part it is about.
 String fileWith({
@@ -20,26 +23,26 @@ String fileWith({
   'format': ?format,
   'version': ?version,
   'name': ?name,
-  'colors': colors ?? {DiscordSlot.accent: '#FF00FF00'},
+  'colors': colors ?? {ColorSlot.accent: '#FF00FF00'},
   'avatarPalette': ?avatarPalette,
 });
 
 void main() {
-  final dark = DiscordPalettes.dark;
+  final dark = AppPalettes.dark;
 
   group('encodeThemeFile', () {
     final entry = ThemeEntry.fromColors(
-      id: 'discord_dark',
+      id: 'hardline_dark',
       name: 'Midnight',
       colors: dark,
     );
 
-    test('writes every slot, in DiscordSlot.all order', () {
+    test('writes every slot, in ColorSlot.all order', () {
       final json = jsonDecode(encodeThemeFile(entry)) as Map<String, Object?>;
       final colors = json['colors']! as Map<String, Object?>;
 
       // Order matters: it is what makes two exported themes diff line for line.
-      expect(colors.keys, DiscordSlot.all);
+      expect(colors.keys, ColorSlot.all);
     });
 
     test('declares the format and version', () {
@@ -56,8 +59,8 @@ void main() {
       final json = jsonDecode(encodeThemeFile(entry)) as Map<String, Object?>;
       final colors = json['colors']! as Map<String, Object?>;
 
-      expect(colors[DiscordSlot.scrim], '#CC000000');
-      expect(colors[DiscordSlot.voiceParticipantRow], '#00000000');
+      expect(colors[ColorSlot.scrim], '#CC000000');
+      expect(colors[ColorSlot.voiceParticipantRow], '#00000000');
     });
 
     test('round-trips a theme unchanged', () {
@@ -82,7 +85,7 @@ void main() {
   group('decodeThemeFile', () {
     test('accepts #RRGGBB and assumes opaque', () {
       final entry = decodeThemeFile(
-        fileWith(colors: {DiscordSlot.accent: '#00FF00'}),
+        fileWith(colors: {ColorSlot.accent: '#00FF00'}),
       );
 
       expect(entry.toColors().accent, const Color(0xFF00FF00));
@@ -90,32 +93,32 @@ void main() {
 
     test('fills a missing slot from the default palette', () {
       final entry = decodeThemeFile(
-        fileWith(colors: {DiscordSlot.accent: '#FF00FF00'}),
+        fileWith(colors: {ColorSlot.accent: '#FF00FF00'}),
       );
 
       // Completeness is the point: a partial file must still yield a theme
       // that renders, rather than sixty magenta slots.
-      expect(entry.colors.keys.toSet(), DiscordSlot.all.toSet());
-      expect(entry.toColors().chatBackground, dark.chatBackground);
+      expect(entry.colors.keys.toSet(), ColorSlot.all.toSet());
+      expect(entry.toColors().timelineBackground, dark.timelineBackground);
     });
 
     test('ignores a slot this build has never heard of', () {
       final entry = decodeThemeFile(
         fileWith(
-          colors: {DiscordSlot.accent: '#FF00FF00', 'slotFromTheFuture': '#FFF'},
+          colors: {ColorSlot.accent: '#FF00FF00', 'slotFromTheFuture': '#FFF'},
         ),
       );
 
       expect(entry.colors.containsKey('slotFromTheFuture'), isFalse);
-      expect(entry.colors.keys.toSet(), DiscordSlot.all.toSet());
+      expect(entry.colors.keys.toSet(), ColorSlot.all.toSet());
     });
 
     test('a single unparseable colour costs only that colour', () {
       final entry = decodeThemeFile(
         fileWith(
           colors: {
-            DiscordSlot.accent: 'not a colour',
-            DiscordSlot.danger: '#FF00FF00',
+            ColorSlot.accent: 'not a colour',
+            ColorSlot.danger: '#FF00FF00',
           },
         ),
       );
