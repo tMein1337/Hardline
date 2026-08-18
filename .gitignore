@@ -52,3 +52,4 @@ app.*.map.json
 .direnv/
 # Release staging produced by tool/package_windows_release.ps1
 /dist/
+RELEASE-LEGAL-ROADMAP.md
