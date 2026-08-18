@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../theme/theme_context.dart';
 import '../accounts/account_actions.dart';
 import '../shell/widgets/shell_divider.dart';
+import 'panes/about_pane.dart';
 import 'panes/account_pane.dart';
 import 'panes/activity_pane.dart';
 import 'panes/appearance_pane.dart';
@@ -15,7 +19,7 @@ import 'settings_section.dart';
 /// The full-screen settings surface.
 ///
 /// A route rather than a dialog: the sessions list and the appearance grid both
-/// want the whole window, and Discord — which this app's layout follows —
+/// want the whole window, and a desktop client of this density
 /// settles for nothing less. It sits above the shell, so the call keeps running
 /// and the sync keeps arriving underneath.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -69,7 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: colors.chatBackground,
+          backgroundColor: colors.timelineBackground,
           body: Row(
             children: [
               _Sidebar(
@@ -98,6 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     SettingsSection.voice => const VoicePane(),
     SettingsSection.activity => const ActivityPane(),
     SettingsSection.appearance => const AppearancePane(),
+    SettingsSection.about => const AboutPane(),
   };
 }
 
@@ -113,7 +118,7 @@ class _Sidebar extends StatelessWidget {
 
     return Container(
       width: 232,
-      color: colors.channelSidebar,
+      color: colors.roomSidebar,
       padding: const EdgeInsets.only(top: 60, bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
