@@ -80,6 +80,17 @@ dart run tool/write_build_info.dart          # stamps version + commit
 flutter build windows --release
 ```
 
+`write_build_info.dart` rewrites `lib/core/build_info.dart`, which is tracked --
+it is committed with placeholder values so that a fresh clone compiles without
+running the tool first. This step therefore leaves the tree with exactly that
+one file modified, by design, and the packaging script's clean-tree check
+allows that file and nothing else. Do not commit the stamped values; put the
+placeholders back once the release is packaged:
+
+```sh
+dart run tool/write_build_info.dart --reset
+```
+
 Output: `build\windows\x64\runner\Release\`.
 
 That whole directory is the application. `hardline.exe` alone will not run — it

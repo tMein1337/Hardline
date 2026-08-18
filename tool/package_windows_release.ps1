@@ -67,9 +67,15 @@ if ($pubspecMarketing -ne $Version) {
 
 # ── Sanity: the tree the binary came from ────────────────────────────────
 if (-not $SkipBuildCheck) {
-    $dirty = & git status --porcelain
-    if ($dirty) {
-        Fail "Working tree is not clean. Release from a tagged, clean checkout, or pass -SkipBuildCheck for a dry run."
+    # write_build_info.dart runs immediately before the build and rewrites
+    # lib/core/build_info.dart, which is tracked so that a fresh clone compiles
+    # without running the tool first. The documented procedure therefore always
+    # arrives here with that one file modified. Anything else dirty means the
+    # binary does not correspond to a commit, which is the failure worth
+    # catching.
+    $dirty = @(& git status --porcelain -- . ':(exclude)lib/core/build_info.dart')
+    if ($dirty.Count -gt 0) {
+        Fail "Working tree is not clean:`r`n$($dirty -join "`r`n")`r`nRelease from a tagged, clean checkout, or pass -SkipBuildCheck for a dry run."
     }
     $headTag = & git describe --tags --exact-match HEAD 2>$null
     if ($LASTEXITCODE -ne 0 -or $headTag -ne $Tag) {
@@ -79,6 +85,22 @@ if (-not $SkipBuildCheck) {
 
 $commit = (& git rev-parse HEAD).Trim()
 if (-not $commit) { Fail 'Could not read the current commit.' }
+
+# The About screen names the commit and tag it was stamped with, and that stamp
+# is what a user follows back to the source. Checking it here is stronger than
+# "is the tree clean": it catches a binary built before the tag was moved into
+# place, or one left over from an earlier version entirely.
+if (-not $SkipBuildCheck) {
+    $stamp = Get-Content (Join-Path $root 'lib/core/build_info.dart') -Raw
+    $stampCommit = [regex]::Match($stamp, "buildCommit = '([^']*)'").Groups[1].Value
+    $stampTag = [regex]::Match($stamp, "buildTag = '([^']*)'").Groups[1].Value
+    if ($stampCommit -ne $commit) {
+        Fail "build_info.dart names commit '$stampCommit' but HEAD is '$commit'. The binary would send users to the wrong source. Run: dart run tool/write_build_info.dart, then rebuild."
+    }
+    if ($stampTag -ne $Tag) {
+        Fail "build_info.dart names tag '$stampTag' but this release is '$Tag'. Run: dart run tool/write_build_info.dart, then rebuild."
+    }
+}
 
 # ── Inputs ───────────────────────────────────────────────────────────────
 $buildDir = Join-Path $root 'build\windows\x64\runner\Release'
