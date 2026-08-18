@@ -23,14 +23,14 @@ still a token.
 
 **Source archive for this exact version:**
 
-<https://github.com/Mein1337/hardline/releases/tag/TAG_PLACEHOLDER>
+<https://github.com/tMein1337/hardline/releases/tag/TAG_PLACEHOLDER>
 
 **The tagged commit:**
 
-<https://github.com/Mein1337/hardline/tree/COMMIT_PLACEHOLDER>
+<https://github.com/tMein1337/hardline/tree/COMMIT_PLACEHOLDER>
 
 ```sh
-git clone https://github.com/Mein1337/hardline.git
+git clone https://github.com/tMein1337/hardline.git
 cd hardline
 git checkout TAG_PLACEHOLDER
 ```
@@ -78,4 +78,4 @@ for this release is attached to the release page as
 If you cannot obtain the Corresponding Source for this binary from the links
 above, that is a licensing bug and it will be fixed. Open an issue:
 
-<https://github.com/Mein1337/hardline/issues>
+<https://github.com/tMein1337/hardline/issues>

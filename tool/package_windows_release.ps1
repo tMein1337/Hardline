@@ -157,10 +157,10 @@ This program comes with ABSOLUTELY NO WARRANTY.
   SOURCE.md               how to obtain the source code for THIS build
 
 Source for this exact build:
-  https://github.com/Mein1337/hardline/tree/$commit
+  https://github.com/tMein1337/hardline/tree/$commit
 
 Release page:
-  https://github.com/Mein1337/hardline/releases/tag/$Tag
+  https://github.com/tMein1337/hardline/releases/tag/$Tag
 
 Hardline is not affiliated with, endorsed by, or sponsored by The Matrix.org
 Foundation C.I.C. or by Google LLC.

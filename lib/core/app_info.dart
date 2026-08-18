@@ -65,7 +65,7 @@ const kThirdPartyNotice =
 
 // ── Links ────────────────────────────────────────────────────────────────
 
-const kRepositoryUrl = 'https://github.com/Mein1337/hardline';
+const kRepositoryUrl = 'https://github.com/tMein1337/hardline';
 const kIssuesUrl = '$kRepositoryUrl/issues';
 const kLicenseUrl = 'https://www.gnu.org/licenses/agpl-3.0.html';
 const kPrivacyUrl = '$kRepositoryUrl/blob/main/PRIVACY.md';

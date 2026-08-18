@@ -182,7 +182,7 @@ current when it was built, and the history is visible in the source repository.
 
 Security issues: see [`SECURITY.md`](SECURITY.md).
 
-Anything else: <https://github.com/Mein1337/hardline/issues>
+Anything else: <https://github.com/tMein1337/hardline/issues>
 
 ## A note on scope
 

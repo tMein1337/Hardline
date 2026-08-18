@@ -14,7 +14,7 @@ welcome and taken seriously.
 
 Report privately through GitHub's private vulnerability reporting:
 
-<https://github.com/Mein1337/hardline/security/advisories/new>
+<https://github.com/tMein1337/hardline/security/advisories/new>
 
 If that is unavailable to you, open a public issue containing **only** the words
 "security contact request" and no details, and you will be given a private
