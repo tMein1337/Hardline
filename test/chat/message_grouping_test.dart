@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
-import 'package:matrix_client/features/chat/message_grouping.dart';
-import 'package:matrix_client/features/voice/matrix_rtc_membership.dart';
+import 'package:hardline/features/chat/message_grouping.dart';
+import 'package:hardline/features/voice/matrix_rtc_membership.dart';
 
 /// Base instant for readable relative timestamps.
 final _t0 = DateTime(2026, 8, 4, 12, 0);

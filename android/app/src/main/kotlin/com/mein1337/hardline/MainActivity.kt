@@ -1,4 +1,4 @@
-package com.example.matrix_client
+package com.mein1337.hardline
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,5 +1,5 @@
-name: matrix_client
-description: "A new Flutter project."
+name: hardline
+description: "Hardline — an independent desktop client for the Matrix protocol."
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -45,6 +45,7 @@ dependencies:
   # implement WebRTCDelegate and extend MediaDevices — both are its types, so
   # this is a direct dependency in substance.
   webrtc_interface: ^1.5.1
+  url_launcher: ^6.3.2
 
 dependency_overrides:
   # super_native_extensions (under super_clipboard/super_drag_and_drop) caps
@@ -68,3 +69,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Bundled so the licence and the privacy statement are readable inside the
+  # app with no network — an "Appropriate Legal Notices" feature that only works
+  # online is not much of one.
+  assets:
+    - LICENSE
+    - PRIVACY.md

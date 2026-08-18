@@ -1,7 +1,10 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
-import 'package:matrix_client/core/util/byte_format.dart';
-import 'package:matrix_client/features/chat/attachments/attachment_kind.dart';
+import 'package:hardline/core/util/byte_format.dart';
+import 'package:hardline/features/chat/attachments/attachment_kind.dart';
 
 void main() {
   group('attachmentKindFor', () {

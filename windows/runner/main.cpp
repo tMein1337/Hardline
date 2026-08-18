@@ -29,7 +29,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // The three-column layout (rail + room list + chat) needs room to breathe;
   // a minimum size is enforced in Win32Window::MessageHandler.
   Win32Window::Size size(1400, 900);
-  if (!window.Create(L"Matrix", origin, size)) {
+  if (!window.Create(L"Hardline", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

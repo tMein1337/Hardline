@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/core/util/time_format.dart';
+import 'package:hardline/core/util/time_format.dart';
 
 void main() {
   final now = DateTime(2026, 8, 11, 14, 30);

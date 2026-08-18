@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/accounts/account_entry.dart';
+import 'package:hardline/features/accounts/account_entry.dart';
 
 void main() {
   const alice = AccountEntry(

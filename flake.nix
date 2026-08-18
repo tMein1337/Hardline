@@ -1,5 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Mein1337
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 {
-  description = "matrix_client — Flutter Matrix client, reproducible NixOS build/run environment";
+  description = "Hardline — an independent Flutter client for the Matrix protocol; reproducible NixOS build/run environment";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -91,11 +94,11 @@
               # nixpkgs cargo/rustc will not do. Ensure a default toolchain
               # exists; install once, idempotently.
               if command -v rustup >/dev/null 2>&1 && ! rustup default >/dev/null 2>&1; then
-                echo "matrix_client devshell: no default Rust toolchain — installing stable (first run only)…"
+                echo "Hardline devshell: no default Rust toolchain — installing stable (first run only)…"
                 rustup default stable
               fi
 
-              echo "matrix_client devshell ready. Build/run with:  flutter run -d linux"
+              echo "Hardline devshell ready. Build/run with:  flutter run -d linux"
             '';
           };
         });

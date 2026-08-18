@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "matrix_client" "\0"
+            VALUE "CompanyName", "Mein1337" "\0"
+            VALUE "FileDescription", "Hardline - Matrix protocol client" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "matrix_client" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "matrix_client.exe" "\0"
-            VALUE "ProductName", "matrix_client" "\0"
+            VALUE "InternalName", "hardline" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Mein1337. Licensed under the GNU AGPLv3 or later." "\0"
+            VALUE "OriginalFilename", "hardline.exe" "\0"
+            VALUE "ProductName", "Hardline" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

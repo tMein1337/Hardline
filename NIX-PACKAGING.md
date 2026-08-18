@@ -1,4 +1,9 @@
-# Packaging `matrix_client` for Nix / nixpkgs
+<!--
+SPDX-FileCopyrightText: 2026 Mein1337
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+# Packaging Hardline for Nix / nixpkgs
 
 This documents where the Nix support stands and the concrete remaining work to
 turn the app into a hermetic, `nixpkgs`-style derivation.
@@ -114,7 +119,7 @@ FOD for the pub cache).
 
 ```nix
 packages.default = pkgs.flutter.buildFlutterApplication {
-  pname = "matrix_client";
+  pname = "hardline";
   version = "0.1.0";
   src = ./.;
   autoPubspecLock = ./pubspec.lock;         # pub deps FOD

@@ -1,6 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/voice/audio_devices_provider.dart';
-import 'package:matrix_client/features/voice/voice_prefs_state.dart';
+import 'package:hardline/features/voice/audio_devices_provider.dart';
+import 'package:hardline/features/voice/voice_prefs_state.dart';
 
 void main() {
   group('VoicePrefsState', () {

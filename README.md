@@ -1,9 +1,51 @@
-# matrix_client
+# Hardline
 
-A Matrix client with a Discord-like interface, written in Flutter. Primary
-target is Windows desktop.
+An independent desktop client compatible with the Matrix protocol, written in
+Flutter. Primary target is Windows desktop.
+
+Hardline is not published, sponsored or endorsed by The Matrix.org Foundation
+C.I.C., and is not affiliated with it. It speaks the Matrix protocol; that is
+the whole of the relationship. "Matrix" and "Flutter" are the trademarks of
+their respective owners.
 
 Written in English to match the code comments.
+
+## License
+
+Hardline is free software under the **GNU Affero General Public License,
+version 3 or later** (`AGPL-3.0-or-later`).
+
+- Full text: [`LICENSE`](LICENSE)
+- What it covers, and what it does not:
+  [`PROJECT-LICENSING-NOTICE.md`](PROJECT-LICENSING-NOTICE.md)
+- Third-party components and their own licenses:
+  [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+
+It comes with **no warranty**, to the extent permitted by applicable law.
+
+Every binary release is published alongside the exact corresponding source for
+that build — see [`RELEASING.md`](RELEASING.md) and [`SOURCE.md`](SOURCE.md).
+The running application shows its own version, commit and source link under
+**Settings → About**.
+
+| | |
+|---|---|
+| Privacy | [`PRIVACY.md`](PRIVACY.md) |
+| Security reports | [`SECURITY.md`](SECURITY.md) |
+| Contributing | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+
+## Design
+
+A black panel with an orange accent, borrowing the conventions of an airliner
+glass cockpit: surfaces separated by very little luminance, structure from thin
+rules rather than a staircase of greys, and a small set of instrument colours
+that mean the same thing everywhere — **green** normal, **amber** caution,
+**red** warning, **cyan** reference, **orange** the accent and the current
+selection.
+
+Themes are user-editable and the three built-ins — *Flight Deck*, *Night Ops*
+and *Day Panel* — are ordinary entries in the theme library, not a privileged
+kind. See "Custom themes" below.
 
 ## Status
 
@@ -212,7 +254,7 @@ follow yourself, so every list is empty against a single account.
     the badge does *not* clear until you scroll back down. Minimise the window,
     have them send one more, and confirm it survives being minimised.
 11. **Dead call rings.** Have them start a call and leave without you joining.
-    The timeline shows *"imtolate started a call"* with a green handset — the
+    The timeline shows *"<their name> started a call"* with a green handset — the
     badge is now explicable rather than a red 1 over nothing — and within
     20 seconds or so it clears itself, without the room being opened. Then the
     safety case: have them send a real message **and** start a call, then leave
@@ -321,8 +363,9 @@ Fixed in code, **unobserved** — see test 4 above before believing either:
   the membership" below.
 
 ### ideas
-- Overlay (like discord overlay)
-- live indication of whos talking (like the circle around the Icon in Discord)
+- An always-on-top call overlay for use over a full-screen application.
+- A live speaking indicator on the space rail, so an unopened room still shows
+  that somebody in it is talking.
 
 ## Activity summary
 
@@ -878,25 +921,25 @@ for free.
 
 ```json
 {
-  "format": "matrix_client.theme",
+  "format": "hardline.theme",
   "version": 1,
   "name": "Midnight",
   "colors": {
-    "serverRail": "#FF1E1F22",
-    "channelSidebar": "#FF2B2D31",
-    "chatBackground": "#FF313338",
-    "accent": "#FF5865F2"
+    "spaceRail": "#FF0A0A0B",
+    "roomSidebar": "#FF101012",
+    "timelineBackground": "#FF151517",
+    "accent": "#FFFF7A18"
   },
-  "avatarPalette": ["#FF5865F2", "#FF3BA55D"]
+  "avatarPalette": ["#FFFF7A18", "#FF4FC3F7"]
 }
 ```
 
 | Field | Meaning |
 |---|---|
-| `format` | Always `matrix_client.theme`. Anything else is refused. |
+| `format` | Always `hardline.theme`. Files written by earlier builds say `matrix_client.theme` and are still accepted; anything else is refused. |
 | `version` | Format version, currently `1`. A higher number is refused. |
 | `name` | The theme's name. Trimmed, and capped at 60 characters. |
-| `colors` | Slot name → `#AARRGGBB`. The slot names are the constants in `DiscordSlot`; an export writes all of them, in that order. |
+| `colors` | Slot name → `#AARRGGBB`. The slot names are the constants in `ColorSlot`; an export writes all of them, in that order. The three slots renamed in the redesign (`serverRail`, `channelSidebar`, `chatBackground`) are still read under their old names. |
 | `avatarPalette` | The ramp used for users with no profile picture. Optional. |
 
 Colours are written `#AARRGGBB` and read as either `#AARRGGBB` or `#RRGGBB`,
@@ -933,7 +976,7 @@ reason.
 
 `tooltipDelay` is a setting, not a colour, and stays out of the file. The avatar
 ramp *is* carried through export, import and duplication, but has no editor —
-the colour grid renders `DiscordSlot.all`, and the ramp is a list rather than a
+the colour grid renders `ColorSlot.all`, and the ramp is a list rather than a
 slot. Anyone who wants to change it can edit an exported file and import it
 back.
 

@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/settings/verification/sas_digits.dart';
+import 'package:hardline/features/settings/verification/sas_digits.dart';
 
 void main() {
   group('sasDigitGroups', () {
