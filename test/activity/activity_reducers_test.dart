@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/activity/activity_reducers.dart';
+import 'package:hardline/features/activity/activity_reducers.dart';
 
 void main() {
   final now = DateTime.utc(2026, 8, 11, 12);
@@ -39,9 +42,9 @@ void main() {
     test('orders newest first', () {
       final result = pruneActivities(
         [
-          record('old', userId: '@a:x.org', ago: const Duration(hours: 2)),
-          record('new', userId: '@a:x.org', ago: const Duration(minutes: 1)),
-          record('mid', userId: '@a:x.org', ago: const Duration(minutes: 30)),
+          record('old', userId: '@alice:example.org', ago: const Duration(hours: 2)),
+          record('new', userId: '@alice:example.org', ago: const Duration(minutes: 1)),
+          record('mid', userId: '@alice:example.org', ago: const Duration(minutes: 30)),
         ],
         now: now,
         horizon: const Duration(hours: 24),
@@ -54,8 +57,8 @@ void main() {
     test('drops anything past the horizon', () {
       final result = pruneActivities(
         [
-          record('kept', userId: '@a:x.org', ago: const Duration(hours: 23)),
-          record('gone', userId: '@a:x.org', ago: const Duration(hours: 25)),
+          record('kept', userId: '@alice:example.org', ago: const Duration(hours: 23)),
+          record('gone', userId: '@alice:example.org', ago: const Duration(hours: 25)),
         ],
         now: now,
         horizon: const Duration(hours: 24),
@@ -69,7 +72,7 @@ void main() {
       final result = pruneActivities(
         [
           for (var i = 0; i < 10; i++)
-            record('e$i', userId: '@a:x.org', ago: Duration(minutes: i)),
+            record('e$i', userId: '@alice:example.org', ago: Duration(minutes: i)),
         ],
         now: now,
         horizon: const Duration(hours: 24),
@@ -86,13 +89,13 @@ void main() {
         [
           record(
             'dup',
-            userId: '@a:x.org',
+            userId: '@alice:example.org',
             ago: const Duration(minutes: 5),
             preview: 'from the seed',
           ),
           record(
             'dup',
-            userId: '@a:x.org',
+            userId: '@alice:example.org',
             ago: const Duration(minutes: 5),
             preview: 'from the backfill',
           ),
@@ -110,10 +113,10 @@ void main() {
   group('newestPerUser', () {
     final entries = pruneActivities(
       [
-        record('a-old', userId: '@a:x.org', ago: const Duration(minutes: 20)),
-        record('a-new', userId: '@a:x.org', ago: const Duration(minutes: 2)),
-        record('b-new', userId: '@b:x.org', ago: const Duration(minutes: 5)),
-        record('c-new', userId: '@c:x.org', ago: const Duration(minutes: 1)),
+        record('a-old', userId: '@alice:example.org', ago: const Duration(minutes: 20)),
+        record('a-new', userId: '@alice:example.org', ago: const Duration(minutes: 2)),
+        record('b-new', userId: '@bob:example.org', ago: const Duration(minutes: 5)),
+        record('c-new', userId: '@carol:example.org', ago: const Duration(minutes: 1)),
       ],
       now: now,
       horizon: const Duration(hours: 24),
@@ -123,35 +126,35 @@ void main() {
     test('keeps one entry per person, the latest', () {
       final result = newestPerUser(
         entries,
-        {'@a:x.org', '@b:x.org'},
+        {'@alice:example.org', '@bob:example.org'},
         now: now,
         window: const Duration(minutes: 30),
       );
 
-      expect(result.keys.toSet(), {'@a:x.org', '@b:x.org'});
-      expect(result['@a:x.org']!.eventId, 'a-new');
+      expect(result.keys.toSet(), {'@alice:example.org', '@bob:example.org'});
+      expect(result['@alice:example.org']!.eventId, 'a-new');
     });
 
     test('ignores people who are not followed', () {
       final result = newestPerUser(
         entries,
-        {'@a:x.org'},
+        {'@alice:example.org'},
         now: now,
         window: const Duration(minutes: 30),
       );
 
-      expect(result.keys, ['@a:x.org']);
+      expect(result.keys, ['@alice:example.org']);
     });
 
     test('honours the window', () {
       final result = newestPerUser(
         entries,
-        {'@a:x.org', '@b:x.org'},
+        {'@alice:example.org', '@bob:example.org'},
         now: now,
         window: const Duration(minutes: 3),
       );
 
-      expect(result.keys, ['@a:x.org']);
+      expect(result.keys, ['@alice:example.org']);
     });
 
     test('following nobody is not a query', () {
@@ -170,10 +173,10 @@ void main() {
   group('messagesOf', () {
     final entries = pruneActivities(
       [
-        record('a1', userId: '@a:x.org', ago: const Duration(minutes: 1)),
-        record('a2', userId: '@a:x.org', ago: const Duration(minutes: 2)),
-        record('b1', userId: '@b:x.org', ago: const Duration(minutes: 3)),
-        record('old', userId: '@a:x.org', ago: const Duration(hours: 5)),
+        record('a1', userId: '@alice:example.org', ago: const Duration(minutes: 1)),
+        record('a2', userId: '@alice:example.org', ago: const Duration(minutes: 2)),
+        record('b1', userId: '@bob:example.org', ago: const Duration(minutes: 3)),
+        record('old', userId: '@alice:example.org', ago: const Duration(hours: 5)),
       ],
       now: now,
       horizon: const Duration(hours: 24),
@@ -183,7 +186,7 @@ void main() {
     test('keeps every message from a followed person, newest first', () {
       final result = messagesOf(
         entries,
-        {'@a:x.org'},
+        {'@alice:example.org'},
         now: now,
         window: const Duration(hours: 1),
         cap: 100,
@@ -195,7 +198,7 @@ void main() {
     test('caps the rows', () {
       final result = messagesOf(
         entries,
-        {'@a:x.org', '@b:x.org'},
+        {'@alice:example.org', '@bob:example.org'},
         now: now,
         window: const Duration(hours: 1),
         cap: 2,

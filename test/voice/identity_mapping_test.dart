@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/voice/livekit_call_controller.dart';
+import 'package:hardline/features/voice/livekit_call_controller.dart';
 
 void main() {
   group('matrixUserIdOf', () {
@@ -8,8 +11,8 @@ void main() {
     // person — or on nobody.
     test('splits on the last colon, not the first', () {
       expect(
-        matrixUserIdOf('@imtolate:imtolate.de:LQTQHXJKCZ'),
-        '@imtolate:imtolate.de',
+        matrixUserIdOf('@alice:example.org:LQTQHXJKCZ'),
+        '@alice:example.org',
       );
     });
 

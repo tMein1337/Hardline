@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/activity/activity_prefs_state.dart';
+import 'package:hardline/features/activity/activity_prefs_state.dart';
 
 void main() {
   group('ActivityPrefsState', () {
@@ -86,8 +89,8 @@ void main() {
     });
 
     test('equality ignores the order of the follow set', () {
-      const a = ActivityPrefsState(following: {'@a:x.org', '@b:x.org'});
-      const b = ActivityPrefsState(following: {'@b:x.org', '@a:x.org'});
+      const a = ActivityPrefsState(following: {'@alice:example.org', '@bob:example.org'});
+      const b = ActivityPrefsState(following: {'@bob:example.org', '@alice:example.org'});
 
       expect(a, b);
       expect(a.hashCode, b.hashCode);

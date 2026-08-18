@@ -1,11 +1,14 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/chat/attachments/attachment_draft_controller.dart';
-import 'package:matrix_client/features/chat/attachments/attachment_intake.dart';
-import 'package:matrix_client/features/chat/attachments/attachment_kind.dart';
-import 'package:matrix_client/features/chat/attachments/pending_attachment.dart';
+import 'package:hardline/features/chat/attachments/attachment_draft_controller.dart';
+import 'package:hardline/features/chat/attachments/attachment_intake.dart';
+import 'package:hardline/features/chat/attachments/attachment_kind.dart';
+import 'package:hardline/features/chat/attachments/pending_attachment.dart';
 
 const _roomA = '!a:example.org';
 const _roomB = '!b:example.org';

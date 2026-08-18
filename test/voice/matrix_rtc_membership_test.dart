@@ -1,5 +1,8 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/voice/matrix_rtc_membership.dart';
+import 'package:hardline/features/voice/matrix_rtc_membership.dart';
 
 /// A membership content blob in the shape Element Call actually publishes,
 /// taken from a real `org.matrix.msc3401.call.member` event.
@@ -12,7 +15,7 @@ Map<String, Object?> contentFixture({
   'call_id': '',
   'scope': 'm.room',
   'device_id': 'YERAQSHKJW',
-  'membershipID': '@sami:imtolate.de:YERAQSHKJW',
+  'membershipID': '@alice:example.org:YERAQSHKJW',
   'created_ts': createdTs ?? DateTime.now().millisecondsSinceEpoch,
   'expires': expires,
   'm.call.intent': 'audio',
@@ -21,8 +24,8 @@ Map<String, Object?> contentFixture({
       [
         {
           'type': 'livekit',
-          'livekit_alias': '!room:imtolate.de',
-          'livekit_service_url': 'https://matrix.imtolate.de/livekit-jwt-service',
+          'livekit_alias': '!room:example.org',
+          'livekit_service_url': 'https://matrix.example.org/livekit-jwt-service',
         },
       ],
   'focus_active': {'type': 'livekit', 'focus_selection': 'oldest_membership'},
@@ -33,17 +36,17 @@ void main() {
     test('parses a real Element Call membership', () {
       final membership = MatrixRtcMembership.fromContent(
         content: contentFixture(),
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
 
-      expect(membership.userId, '@sami:imtolate.de');
+      expect(membership.userId, '@alice:example.org');
       expect(membership.deviceId, 'YERAQSHKJW');
       expect(membership.application, 'm.call');
       expect(membership.isCall, isTrue);
       expect(membership.intent, 'audio');
       expect(membership.isExpired, isFalse);
       expect(membership.focusPreferred.single.serviceUrl,
-          'https://matrix.imtolate.de/livekit-jwt-service');
+          'https://matrix.example.org/livekit-jwt-service');
     });
 
     // Leaving a call is an empty state event, not a redaction. Getting this
@@ -52,7 +55,7 @@ void main() {
       expect(
         MatrixRtcMembership.fromContent(
           content: const {},
-          userId: '@sami:imtolate.de',
+          userId: '@alice:example.org',
         ),
         isNull,
       );
@@ -64,7 +67,7 @@ void main() {
           .millisecondsSinceEpoch;
       final membership = MatrixRtcMembership.fromContent(
         content: contentFixture(createdTs: old, expires: 14400000),
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
 
       expect(membership.isExpired, isTrue);
@@ -77,7 +80,7 @@ void main() {
       expect(
         MatrixRtcMembership.fromContent(
           content: content,
-          userId: '@sami:imtolate.de',
+          userId: '@alice:example.org',
         ),
         isNull,
       );
@@ -90,22 +93,22 @@ void main() {
       final uuid = MatrixRtcMembership.fromContent(
         content: contentFixture()
           ..['membershipID'] = 'c4dbf569-8eec-496f-a0b3-a8475aecee33',
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
       expect(uuid.membershipId, 'c4dbf569-8eec-496f-a0b3-a8475aecee33');
 
       final legacy = MatrixRtcMembership.fromContent(
         content: contentFixture(),
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
-      expect(legacy.membershipId, '@sami:imtolate.de:YERAQSHKJW');
+      expect(legacy.membershipId, '@alice:example.org:YERAQSHKJW');
     });
 
     test('a missing membershipID is empty, not an error', () {
       final content = contentFixture()..remove('membershipID');
       final membership = MatrixRtcMembership.fromContent(
         content: content,
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
       expect(membership.membershipId, isEmpty);
     });
@@ -118,7 +121,7 @@ void main() {
             'not even a map',
           ],
         ),
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
 
       expect(membership.focusPreferred, isEmpty);
@@ -128,7 +131,7 @@ void main() {
       final content = contentFixture()..remove('created_ts');
       final membership = MatrixRtcMembership.fromContent(
         content: content,
-        userId: '@sami:imtolate.de',
+        userId: '@alice:example.org',
       )!;
 
       expect(membership.isExpired, isFalse);
@@ -139,21 +142,21 @@ void main() {
     test('builds the MSC3757 per-device key', () {
       expect(
         MatrixRtcMembership.stateKeyFor(
-          userId: '@sami:imtolate.de',
+          userId: '@alice:example.org',
           deviceId: 'YERAQSHKJW',
         ),
-        '_@sami:imtolate.de_YERAQSHKJW_m.call',
+        '_@alice:example.org_YERAQSHKJW_m.call',
       );
     });
 
     test('round-trips the user id back out', () {
-      const key = '_@sami:imtolate.de_YERAQSHKJW_m.call';
-      expect(MatrixRtcMembership.userIdFromStateKey(key), '@sami:imtolate.de');
+      const key = '_@alice:example.org_YERAQSHKJW_m.call';
+      expect(MatrixRtcMembership.userIdFromStateKey(key), '@alice:example.org');
     });
 
     test('rejects keys that are not per-device user keys', () {
       expect(MatrixRtcMembership.userIdFromStateKey(''), isNull);
-      expect(MatrixRtcMembership.userIdFromStateKey('@sami:imtolate.de'), isNull);
+      expect(MatrixRtcMembership.userIdFromStateKey('@alice:example.org'), isNull);
       expect(MatrixRtcMembership.userIdFromStateKey('_nonsense'), isNull);
     });
   });

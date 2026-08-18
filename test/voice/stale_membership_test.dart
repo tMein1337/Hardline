@@ -1,8 +1,11 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:matrix_client/features/voice/matrix_rtc_membership.dart';
-import 'package:matrix_client/features/voice/stale_membership_sweeper.dart';
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
-const _ownUser = '@sami:imtolate.de';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hardline/features/voice/matrix_rtc_membership.dart';
+import 'package:hardline/features/voice/stale_membership_sweeper.dart';
+
+const _ownUser = '@alice:example.org';
 const _ownDevice = 'YERAQSHKJW';
 
 MatrixRtcMembership membership({
@@ -50,7 +53,7 @@ void main() {
     });
 
     test('somebody else being in the call is not our problem', () {
-      expect(isStale([membership(userId: '@bob:imtolate.de')]), isFalse);
+      expect(isStale([membership(userId: '@bob:example.org')]), isFalse);
     });
 
     // MSC3757 per-device state keys exist so one user can hold several
@@ -63,7 +66,7 @@ void main() {
     test('finds ours among other participants', () {
       expect(
         isStale([
-          membership(userId: '@bob:imtolate.de', deviceId: 'BOBDEVICE'),
+          membership(userId: '@bob:example.org', deviceId: 'BOBDEVICE'),
           membership(deviceId: 'OTHERDEVICE'),
           membership(),
         ]),
