@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// The `super_drag_and_drop` adapter.
 ///
 /// One of three source files that import an input package. It exposes a widget

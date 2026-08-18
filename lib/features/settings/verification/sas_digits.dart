@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// How many digits the Matrix decimal SAS carries in total.
 ///
 /// Three numbers of four digits each. Fixed by the protocol, not a choice:

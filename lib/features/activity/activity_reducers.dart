@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// The activity log's record type and the pure rules over it.
 ///
 /// Split out from `message_activity_log.dart` for the same reason

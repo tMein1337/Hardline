@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// "Take me there" — the point of the activity summary.
 ///
 /// These live here rather than in the rows because opening a room is two

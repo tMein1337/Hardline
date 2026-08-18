@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// One or two letters standing in for a missing avatar.
 ///
 /// Rune-based so emoji and non-Latin names are not split mid-character, which

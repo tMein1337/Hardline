@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // `AppExitResponse` is a dart:ui type; `show` keeps the rest of dart:ui from
 // colliding with the widgets library imported below.
 import 'dart:ui' show AppExitResponse;

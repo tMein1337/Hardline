@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// Hex colour text, shared by the slot editor and the theme file format.
 ///
 /// It lives in `theme/` rather than beside the editor that first needed it

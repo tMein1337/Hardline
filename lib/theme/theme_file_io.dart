@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// Theme files on disk: the save/open dialogs and the read/write.
 ///
 /// The counterpart to `attachment_picker_source.dart`, and split from

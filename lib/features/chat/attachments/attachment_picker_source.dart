@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Mein1337
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// The `file_selector` adapter.
 ///
 /// One of three source files that import an input package; everything else in
