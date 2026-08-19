@@ -87,6 +87,29 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# Ship the Visual C++ runtime beside the executable instead of requiring the
+# user to install the redistributable first.
+#
+# hardline.exe imports MSVCP140.dll and VCRUNTIME140.dll, which are not part of
+# a clean Windows installation. Most machines happen to have them because some
+# other application installed the redistributable, but a fresh one does not,
+# and 0.1.0 shipped with that as a documented prerequisite. Copying the DLLs
+# into the application directory - which the Visual Studio redistributable
+# licence permits for unmodified files - removes the prerequisite entirely and
+# needs no administrator rights, unlike running the redistributable installer.
+#
+# The Universal CRT is deliberately excluded: it is part of Windows 10 and
+# later, which is the minimum target, so bundling it would add weight for
+# nothing.
+set(CMAKE_INSTALL_UCRT_LIBRARIES OFF)
+# Take the file list without the module's own install rules, which would put
+# the DLLs in a bin/ subdirectory the loader never searches.
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+include(InstallRequiredSystemLibraries)
+install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

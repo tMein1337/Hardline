@@ -1,1 +1,11 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # tool/bundle_dependency_sources.dart copies the source of every resolved
+    # package into dist/ so a release can be rebuilt if a package disappears
+    # from pub.dev. That is thousands of Dart files the analyzer would
+    # otherwise walk on every run, which makes `flutter analyze` appear to
+    # hang - and both CONTRIBUTING.md and RELEASING.md tell people to run it.
+    - dist/**
+    - build/**

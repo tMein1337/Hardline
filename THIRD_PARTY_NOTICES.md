@@ -30,8 +30,13 @@ release also contains components that are not resolved through
   `flutter_vodozemac` (Apache-2.0).
 - **SQLite** (public domain), reached through
   `sqflite_common_ffi`.
-- The **Microsoft Visual C++ runtime**, which is a generally
-  available system component and is not redistributed here.
+- The **Microsoft Visual C++ runtime** — `msvcp140*.dll`,
+  `vcruntime140*.dll` and `concrt140.dll` — which IS
+  redistributed here, unmodified, beside the executable, so
+  that the application runs without a separate prerequisite
+  install. It is distributed under the redistributable terms
+  of the Microsoft Visual Studio licence, remains a Microsoft
+  component, and is not covered by the licence of this work.
 
 The full, machine-collected set of engine and package licenses
 for the exact build you are running is available inside the

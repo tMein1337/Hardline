@@ -13,13 +13,19 @@ procedure is written down rather than improvised.
 
 Record the versions actually used, and put them in the release notes.
 
-| Component | Version used for 0.1.0 |
+| Component | Version used |
 |---|---|
 | Flutter | 3.44.8 (stable) |
 | Dart | 3.12.2 |
-| Visual Studio | 2022, "Desktop development with C++" workload |
+| Visual Studio | Community 2026, 18.8.2 - "Desktop development with C++" workload |
+| MSVC toolset | 14.51.36231 |
 | Windows SDK | as installed by the above |
 | Target | Windows 10 1809 (x64) or later |
+
+Read these off the machine that actually built the release rather than copying
+them forward; 0.1.0 shipped claiming Visual Studio 2022 when it had in fact
+been built with 2026, which would have sent anyone reproducing the build to the
+wrong compiler.
 
 Verify before building:
 
