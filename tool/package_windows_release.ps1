@@ -193,7 +193,26 @@ Foundation C.I.C. or by Google LLC.
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Write-Host "Compressing..."
-Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
+# Built entry by entry rather than with Compress-Archive, which on Windows
+# PowerShell 5.1 writes Windows path separators into the entry names. The ZIP
+# specification (APPNOTE 4.4.17.1) requires forward slashes; an archive using
+# backslashes unpacks on Linux and macOS as a heap of files with backslashes
+# in their names rather than as a directory tree.
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
+try {
+    $stageRoot = (Resolve-Path $stage).Path.TrimEnd('\')
+    $prefix = Split-Path $stageRoot -Leaf
+    foreach ($file in Get-ChildItem -Path $stageRoot -Recurse -File) {
+        $relative = $file.FullName.Substring($stageRoot.Length + 1).Replace('\', '/')
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $archive, $file.FullName, "$prefix/$relative",
+            [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+} finally {
+    $archive.Dispose()
+}
 
 # ── Checksums ────────────────────────────────────────────────────────────
 $sums = Join-Path $dist 'SHA256SUMS.txt'
