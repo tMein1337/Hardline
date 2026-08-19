@@ -40,7 +40,8 @@
 param(
     [Parameter(Mandatory = $true)] [string] $Version,
     [Parameter(Mandatory = $true)] [string] $Tag,
-    [switch] $SkipBuildCheck
+    [switch] $SkipBuildCheck,
+    [switch] $SkipInstaller
 )
 
 $ErrorActionPreference = 'Stop'
@@ -214,25 +215,59 @@ try {
     $archive.Dispose()
 }
 
+# ── Installer ────────────────────────────────────────────────────────────
+# Built from the same staged directory as the archive, so the two downloads
+# cannot drift apart: whatever was verified above is what both contain.
+$setup = $null
+if (-not $SkipInstaller) {
+    $iscc = @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if (-not $iscc) {
+        Fail ('Inno Setup 6 not found. Install it from https://jrsoftware.org/isdl.php, ' +
+              'or pass -SkipInstaller to produce only the portable archive.')
+    }
+
+    Write-Host 'Building the installer...'
+    & $iscc /Q "/DMyAppVersion=$Version" "/DRepoRoot=$root" "/DStageDir=$stage" `
+        "/DOutputDir=$dist" (Join-Path $root 'tool\hardline.iss')
+    if ($LASTEXITCODE -ne 0) { Fail 'Inno Setup failed to build the installer.' }
+
+    $setup = Join-Path $dist "hardline-$Version-windows-setup.exe"
+    if (-not (Test-Path $setup)) {
+        Fail "Inno Setup reported success but $setup was not produced."
+    }
+}
+
 # ── Checksums ────────────────────────────────────────────────────────────
 $sums = Join-Path $dist 'SHA256SUMS.txt'
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
 $exeHash = (Get-FileHash (Join-Path $stage 'hardline.exe') -Algorithm SHA256).Hash.ToLower()
-[System.IO.File]::WriteAllLines($sums, @(
+$sumLines = @(
     "$hash  $name.zip",
     "$exeHash  $name/hardline.exe"
-), $utf8NoBom)
+)
+if ($setup) {
+    $setupHash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+    $sumLines += "$setupHash  $(Split-Path $setup -Leaf)"
+}
+[System.IO.File]::WriteAllLines($sums, $sumLines, $utf8NoBom)
 
 Write-Host ''
 Write-Host "Staged:    $stage"
 Write-Host "Archive:   $zip"
+if ($setup) { Write-Host "Installer: $setup" }
 Write-Host "Checksums: $sums"
 Write-Host ''
 Write-Host "  $name.zip"
 Write-Host "  SHA-256: $hash"
 Write-Host ''
 Write-Host 'Still to do by hand:'
-Write-Host '  1. Authenticode-sign and timestamp hardline.exe and the archive.'
+Write-Host '  1. Authenticode-sign and timestamp hardline.exe, the archive and'
+Write-Host '     the installer - an unsigned installer draws a harsher SmartScreen'
+Write-Host '     warning than an unsigned application does.'
 Write-Host '  2. Re-run the checksums after signing - signing changes the file.'
 Write-Host '  3. Attach the source archive to the same release page, with a'
 Write-Host '     "Source code for this release" link beside the binary.'
