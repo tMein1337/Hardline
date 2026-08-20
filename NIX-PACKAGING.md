@@ -5,8 +5,46 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Packaging Hardline for Nix / nixpkgs
 
-This documents where the Nix support stands and the concrete remaining work to
-turn the app into a hermetic, `nixpkgs`-style derivation.
+This documents the Nix support: a hermetic `packages.default` that anyone can run
+with `nix run github:tMein1337/Hardline`, plus the `devShell` used for local work.
+
+## Status: `nix run` works (`flake.nix`)
+
+`packages.default` is a hermetic `flutter.buildFlutterApplication`. Both
+network-fetching build steps are pinned; the build runs with no network in the
+sandbox and the result is self-contained (verified: it loads every native lib and
+reaches GTK display init). The Flutter version is **not** an issue: the pinned
+nixpkgs ships Flutter 3.44.4 / Dart 3.12.2, which satisfies `sdk: ^3.12.2`.
+
+How the two blockers are solved — via nixpkgs' pub **source builders**
+(`customSourceBuilders` in `flake.nix`, files under `nix/`):
+
+- **libwebrtc (Blocker 1)** — `nix/flutter_webrtc.nix` pre-fetches the exact
+  prebuilt release as a fixed-output derivation and drops both the zip and the
+  pre-extracted `third_party/libwebrtc/` into the package source, so the plugin's
+  CMake download guard is skipped and nothing is written at build time.
+- **cargokit / rustup (Blocker 2)** — `super_native_extensions` is handled by
+  nixpkgs' built-in source builder; `flutter_vodozemac` 0.6.0 is not (its map
+  stops at 0.5.0), so `nix/flutter_vodozemac.nix` mirrors the upstream builder and
+  adds the 0.6.0 `cargoHash`. Both compile the Rust with
+  `rustPlatform.buildRustPackage` (offline, vendored) and replace cargokit's
+  rustup-driven `cargokit.cmake` with a stub — so **no rustup and no crate
+  downloads** happen during the Flutter build.
+
+Runtime self-containment (replacing the devShell's `LD_LIBRARY_PATH`): the wrapper
+adds the runtime libs, `/run/opengl-driver/lib` and the app's bundled `lib/`, and
+`NIX_LDFLAGS = -rpath …` bakes the libwebrtc DT_NEEDED libs (libgbm/libdrm/X11/…)
+into the binaries — which is also what lets the final executable *link* against
+the prebuilt `libwebrtc.so` (GNU ld resolves a transitive shared-lib dep via
+-rpath, not `-L`). NixOS-first; non-NixOS users launch via nixGL (see README).
+
+---
+
+## Appendix: original investigation notes
+
+The material below is the pre-implementation analysis. It is kept for context; the
+shipped approach above (nixpkgs source builders) supersedes the hand-rolled
+`patchelf` / `importCargoLock` sketch here.
 
 ## What works today (`flake.nix`)
 

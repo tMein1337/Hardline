@@ -135,6 +135,28 @@ flutter analyze
 flutter test
 ```
 
+### Run on Linux with Nix
+
+The flake ships a hermetic package, so no toolchain, checkout or dev shell is
+needed:
+
+```
+nix run github:tMein1337/Hardline
+```
+
+This targets **NixOS**, where the GPU driver lives at `/run/opengl-driver/lib`
+(the wrapper puts it on the library path). On a **non-NixOS** distro a Nix-built
+GL app cannot see the host driver, so launch it through
+[nixGL](https://github.com/nix-community/nixGL):
+
+```
+nix run --impure github:nix-community/nixGL#nixGLIntel -- \
+  nix run github:tMein1337/Hardline
+```
+
+(Use `#nixGLNvidia` / the variant matching your GPU.) For development,
+`nix develop` gives the same build/run environment (see `NIX-PACKAGING.md`).
+
 ## TODO
 
 ### 1. Verify screen-share system audio
@@ -335,6 +357,68 @@ Not yet traced to a widget: it surfaced the moment the app first ran on **Linux*
 fix is the shape the activity providers already use: guard on `mounted`, capture
 the value before the `await`, or move the subscription to something that outlives
 the widget (`ref.listen` in a keep-alive, not a `ref.read` in `build`/`initState`).
+
+### 6. Verify the NixOS package end to end on a clean machine
+
+The Nix work builds and the process comes up, but "comes up" is all that has
+been checked. `nix develop` + `flutter run -d linux` shows a window and
+initialises E2EE; the hermetic `packages.default` is only verified as far as
+*loading every native lib and reaching GTK display init* (see
+`NIX-PACKAGING.md`) — not as a usable client. Nobody has run
+`nix run github:tMein1337/Hardline` on a machine that is not this one, with no
+checkout and no dev shell, and actually driven it.
+
+What still needs proving:
+
+1. **`nix run` on a clean NixOS box.** A machine that has never built this,
+   straight from the flake ref. It must render a real first frame — not merely
+   reach display init — then log in, sync, and open a room. This is the path the
+   README tells people to use and it is the least-exercised one.
+2. **The GPU/window half specifically.** The wrapper bakes
+   `/run/opengl-driver/lib` for exactly this; confirm a frame actually paints on
+   both X11 and Wayland, since a bufferless Wayland surface is the silent failure
+   that leaves a live process with no visible window.
+3. **A call.** libwebrtc is the reason the whole runtime-libs dance exists.
+   Joining a call, sending audio and screen-sharing is what proves the rpath'd
+   `DT_NEEDED` libs (libgbm/libdrm/…) resolve at *runtime*, not just at link.
+4. **Non-NixOS via nixGL.** The `nix run --impure …#nixGLIntel -- nix run …`
+   line in "Run on Linux with Nix" has never been run. Confirm it on a non-NixOS
+   distro, and with the Nvidia variant if a card is available.
+5. **A second build reproduces.** Delete the result and `nix build` again: the
+   two fixed-output derivations (the libwebrtc zip, the pub cache) must still
+   hash-match. A drifting hash is how a hermetic build quietly stops being one.
+
+Once this passes, the "Run on Linux with Nix" section stops being a claim and
+becomes a tested path. The start-up Riverpod exception in TODO 5 was found this
+way — running past the environment fixes surfaces the app-logic bugs behind them.
+
+### 7. Publish a binary cache, and keep the nixpkgs pin fresh
+
+Two Nix-distribution chores, separate from proving the build works (TODO 6).
+
+**A binary cache (Cachix or attic).** The heavy part of this build is the
+*build-time* closure — the Flutter SDK, Dart, the Rust toolchain for the two
+cargokit plugins, and the pub-cache FOD — none of which is in the runtime
+closure. Without a cache every consumer rebuilds all of it from source; with one
+they download only the runtime closure and never materialise the toolchain. Set
+the cache up, push `packages.default` to it (from CI or by hand), and advertise
+it in `flake.nix` via `nixConfig.extra-substituters` +
+`extra-trusted-public-keys` so it is used automatically. This is the single
+biggest thing for anyone consuming the flake.
+
+**Keep the pin on a recent `nixos-unstable`.** The input already tracks
+`nixos-unstable`; the *revision* is what is frozen in `flake.lock`. The closer
+that revision is to what an unstable-tracking consumer runs, the more low-level
+libs (glibc, gtk3, glib, mesa) hash-identically and collapse to one shared copy
+instead of two — free disk for consumers. A stale pin shares nothing.
+
+**But a pin bump is not a no-op — it is the highest-risk change in the whole Nix
+setup.** `nix flake update` can move the very things the build is pinned
+against: the Flutter/Dart version (must satisfy `sdk: ^3.12.2`), nixpkgs'
+built-in pub source builders (the `super_native_extensions` 0.9.1 mapping in
+`flake.nix`), and the `cargoHash`es under `nix/`. Treat a bump as a change to
+verify, done *inside* a TODO-6 build-and-run pass — never a blind
+`nix flake update` on faith.
 
 ### second to last Plattform Support
 - Linux

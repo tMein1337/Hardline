@@ -1,0 +1,89 @@
+# Custom pub source-builder for flutter_vodozemac 0.6.0.
+#
+# Mirrors nixpkgs' pkgs/development/compilers/dart/package-source-builders/
+# flutter_vodozemac, whose cargoHash map only goes up to 0.5.0 and therefore
+# `throw`s on the 0.6.0 this app pins. We add the 0.6.0 entry here and pass this
+# via `customSourceBuilders` in flake.nix.
+#
+# The pattern: build the Rust crate with rustPlatform.buildRustPackage (offline,
+# vendored via cargoHash) and replace cargokit's cmake with a fake that just
+# points the target at the prebuilt .so — so cargokit never invokes rustup or
+# downloads crates at Flutter-build time.
+{
+  lib,
+  rustPlatform,
+  writeText,
+  stdenv,
+}:
+
+{ version, src, ... }:
+
+let
+  rustDep = rustPlatform.buildRustPackage {
+    pname = "flutter_vodozemac-rs";
+    inherit version src;
+
+    sourceRoot = "${src.name}/rust";
+
+    cargoHash =
+      {
+        _0_2_2 = "sha256-Iw0AkHVjR1YmPe+C0YYBTDu5FsRk/ZpaRyBilcvqm6M=";
+        _0_3_0 = "sha256-eKKrcroV2yl/FV2WmgZWFPO5MPAGz0xCvpr0fgIuGZ4=";
+        _0_4_1 = "sha256-eKKrcroV2yl/FV2WmgZWFPO5MPAGz0xCvpr0fgIuGZ4=";
+        _0_5_0 = "sha256-eKKrcroV2yl/FV2WmgZWFPO5MPAGz0xCvpr0fgIuGZ4=";
+        # Added for this app. If the crate's Cargo.lock is unchanged from 0.5.0
+        # this matches; otherwise `nix build` reports the correct hash to paste.
+        _0_6_0 = "sha256-eKKrcroV2yl/FV2WmgZWFPO5MPAGz0xCvpr0fgIuGZ4=";
+      }
+      .${"_" + (lib.replaceStrings [ "." ] [ "_" ] version)} or (throw ''
+        Unsupported version of pub 'flutter_vodozemac': '${version}'
+        Please add cargoHash here. If the cargoHash
+        is the same with existing versions, add an alias here.
+      '');
+
+    passthru.libraryPath = "lib/libvodozemac_bindings_dart.so";
+  };
+
+  fakeCargokitCmake = writeText "FakeCargokit.cmake" ''
+    function(apply_cargokit target manifest_dir lib_name any_symbol_name)
+      set("''${target}_cargokit_lib" ${rustDep}/${rustDep.passthru.libraryPath} PARENT_SCOPE)
+    endfunction()
+  '';
+
+  getLibraryPath = ''
+    String _getLibraryPath() {
+      if (kIsWeb) {
+        return './';
+      }
+      try {
+        return Platform.resolvedExecutable + '/../lib/libvodozemac_bindings_dart.so';
+      } catch (_) {
+        return './';
+      }
+    }
+  '';
+in
+stdenv.mkDerivation {
+  pname = "flutter_vodozemac";
+  inherit version src;
+  passthru = src.passthru // {
+    # vodozemac-wasm in fluffychat will make use of it
+    inherit (rustDep) cargoDeps;
+  };
+
+  installPhase = ''
+    runHook preInstall
+
+    cp -r "$src" "$out"
+    pushd $out
+      chmod +rwx cargokit/cmake/cargokit.cmake
+      cp ${fakeCargokitCmake} cargokit/cmake/cargokit.cmake
+      chmod +rw lib/flutter_vodozemac.dart
+      substituteInPlace lib/flutter_vodozemac.dart \
+        --replace-warn "libraryPath: './'" "libraryPath: _getLibraryPath()"
+      echo "${getLibraryPath}" >> lib/flutter_vodozemac.dart
+    popd
+
+    runHook postInstall
+  '';
+}
