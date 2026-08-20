@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Mein1337
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Build the Nix package and push it to the Cachix binary cache, so consumers
+# download the built app instead of recompiling Flutter + libwebrtc + the two
+# Rust plugins from source.
+#
+# One-time setup outside this file:
+#   * create the `hardline` cache at cachix.org
+#   * add its public key to flake.nix nixConfig.extra-trusted-public-keys
+#   * add a write auth token as the CACHIX_AUTH_TOKEN repository secret
+name: nix
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A cold build (Flutter SDK + build closure) is large; the GitHub runner
+      # ships only ~14 GB free, so reclaim space first.
+      - uses: easimon/maximize-build-space@v10
+        with:
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
+      - uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      # Pushes all built store paths to the cache after the build when the auth
+      # token is present. Forks (PRs without the secret) still build as a check
+      # but do not push.
+      - uses: cachix/cachix-action@v15
+        with:
+          name: hardline
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - run: nix build .#hardline --print-build-logs

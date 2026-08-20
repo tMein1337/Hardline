@@ -119,6 +119,51 @@ against Element:
 | Call rings render in the timeline instead of badging invisibly | built |
 | Badges left behind by calls that ended clear themselves | built |
 
+## How to Install
+
+### Windows
+
+Download from the [Releases page](https://github.com/tMein1337/Hardline/releases).
+Two forms of the same build are published:
+
+- **Installer** — `hardline-<version>-windows-setup.exe`. Double-click and follow
+  the prompts. If the build is unsigned you may get a SmartScreen warning; the
+  release notes say whether it is signed.
+- **Portable** — `hardline-<version>-windows.zip`. Extract it anywhere and run
+  `hardline.exe`. Keep the folder together — the DLLs and data beside the `.exe`
+  are part of the app, and the bare `.exe` will not run on its own.
+
+Verify the download against the SHA-256 published in the release notes. Every
+release is accompanied by the exact source it was built from.
+
+### NixOS (flakes)
+
+Run it without installing anything:
+
+```
+nix run github:tMein1337/Hardline
+```
+
+Or add it to your system. In your flake:
+
+```nix
+inputs.hardline.url = "github:tMein1337/Hardline";
+# Do NOT set inputs.hardline.inputs.nixpkgs.follows — the pinned nixpkgs is
+# required to build.
+```
+
+then, in your `nixosSystem` modules:
+
+```nix
+imports = [ inputs.hardline.nixosModules.default ];
+programs.hardline.enable = true;
+```
+
+and `sudo nixos-rebuild switch`. Needs `hardware.graphics.enable = true` (usually
+already on) to render. On a **non-NixOS** distro, launch through nixGL — see
+[Run on Linux with Nix](#run-on-linux-with-nix). The overlay and more detail are
+under [Consuming this flake](#consuming-this-flake).
+
 ## Running
 
 ```
@@ -156,6 +201,39 @@ nix run --impure github:nix-community/nixGL#nixGLIntel -- \
 
 (Use `#nixGLNvidia` / the variant matching your GPU.) For development,
 `nix develop` gives the same build/run environment (see `NIX-PACKAGING.md`).
+
+### Consuming this flake
+
+Add it as an input and install the package, the overlay, or the NixOS module:
+
+```nix
+{
+  inputs.hardline.url = "github:tMein1337/Hardline";
+  # Do NOT set inputs.hardline.inputs.nixpkgs.follows — the pinned nixpkgs
+  # carries the exact Flutter/source-builder versions the build needs. See below.
+
+  outputs = { nixpkgs, hardline, ... }: {
+    # a) directly:
+    #    environment.systemPackages = [ hardline.packages.x86_64-linux.default ];
+    # b) via the overlay:  nixpkgs.overlays = [ hardline.overlays.default ];
+    #                      environment.systemPackages = [ pkgs.hardline ];
+    # c) via the module:   imports = [ hardline.nixosModules.default ];
+    #                      programs.hardline.enable = true;
+  };
+}
+```
+
+Two things worth knowing:
+
+- **The nixpkgs pin is load-bearing.** The package builds only against the
+  nixpkgs revision in this flake's lock (a specific Flutter/Dart, nixpkgs' pub
+  source builders, the cargo hashes). Overriding it with `follows` will likely
+  break the build, so don't — the overlay and module both inject the pin-built
+  package for the same reason. The cost is a second nixpkgs' worth of runtime
+  libs; the binary cache below is the mitigation.
+- **Use the cache.** `nix run github:…` only honours the flake's substituter
+  when you pass `--accept-flake-config` (or are a trusted user); without it you
+  rebuild Flutter + libwebrtc from source.
 
 ## TODO
 
@@ -387,6 +465,16 @@ What still needs proving:
 5. **A second build reproduces.** Delete the result and `nix build` again: the
    two fixed-output derivations (the libwebrtc zip, the pub cache) must still
    hash-match. A drifting hash is how a hermetic build quietly stops being one.
+6. **It is an app, not just a binary.** The package now ships a `.desktop` entry
+   and a hicolor icon. Install it (`programs.hardline.enable`, or the overlay),
+   rebuild, and confirm **Hardline shows up in the app menu with its icon**.
+   Launch it **from the menu** — the window's dock/taskbar tile must show the
+   Hardline icon, not a generic one; that is the tell that `StartupWMClass`
+   matches the GTK app-id. Check **X11 and Wayland** separately.
+7. **The cache actually serves.** After CI has pushed to Cachix, on a machine
+   that never built this: `nix run --accept-flake-config github:tMein1337/Hardline`
+   must **download** from `hardline.cachix.org` rather than compile (the log says
+   `copying path … from 'https://hardline.cachix.org'`).
 
 Once this passes, the "Run on Linux with Nix" section stops being a claim and
 becomes a tested path. The start-up Riverpod exception in TODO 5 was found this
@@ -396,15 +484,23 @@ way — running past the environment fixes surfaces the app-logic bugs behind th
 
 Two Nix-distribution chores, separate from proving the build works (TODO 6).
 
-**A binary cache (Cachix or attic).** The heavy part of this build is the
-*build-time* closure — the Flutter SDK, Dart, the Rust toolchain for the two
-cargokit plugins, and the pub-cache FOD — none of which is in the runtime
-closure. Without a cache every consumer rebuilds all of it from source; with one
-they download only the runtime closure and never materialise the toolchain. Set
-the cache up, push `packages.default` to it (from CI or by hand), and advertise
-it in `flake.nix` via `nixConfig.extra-substituters` +
-`extra-trusted-public-keys` so it is used automatically. This is the single
-biggest thing for anyone consuming the flake.
+**A binary cache (Cachix).** The heavy part of this build is the *build-time*
+closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
+plugins, and the pub-cache FOD — none of which is in the runtime closure.
+Without a cache every consumer rebuilds all of it from source; with one they
+download only the runtime closure and never materialise the toolchain. This is
+the single biggest thing for anyone consuming the flake.
+
+The wiring is in place: `flake.nix` advertises the substituter via `nixConfig`,
+and `.github/workflows/nix.yml` builds `.#hardline` on every push to `main` and
+pushes it to Cachix. Three manual steps remain, which cannot be committed:
+
+1. Create the `hardline` cache at cachix.org.
+2. Replace `REPLACE_WITH_PUBLIC_KEY` in `flake.nix`'s
+   `nixConfig.extra-trusted-public-keys` with the cache's real public key (and
+   confirm the cache name/URL).
+3. Add a write auth token as the `CACHIX_AUTH_TOKEN` repository secret so CI can
+   push.
 
 **Keep the pin on a recent `nixos-unstable`.** The input already tracks
 `nixos-unstable`; the *revision* is what is frozen in `flake.lock`. The closer

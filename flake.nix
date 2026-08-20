@@ -6,6 +6,15 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+  # Binary cache, so consumers download the built app instead of recompiling
+  # Flutter + libwebrtc + the two Rust plugins. `nix run github:…` only honours
+  # these when the caller passes --accept-flake-config or is a trusted user.
+  # Fill in the real cache name and public key once the Cachix cache exists.
+  nixConfig = {
+    extra-substituters = [ "https://hardline.cachix.org" ];
+    extra-trusted-public-keys = [ "hardline.cachix.org-1:uT6o7En8gf05Q8TDpkEQcNPxlNAy74koJkuLUX3/WAQ=" ];
+  };
+
   outputs = { self, nixpkgs }:
     let
       systems = [ "x86_64-linux" ];
@@ -58,6 +67,9 @@
         let
           lib = pkgs.lib;
           runtimeLibs = runtimeLibsFor pkgs;
+          # Reuse the macOS app icon as the Linux hicolor icon source. Referencing
+          # the single file (rather than ./.) imports only it into the store.
+          appIcon = ./macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png;
         in
         pkgs.flutter.buildFlutterApplication {
           pname = "hardline";
@@ -72,6 +84,41 @@
             flutter_vodozemac = pkgs.callPackage ./nix/flutter_vodozemac.nix { };
             flutter_webrtc = pkgs.callPackage ./nix/flutter_webrtc.nix { };
           };
+
+          # Desktop integration: an application-menu entry and a hicolor icon, so
+          # the result is an installable app and not just a binary on PATH.
+          # copyDesktopItems installs `desktopItems` during postInstall;
+          # imagemagick resizes the icon below. buildFlutterApplication appends
+          # its own nativeBuildInputs (wrapGAppsHook3, pkg-config), so this is
+          # additive.
+          nativeBuildInputs = [ pkgs.copyDesktopItems pkgs.imagemagick ];
+
+          desktopItems = [
+            (pkgs.makeDesktopItem {
+              name = "com.mein1337.hardline"; # -> com.mein1337.hardline.desktop
+              desktopName = "Hardline";
+              genericName = "Matrix client";
+              comment = "An independent client for the Matrix protocol";
+              exec = "hardline";
+              icon = "com.mein1337.hardline";
+              categories = [ "Network" "InstantMessaging" ];
+              keywords = [ "Matrix" "Chat" "Messaging" ];
+              # Must equal the GTK application-id / g_set_prgname (see
+              # linux/CMakeLists.txt) or the running window won't bind to this
+              # entry's icon in the dock/launcher.
+              startupWMClass = "com.mein1337.hardline";
+            })
+          ];
+
+          # imagemagick 7 provides `magick`. `''${s}` emits a literal ${s} for
+          # bash rather than interpolating in Nix.
+          postInstall = ''
+            for s in 16 24 32 48 64 128 256 512; do
+              dir=$out/share/icons/hicolor/''${s}x''${s}/apps
+              mkdir -p "$dir"
+              magick ${appIcon} -resize ''${s}x''${s} "$dir/com.mein1337.hardline.png"
+            done
+          '';
 
           # Dev libraries flutter_webrtc's CMake resolves via pkg-config
           # (GTK, libpulse -> HAVE_LIBPULSE) and links the prebuilt libwebrtc.so
@@ -108,6 +155,9 @@
             mainProgram = "hardline";
             platforms = [ "x86_64-linux" ];
             license = lib.licenses.agpl3Plus;
+            # fromSource: the Dart/Rust compiled in-sandbox. binaryNativeCode: the
+            # bundled prebuilt libwebrtc.so (see nix/flutter_webrtc.nix).
+            sourceProvenance = with lib.sourceTypes; [ fromSource binaryNativeCode ];
           };
         };
     in
@@ -116,6 +166,35 @@
         hardline = mkHardline pkgs;
         default = hardline;
       });
+
+      # Inject the *pin-built* package into a consumer's pkgs. It deliberately
+      # does not rebuild against their nixpkgs — the pinned nixpkgs is
+      # load-bearing (Flutter version, source builders, cargoHashes), which is
+      # also why consumers must not `follows` our nixpkgs. The cost is no
+      # shared-lib dedup with their system; the binary cache is the mitigation.
+      overlays.default = final: prev: {
+        hardline = self.packages.${prev.system}.hardline;
+      };
+
+      nixosModules.default = { config, lib, pkgs, ... }:
+        let
+          cfg = config.programs.hardline;
+        in
+        {
+          options.programs.hardline.enable =
+            lib.mkEnableOption "Hardline, an independent Matrix client";
+
+          config = lib.mkIf cfg.enable {
+            environment.systemPackages = [ self.packages.${pkgs.system}.default ];
+
+            # hardware.graphics.enable is what populates /run/opengl-driver/lib,
+            # which the wrapper bakes onto LD_LIBRARY_PATH; without it Hardline
+            # starts but paints no window. Warn rather than block — a headless or
+            # remote setup may still want the package present.
+            warnings = lib.optional (!config.hardware.graphics.enable)
+              "programs.hardline: hardware.graphics.enable is false — Hardline needs /run/opengl-driver/lib to render.";
+          };
+        };
 
       apps = forAllSystems (pkgs: rec {
         hardline = {
