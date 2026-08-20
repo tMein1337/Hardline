@@ -187,6 +187,62 @@ Attach to the same release page:
 - [ ] Every checklist item in `RELEASE-LEGAL-ROADMAP.md` under **BLOCKERS** is
       green.
 
+### The clean machine can be Windows Sandbox
+
+Windows 11 Pro includes Windows Sandbox, which boots a fresh Windows image in
+about twenty seconds and destroys it on close. That is a better clean machine
+than a virtual machine you maintain, because it cannot be contaminated by an
+earlier test run.
+
+Enable it once, from an elevated PowerShell:
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All
+```
+
+Then save this as `clean-test.wsb`, correcting the host path, and double-click
+it:
+
+```xml
+<Configuration>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\path\to\repo\dist</HostFolder>
+      <SandboxFolder>C:\hardline</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <Networking>Enable</Networking>
+  <vGPU>Enable</vGPU>
+  <MemoryInMB>4096</MemoryInMB>
+</Configuration>
+```
+
+Test **both** downloads. They are built from the same staged directory, but
+they are two published artifacts and the installer exercises a different path
+onto disk than the archive does.
+
+Do not use Hyper-V Quick Create's "Windows 11 dev environment" image. It has
+Visual Studio pre-installed, so the Visual C++ runtime is already present and
+the test proves nothing.
+
+**Two traps, both of which look exactly like real failures:**
+
+- **A cold certificate store.** Windows fetches trusted roots on demand, and a
+  freshly booted sandbox has almost none. The first HTTPS request can therefore
+  fail TLS validation, which surfaces as *"Couldn't reach that homeserver"* even
+  though the network, DNS and the server are all fine. Making any other HTTPS
+  request first — `Invoke-WebRequest https://example.com` — populates the store,
+  after which sign-in works. No real machine hits this, because ordinary
+  browsing fills the store long before anyone installs a Matrix client.
+- **Rendering.** Flutter draws through the GPU, so leave `vGPU` enabled. A blank
+  or broken window is far more likely to be a sandbox limitation than a bug in
+  the application.
+
+Verified this way for 0.1.1: both the installer and the portable archive start
+on a machine that has never had the Visual C++ Redistributable, which 0.1.0
+could not do — it fails there with a missing `VCRUNTIME140_1.dll`.
+
 ## 10. Keep it available
 
 For as long as any binary of a version is downloadable:

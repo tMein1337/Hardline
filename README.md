@@ -336,48 +336,6 @@ fix is the shape the activity providers already use: guard on `mounted`, capture
 the value before the `await`, or move the subscription to something that outlives
 the widget (`ref.listen` in a keep-alive, not a `ref.read` in `build`/`initState`).
 
-### 6. Verify that a clean Windows machine starts it
-
-The Visual C++ runtime is now copied next to the executable
-(`windows/CMakeLists.txt`), so the application should need nothing installed
-beforehand. That has never been observed, because every machine this has run on
-carries Visual Studio and therefore the redistributable already. Until someone
-runs the test below, treat it as unproven.
-
-**Why it matters.** `hardline.exe` imports `MSVCP140.dll` and
-`VCRUNTIME140.dll`, which are not part of a clean Windows installation. 0.1.0
-shipped without them and named the redistributable as a prerequisite; the
-bundled copies are meant to remove that. If app-local deployment does not behave
-the way it is supposed to, the package fails to start on precisely the machines
-least able to diagnose why.
-
-**The test.** A Windows 10 (1809 or later) or Windows 11 machine — a fresh VM is
-fine — with no Visual Studio, no Flutter toolchain and no Visual C++
-Redistributable installed. Install nothing first; that is the whole point.
-
-1. Copy the packaged folder across, or download the release zip and extract it.
-2. Run `hardline.exe`. It should start with no missing-DLL dialog.
-3. Sign in, send a message, and join a call.
-4. **Settings → About**: the version and commit must match the release, and the
-   source link must resolve to that tree.
-5. Check that the data directory is created at `%APPDATA%\Mein1337\Hardline`.
-   First-run behaviour is never exercised on a machine that already has one.
-
-**If it refuses to start**, the dialog names the missing library:
-
-- `MSVCP140.dll` or `VCRUNTIME140.dll` — the app-local copy is not being found.
-  Confirm they are beside the exe in the packaged folder rather than in a `bin/`
-  subdirectory, which is where `InstallRequiredSystemLibraries` puts them unless
-  `CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP` is set.
-- `api-ms-win-crt-*.dll` — the Universal CRT is absent, which means the machine
-  predates Windows 10 and is outside what this supports.
-
-Two names appear in the binaries that are deliberately **not** shipped:
-`d3dcompiler_46.dll`, referenced by `flutter_windows.dll`, and `jvm.dll`,
-referenced by `dartjni.dll`. Both are optional runtime loads rather than
-imports — 0.1.0 ran without either — so neither should appear in a start-up
-failure. If one does, that is a real finding.
-
 ### second to last Plattform Support
 - Linux
 - Macos
