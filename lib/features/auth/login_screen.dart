@@ -73,24 +73,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     final pending = widget.pending;
     final homeserver = _homeserver.text.trim();
-    final ok = await ref
-        .read(loginControllerProvider.notifier)
-        .signIn(
-          homeserver: homeserver,
-          username: _username.text,
-          password: _password.text,
-          target: pending?.client,
-        );
+
+    // Every provider this method needs is read *before* the first await, and
+    // held rather than re-read afterwards, because this screen is normally gone
+    // by the time the await returns.
+    //
+    // The SDK's `login()` calls `Client.init()` internally, and `init()` emits
+    // `LoginState.loggedIn` and *then* waits for the first sync — a whole
+    // network round trip later. The router acts on `loggedIn` at the next
+    // frame, so `LoginScreen` has already been replaced by the shell while
+    // `signIn` is still awaiting. A `ref` read at that point throws the
+    // "widget is about to or has been unmounted" StateError, and nothing
+    // awaits `_submit`, so it surfaces as an unhandled exception on the first
+    // launch of a fresh install. All three of these are app-lifetime
+    // providers, so a captured reference stays valid.
+    final login = ref.read(loginControllerProvider.notifier);
+    final prefs = ref.read(prefsProvider);
+    final accounts = ref.read(accountActionsProvider.notifier);
+
+    final ok = await login.signIn(
+      homeserver: homeserver,
+      username: _username.text,
+      password: _password.text,
+      target: pending?.client,
+    );
 
     if (homeserver.isNotEmpty) {
-      await ref.read(prefsProvider).setString(_lastHomeserverKey, homeserver);
+      await prefs.setString(_lastHomeserverKey, homeserver);
     }
 
     // A first login moves the router on its own, driven by the login-state
     // stream. An *added* account does not: the live client has not changed
     // until we say so.
     if (!ok || pending == null) return;
-    await ref.read(accountActionsProvider.notifier).completeAddAccount(pending);
+    await accounts.completeAddAccount(pending);
     if (mounted) Navigator.of(context).pop(true);
   }
 

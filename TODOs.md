@@ -5,12 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Outstanding work.
-
 Items 1 to 4 are **verifications**, not features: the code is written and
 believed correct, but has never been observed working, usually because the test
-needs a second client or a second machine. Items 6 and 7 are the same shape for
-the Nix packaging. Item 5 is a real bug.
+needs a second client or a second machine. Items 5 and 6 are the same shape for
+the Nix packaging.
 
 ## 1. Verify screen-share system audio
 
@@ -193,26 +191,7 @@ different microphones.
    or in Element, hard-kill this one and relaunch. The sweep must clear only
    this device's membership and leave the other call running.
 
-## 5. Fix the Riverpod `ref`-after-unmount exception on start-up
-
-Launching throws once, before the first frame:
-
-```
-Unhandled Exception: Bad state: Using "ref" when a widget is about to or has
-been unmounted is unsafe.
-```
-
-A `ref` is used from an async callback after the widget that owns it has already
-unmounted — a start-up lifecycle race. The window still renders, so it is
-non-fatal today, but an unhandled exception on every launch should not stay.
-
-Not yet traced to a widget: it surfaced the moment the app first ran on **Linux**
-(past the Nix build/runtime fixes — it is app logic, not the environment). The
-fix is the shape the activity providers already use: guard on `mounted`, capture
-the value before the `await`, or move the subscription to something that outlives
-the widget (`ref.listen` in a keep-alive, not a `ref.read` in `build`/`initState`).
-
-## 6. Verify the NixOS package end to end on a clean machine
+## 5. Verify the NixOS package end to end on a clean machine
 
 The Nix work builds and the process comes up, but "comes up" is all that has
 been checked. `nix develop` + `flutter run -d linux` shows a window and
@@ -253,12 +232,16 @@ What still needs proving:
    `copying path … from 'https://hardline.cachix.org'`).
 
 Once this passes, the "Run on Linux with Nix" section stops being a claim and
-becomes a tested path. The start-up Riverpod exception in TODO 5 was found this
-way — running past the environment fixes surfaces the app-logic bugs behind them.
+becomes a tested path. Running past the environment fixes is what surfaces the
+app-logic bugs sitting behind them, so read the log as well as the window: the
+unhandled Riverpod exception this list used to carry was found exactly that way.
+It is fixed — `_LoginScreenState._submit` read `ref` after `signIn` returned, by
+which point the router had already swapped the login screen for the shell — and
+a first launch should now come up with nothing in the log at all.
 
-## 7. Publish a binary cache, and keep the nixpkgs pin fresh
+## 6. Publish a binary cache, and keep the nixpkgs pin fresh
 
-Two Nix-distribution chores, separate from proving the build works (TODO 6).
+Two Nix-distribution chores, separate from proving the build works (TODO 5).
 
 **A binary cache (Cachix).** The heavy part of this build is the *build-time*
 closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
@@ -300,6 +283,23 @@ verify, done *inside* a TODO-6 build-and-run pass — never a blind
 
 ## last: Smaller things
 
+- **A link in a message is not clickable.** `message_body.dart` draws every
+  body as a plain `SelectableText`, so the only way to follow a URL somebody
+  sent is to select it by hand and paste it into a browser. Detect them and
+  open them in the system browser on click. `url_launcher` is already a
+  dependency, and `about_pane.dart` already holds the pattern worth copying:
+  `launchUrl(..., mode: LaunchMode.externalApplication)`, and on failure copy
+  the address to the clipboard rather than reporting a dead end — a machine
+  with no browser association must still be able to get at it. Three things to
+  keep in mind. The text has to stay **selectable**, so this is a recognizer on
+  the existing `SelectableText`, not a swap to `RichText`. A `matrix.to` link
+  is not a web link — it addresses a room or a person in *this* app, and
+  handing it to a browser to bounce back is the wrong answer. And the visible
+  text is safe to trust only for as long as `_Text` keeps passing
+  `plaintextBody: true`; the moment a formatted body is rendered, the label and
+  the target become two different fields and a link from a stranger has to show
+  where it really goes before it is opened.
+
 - Matrix device ids change on every logout/login, so per-device volumes are
   forgotten when someone re-authenticates. Inherent to keying by device — the
   LiveKit identity carries `@user:server:DEVICEID` and nothing else about the
@@ -307,19 +307,35 @@ verify, done *inside* a TODO-6 build-and-run pass — never a blind
   does **not** lose them: the session is restored from its own database rather
   than re-authenticated, so the device id survives.
 
-Fixed in code, **unobserved** — see test 4 above before believing either:
-
-- ~~Renegotiating the microphone mid-call briefly drops audio for others.~~ Now
-  a track restart in place rather than a mute/unmute cycle. The investigation
-  found the switch was not taking effect at all; see "Switching the microphone
-  mid-call is `setDeviceId`" in [notes.md](notes.md).
-- ~~A hard kill (Task Manager) cannot withdraw the call membership.~~ Now
-  withdrawn by the homeserver via MSC4140, with a startup sweep behind it for
-  servers that do not offer it. See "A hard kill needs the server to withdraw
-  the membership" in [notes.md](notes.md).
-
 ## ideas
 - An always-on-top call overlay for use over a full-screen application.
 - A live speaking indicator on the space rail, so an unopened room still shows
   that somebody in it is talking.
+- **Optional encryption for the data stored on this device.** Everything is
+  written in the clear today: `matrix_client.sqlite` holds the access token and
+  the Megolm keys, and `matrix/files/` holds attachments already decrypted.
+  `PRIVACY.md` and both release pages say so plainly, and full-disk encryption
+  covers the case that matters most — a powered-off machine that walks away —
+  which is why this is an idea and not a defect.
+
+  What it would add is protection from another account on the same machine, and
+  from a disk image lifted off it. It cannot protect against anything running
+  *as the user*, because whatever the app can decrypt, malware wearing the same
+  token can too. Say that out loud in the UI or it promises more than it does.
+
+  The awkward part is the key, and it is a genuine trade rather than a detail.
+  A passphrase typed at launch is real protection, but it blocks any unattended
+  start and a forgotten one destroys the encrypted history for good. An OS
+  keystore (DPAPI on Windows, libsecret on Linux) is invisible and unlosable,
+  but it is only as strong as the OS account — which is exactly the threat above
+  and no more. Opt-in, with the choice spelled out, is the only honest shape.
+
+  Mechanically the database half is nearly free: `buildMatrixClient` hands
+  `MatrixSdkDatabase.init` an already-open `Database`, so it is a swap of the
+  factory. The cost is downstream — SQLCipher on desktop means shipping a
+  SQLCipher-enabled sqlite3 in place of the stock `sqlite3.dll` this build
+  bundles, so it lands on the Windows package and the Nix derivation both, and
+  `sqflite_sqlcipher` is aimed at mobile and wants checking before it is
+  assumed. The media cache needs its own answer regardless: `DatabaseFileStorage`
+  writes ordinary files into `matrix/files/` and knows nothing about a cipher.
 
