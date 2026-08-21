@@ -89,6 +89,10 @@ flutter pub get
 flutter run -d windows
 ```
 
+Needs the Rust toolchain on PATH - `flutter_vodozemac` builds vodozemac through
+cargokit - and MSVC for the Windows build. The first Windows build downloads a
+large prebuilt `libwebrtc`.
+
 There is a Nix flake for a reproducible Linux dev shell — see
 [`NIX-PACKAGING.md`](NIX-PACKAGING.md).
 
