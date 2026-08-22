@@ -62,10 +62,27 @@ dependency_overrides:
   # between v11 and v12. Re-check this if the app ever ships on Android.
   device_info_plus: ^12.3.0
 
+# Swaps the bundled SQLite for the SQLite3MultipleCiphers build, which is the
+# same SQLite plus a page-level cipher reachable through `PRAGMA key`. It is a
+# drop-in with no key set, so a database that has never been encrypted opens
+# exactly as before. See lib/core/storage/store_cipher.dart.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Test-only. The unlock gate resolves the store's path through
+  # path_provider, whose Windows and Linux implementations are plain Dart
+  # rather than method channels — so a widget test cannot fake it by
+  # intercepting a channel and has to substitute the platform instance.
+  path_provider_platform_interface: ^2.1.3
+  # Comes with the above: substituting a platform instance needs the mixin
+  # that tells the interface's token check this is a deliberate fake.
+  plugin_platform_interface: ^2.1.8
 
 flutter:
   uses-material-design: true

@@ -39,6 +39,12 @@
         #        with a bare-name dlopen. Missing => buildMatrixClient throws
         #        before runApp, so no first frame is ever produced and the
         #        window is never shown (looks like a hung/invisible app).
+        #        Note this is *plain* SQLite, with no cipher: nixpkgs' source
+        #        builder for the sqlite3 pub package overrides the
+        #        `hooks.user_defines` in pubspec.yaml that asks for the
+        #        SQLite3MultipleCiphers build. On-device encryption therefore
+        #        refuses to switch on here rather than pretending — see
+        #        "The store cipher is missing on Nix" in NIX-PACKAGING.md.
         # X11 libs pulled in by libwebrtc.so (top-level attrs; the `xorg.*`
         # set was deprecated in nixpkgs):
         libx11

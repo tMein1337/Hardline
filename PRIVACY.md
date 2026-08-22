@@ -72,9 +72,15 @@ members, read receipts and your own read markers.
 
 | What | Where | Retention |
 |---|---|---|
-| Downloaded attachments and images | `matrix\files\` (per account) | Deleted automatically **30 days** after they are cached. |
+| Downloaded attachments and images | inside the same account database (`matrix\*.sqlite`) | Deleted automatically **30 days** after they are cached. |
 | Large attachments | not cached | Anything over **10 MB** is re-fetched on demand rather than stored. |
 | Avatars | in-memory and the platform HTTP image cache | Not written to a dedicated cache by this application. |
+
+Cached attachments are held inside the account's database rather than as loose
+files in a directory, so that whatever protects the database protects them too.
+A version of Hardline before 0.2.0 wrote them to a `matrix\files\`
+directory instead; that directory is deleted the first time a newer version
+opens the account.
 
 Files you explicitly save with **Save as** go wherever you put them, and
 Hardline does not track them afterwards.
@@ -95,6 +101,10 @@ is a JSON file inside the same application data directory:
 | `sas_display_v1` | Whether verification shows emoji or numbers |
 | `security_prefs_v1` | Whether a link is confirmed before it is opened |
 
+No preference records whether on-device encryption is on. Hardline works that
+out from the database files themselves, so there is nothing in the preference
+store that could disagree with what is actually on disk.
+
 Per-person volume settings name the other person's user id and device id. They
 never leave your computer.
 
@@ -106,8 +116,12 @@ avatar rather than only a user id. Signing an account out removes its entry.
 
 - Your password. It is sent to your homeserver to obtain a token and is not
   written to disk.
-- Your recovery key or security passphrase. It is used in memory to unlock
-  cross-signing and is not persisted by this application.
+- Your Matrix recovery key or security passphrase. It is used in memory to
+  unlock cross-signing and is not persisted by this application.
+- The passphrase for on-device encryption, if you have turned it on. It is held
+  in memory for as long as Hardline is running and is never written anywhere.
+  Nothing on this disk can be used to check a guess at it except the databases
+  it encrypts.
 
 ## What is sent, and where
 
@@ -200,6 +214,11 @@ a share.
   See `deleteAccountStorage` in `lib/bootstrap/matrix_bootstrap.dart`.
 - **Remove everything:** sign out of all accounts, close Hardline, and delete
   the application data directory named above.
+- **If you have forgotten the on-device passphrase:** the lock screen at
+  startup offers to erase every account stored here and start over. That is a
+  deletion, not a recovery — you can sign in again afterwards, but the Megolm
+  keys that were in the store are gone, so history in encrypted rooms that no
+  other device of yours holds keys for stays unreadable.
 - Deleting local data does not delete anything from your homeserver. To remove
   data there, use your homeserver's own account management, and revoke sessions
   from **Settings → Sessions** or from another client.

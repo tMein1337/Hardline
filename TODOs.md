@@ -5,9 +5,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1 to 4 are **verifications**, not features: the code is written and
+Items 1 to 5 are **verifications**, not features: the code is written and
 believed correct, but has never been observed working, usually because the test
-needs a second client or a second machine. Items 5 and 6 are the same shape for
+needs a second client or a second machine. Items 6 and 7 are the same shape for
 the Nix packaging.
 
 ## 1. Verify screen-share system audio
@@ -191,7 +191,78 @@ different microphones.
    or in Element, hard-kill this one and relaunch. The sweep must clear only
    this device's membership and leave the other call running.
 
-## 5. Verify the NixOS package end to end on a clean machine
+## 5. Verify on-device encryption against a real account
+
+`Settings → Security` → *"Encrypt the data stored on this device"* is
+implemented and covered by tests that run against real sqlite files on disk
+(`test/storage/`, `test/settings/device_encryption_test.dart`,
+`test/auth/unlock_screen_test.dart`, `test/auth/launch_sequence_test.dart`).
+What no test can cover is the app itself doing it to a live account, which is
+what the list below is for.
+
+**Steps 1 to 5 and 7 pass, observed on 2026-08-22** against a real account with
+a second one added alongside it. Both stores were confirmed to begin with
+ciphertext rather than `SQLite format 3`; the second account's store was born
+encrypted rather than written in the clear and tidied up afterwards; the old
+`matrix\files\` directory is gone; and `tool/inspect_store.dart` read
+**11 attachments, 1.90 MB** back out of the encrypted main store — the
+attachment cache is inside what the passphrase protects, which is the whole
+claim. Turning it off and on again worked, as did changing the passphrase with
+two accounts signed in, which was the step most likely to half-apply.
+
+One bug was found doing it, and fixed. The first restart came up on a red screen
+*after a correct passphrase*: a locked launch calls `runApp` twice, the second
+call reconciled the lock screen's `ProviderScope` with the app's instead of
+replacing it, and Riverpod refused the change in override count. Distinct scope
+keys in `app.dart` are the fix, and `test/auth/launch_sequence_test.dart` pumps
+the two real roots in order so it cannot come back silently.
+
+**Steps 6 and 8 are outstanding**: the forgotten-passphrase path, which wants a
+throwaway installation because it ends in deletion, and the Nix build, which
+wants the machine. Everything else below is now a re-verification procedure
+rather than an open question — worth re-running after anything touches
+`lib/core/storage/` or the launch sequence.
+
+**How it works, so a failure can be placed.** `pubspec.yaml` points
+`package:sqlite3` at the SQLite3MultipleCiphers build, and
+`lib/core/storage/store_cipher.dart` drives `PRAGMA key` / `PRAGMA rekey` on
+top of it. The attachment cache moved *inside* the database
+(`lib/core/storage/hardline_store.dart`) so that one key covers everything;
+nothing decides to encrypt from a preference, only from the file header.
+
+**The test.**
+
+1. **Turning it on.** With a real, synced account: Settings → Security → the
+   switch, a passphrase, *Encrypt*. The app must stay usable throughout — keep
+   scrolling a timeline while it runs. Afterwards, `matrix_client.sqlite` must
+   **not** start with the bytes `SQLite format 3`, and nothing may have been
+   signed out.
+2. **The lock screen.** Restart. It must ask, refuse a wrong passphrase with a
+   message rather than a crash, accept the right one **after** that wrong
+   attempt, and land in the shell with history intact and encrypted rooms still
+   decrypting.
+3. **A second account.** Add one while encryption is on and confirm its store is
+   born encrypted (same header check). Then switch between the two, which is the
+   path that opens a store the launch did not.
+4. **Changing the passphrase, with two accounts signed in.** Both files must
+   move. Restart and confirm the *old* one is refused and the new one works for
+   whichever account was not active when it changed — that is the half that a
+   half-applied change would break, and it would not show until then.
+5. **Turning it off.** The header goes back to `SQLite format 3`, the launch
+   stops asking, and everything still works.
+6. **The way out** *(outstanding)*. On a throwaway install: lock it, forget
+   the passphrase, use *"I have lost the passphrase"*, and confirm the app
+   comes up at the login screen with the stores gone.
+7. **Attachments.** Send and receive an image, restart, and confirm it is not
+   re-downloaded — the cache is in the database now, and a broken blob table
+   would look like nothing worse than a slow timeline. Check that
+   `%APPDATA%\Mein1337\Hardline\matrix\files\` no longer exists.
+8. **Nix** *(outstanding)*. On the Linux package the setting must refuse to
+   switch on and say why. That is expected, not a bug — see "The store cipher
+   is missing on Nix" in [NIX-PACKAGING.md](NIX-PACKAGING.md), which has the
+   two routes to fixing it.
+
+## 6. Verify the NixOS package end to end on a clean machine
 
 The Nix work builds and the process comes up, but "comes up" is all that has
 been checked. `nix develop` + `flutter run -d linux` shows a window and
@@ -239,9 +310,9 @@ It is fixed — `_LoginScreenState._submit` read `ref` after `signIn` returned, 
 which point the router had already swapped the login screen for the shell — and
 a first launch should now come up with nothing in the log at all.
 
-## 6. Publish a binary cache, and keep the nixpkgs pin fresh
+## 7. Publish a binary cache, and keep the nixpkgs pin fresh
 
-Two Nix-distribution chores, separate from proving the build works (TODO 5).
+Two Nix-distribution chores, separate from proving the build works (TODO 6).
 
 **A binary cache (Cachix).** The heavy part of this build is the *build-time*
 closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
@@ -290,6 +361,21 @@ verify, done *inside* a TODO-6 build-and-run pass — never a blind
   rendered — an `<a href>` can say anything — see the note in
   `message_body.dart`.
 
+- On-device encryption takes a passphrase and nothing else. An OS keystore
+  (DPAPI on Windows, libsecret on Linux) would make it invisible and unlosable,
+  and was deliberately not built: it is only as strong as the OS account, which
+  is most of what the feature is trying to defend against, and it would add a
+  native plugin to two platforms to buy that. A passphrase is the option that
+  actually delivers what the settings pane claims. If a keystore is ever added
+  it belongs *beside* the passphrase as a stated, weaker choice — never as a
+  silent default.
+
+- Turning encryption on rewrites the database in place, so the plaintext pages
+  it used to occupy are not scrubbed. Fixing that properly means writing a new
+  file, fsync'ing it, and overwriting the old one — which on a modern SSD still
+  does not guarantee erasure, because the drive decides where writes land. The
+  settings pane says so instead of implying otherwise.
+
 - Matrix device ids change on every logout/login, so per-device volumes are
   forgotten when someone re-authenticates. Inherent to keying by device — the
   LiveKit identity carries `@user:server:DEVICEID` and nothing else about the
@@ -301,31 +387,3 @@ verify, done *inside* a TODO-6 build-and-run pass — never a blind
 - An always-on-top call overlay for use over a full-screen application.
 - A live speaking indicator on the space rail, so an unopened room still shows
   that somebody in it is talking.
-- **Optional encryption for the data stored on this device.** Everything is
-  written in the clear today: `matrix_client.sqlite` holds the access token and
-  the Megolm keys, and `matrix/files/` holds attachments already decrypted.
-  `PRIVACY.md` and both release pages say so plainly, and full-disk encryption
-  covers the case that matters most — a powered-off machine that walks away —
-  which is why this is an idea and not a defect.
-
-  What it would add is protection from another account on the same machine, and
-  from a disk image lifted off it. It cannot protect against anything running
-  *as the user*, because whatever the app can decrypt, malware wearing the same
-  token can too. Say that out loud in the UI or it promises more than it does.
-
-  The awkward part is the key, and it is a genuine trade rather than a detail.
-  A passphrase typed at launch is real protection, but it blocks any unattended
-  start and a forgotten one destroys the encrypted history for good. An OS
-  keystore (DPAPI on Windows, libsecret on Linux) is invisible and unlosable,
-  but it is only as strong as the OS account — which is exactly the threat above
-  and no more. Opt-in, with the choice spelled out, is the only honest shape.
-
-  Mechanically the database half is nearly free: `buildMatrixClient` hands
-  `MatrixSdkDatabase.init` an already-open `Database`, so it is a swap of the
-  factory. The cost is downstream — SQLCipher on desktop means shipping a
-  SQLCipher-enabled sqlite3 in place of the stock `sqlite3.dll` this build
-  bundles, so it lands on the Windows package and the Nix derivation both, and
-  `sqflite_sqlcipher` is aimed at mobile and wants checking before it is
-  assumed. The media cache needs its own answer regardless: `DatabaseFileStorage`
-  writes ordinary files into `matrix/files/` and knows nothing about a cipher.
-

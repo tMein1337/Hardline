@@ -7,6 +7,7 @@ import 'package:matrix/matrix.dart';
 
 import '../../bootstrap/matrix_bootstrap.dart';
 import '../auth/login_controller.dart';
+import '../settings/device_encryption.dart';
 import '../shell/selection_providers.dart';
 import '../voice/call_controller_provider.dart';
 import 'account_entry.dart';
@@ -100,6 +101,10 @@ class AccountActions extends Notifier<AccountActionState> {
     final client = await buildMatrixClient(
       encryptionAvailable: ref.read(encryptionAvailableProvider),
       storageKey: storageKey,
+      // A store created while this device is encrypted is created encrypted.
+      // There is no moment where the new account's database exists in the clear
+      // and is tidied up afterwards.
+      storePassphrase: ref.read(devicePassphraseProvider),
     );
     return PendingLogin(client: client, storageKey: storageKey);
   }
@@ -260,6 +265,7 @@ class AccountActions extends Notifier<AccountActionState> {
       final client = await buildMatrixClient(
         encryptionAvailable: ref.read(encryptionAvailableProvider),
         storageKey: storageKey,
+        storePassphrase: ref.read(devicePassphraseProvider),
       );
       try {
         await client.init(waitForFirstSync: false);

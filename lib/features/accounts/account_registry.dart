@@ -29,6 +29,16 @@ AccountsState readAccounts(SharedPreferences prefs) {
   }
 }
 
+/// Forgets every account this machine has stored.
+///
+/// The counterpart to `deleteAccountStorage`, and used with it in exactly one
+/// place: the lock screen's last resort, where a forgotten passphrase leaves
+/// nothing to open and the registry would otherwise still name accounts whose
+/// databases have just been deleted.
+Future<void> forgetAllAccounts(SharedPreferences prefs) async {
+  await prefs.remove(_prefsKey);
+}
+
 /// Which account to open on launch.
 ///
 /// Falls back to [kDefaultStorageKey] when nothing is registered, which is what

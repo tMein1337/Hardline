@@ -463,6 +463,177 @@ it tracks which state it last acted on — without that the auto-continue
 re-enters itself and sends the same start event repeatedly. `EncryptionSetup`
 guards its `Bootstrap` driver the same way, for the same reason.
 
+## On-device encryption
+
+Notes that are expensive to rediscover. Code lives in `lib/core/storage/`,
+`lib/features/settings/device_encryption.dart` and
+`lib/features/auth/unlock_screen.dart`.
+
+### The cipher is a build-time choice, made in pubspec.yaml
+
+`package:sqlite3` version 3.x uses Dart build hooks to bundle a SQLite with the
+app, and it will bundle a *different* one on request:
+
+```yaml
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
+```
+
+That swaps stock SQLite for the SQLite3 Multiple Ciphers build — the same
+SQLite plus page-level encryption behind `PRAGMA key`. It is a drop-in: with no
+key set it reads and writes ordinary SQLite files, so an installation that never
+turns encryption on is unaffected, and the Windows bundle simply ships
+`sqlite3mc.dll` where it used to ship `sqlite3.dll`.
+
+Worth knowing because the TODO this came from assumed the opposite. It read
+"SQLCipher on desktop means shipping a SQLCipher-enabled sqlite3 in place of the
+stock `sqlite3.dll`", and costed the feature accordingly. That was true of
+`sqlcipher_flutter_libs`, which is now marked end-of-life with the note "update
+to version 3.x of package:sqlite3 instead". The four lines above are the whole
+of what it replaced.
+
+It does not reach Linux. nixpkgs patches this package's hook to link the system
+SQLite, which has no cipher — see "The store cipher is missing on Nix" in
+[NIX-PACKAGING.md](NIX-PACKAGING.md).
+
+### The file is the source of truth, not a preference
+
+Nothing records "encryption is on". `main()` reads the first fifteen bytes of
+the store and asks whether they are `SQLite format 3`; an encrypted database has
+ciphertext there instead.
+
+A flag in `shared_preferences` would have been easier and is the obvious design,
+which is why it is worth saying why it was rejected. The flag and the disk can
+disagree, and both directions are bad: a flag reading "off" against an encrypted
+file gives an app that will not open a store it holds the key for, and a flag
+reading "on" against a plain file gives an app that believes it is encrypting
+when it is not. Neither is reachable if nothing but the file is ever consulted.
+
+At runtime the same principle: `devicePassphraseProvider` holds the passphrase
+or null, and "is it encrypted" is `!= null`. There is one fact, in one place.
+
+### sqflite's database cache turns one typo into a lockout
+
+`openStore` passes `singleInstance: false`, and that is not a stylistic choice.
+
+sqflite caches open databases by path. A *failed* open leaves a broken entry in
+that cache, so after one wrong passphrase the **correct** one fails too, for the
+rest of the process. On a lock screen — the one screen guaranteed to be tried
+more than once — that is a bug nobody could diagnose from a report: it presents
+as the right passphrase having stopped working, and restarting the app fixes it.
+
+Verified both ways in `test/storage/store_cipher_test.dart` ("a wrong attempt
+does not spoil the next, correct one") and again through the UI in
+`test/auth/unlock_screen_test.dart`. The invariant the cache would otherwise
+have provided — never two handles on one file — is not lost, because
+`ActiveClientController` already guarantees no two live clients share a storage
+key.
+
+### The passphrase is interpolated into SQL, so it is escaped
+
+`PRAGMA key` takes no bound parameters. The passphrase goes into the statement
+as a string literal, which means an apostrophe in it is a syntax error at best
+and a truncated key at worst — and an apostrophe is exactly what a passphrase
+somebody chose contains. `_sqlLiteral` doubles them.
+
+The SDK ships a `SQfLiteEncryptionHelper` that does the same job and does *not*
+do this; it also insists on `PRAGMA cipher_version`, which SQLite3 Multiple
+Ciphers answers with an empty result, so it would throw on a perfectly good
+library. Hence our own.
+
+### The launch calls `runApp` twice, and the two roots need different keys
+
+A locked start has to show a screen before it has a client, because the
+passphrase is what opens the database the client is built from. So `main()`
+runs the lock screen as an app of its own and then calls `runApp` again with
+the real one.
+
+The second call does **not** start a fresh tree. Flutter reconciles the new
+root against the old one, and two `ProviderScope`s of the same type and key are
+"the same widget, updated" — so Riverpod sees the override count go from one
+(the preferences) to four (plus the client, the passphrase and whether
+encryption is available) and aborts:
+
+```
+Tried to change the number of overrides. This is not allowed —
+overrides cannot be removed/added, they can only be updated.
+```
+
+A red screen, immediately after a correct passphrase, which reads as the
+unlocking having failed. `kUnlockScopeKey` and `kAppScopeKey` in `app.dart` are
+what make the second `runApp` replace the first scope rather than update it.
+They exist for nothing else and must stay different;
+`test/auth/launch_sequence_test.dart` pumps the two real roots in order and
+fails with that exact assertion if they ever match.
+
+### Re-keying happens under the live connection
+
+`PRAGMA rekey` rewrites the database in place through a connection that stays
+open, so turning encryption on does not close the store, dispose the client or
+rebuild the app around it. The SDK keeps using the same handle and never
+notices.
+
+That is what makes the settings toggle a toggle rather than a restart, and it is
+why `HardlineStore` exposes its `connection`. Accounts that are *not* live have
+no open handle, so they are opened, re-keyed and closed one at a time — and
+because a half-applied change would not surface until somebody switched to one
+of the accounts left behind, a run that fails part-way rolls the finished ones
+back.
+
+### The attachment cache moved into the database
+
+The SDK's `DatabaseFileStorage` writes every downloaded attachment, avatar and
+thumbnail into a directory as a plain file — decrypted, since holding the
+plaintext is the point of a cache. Beside an encrypted database that is the
+whole hole: the message saying "here is the photo" unreadable, the photo itself
+sitting in a folder.
+
+`HardlineStore` overrides the four file methods and keeps them in a
+`hardline_files` table in the same sqlite file. One key covers everything, by
+construction rather than by a second mechanism kept in step with the first.
+
+It is unconditional rather than switched on with encryption. Two storage
+layouts would mean a migration in each direction and a bug class where the cache
+is wherever the other mode is not looking, and the directory buys nothing when
+encryption is off. Installations upgrading from before this have their old
+`matrix\files\` directory deleted on first launch; nothing is lost, because
+every byte in it is a copy of something the homeserver still has.
+
+Two details the SDK forces:
+
+- `supportsFileStoring` has to be overridden. The mixin derives it from
+  `fileStorageLocation`, which this store does not set, and answering "no" would
+  turn every avatar into a fresh download.
+- `clear()` and `clearCache()` have to be extended. `BoxCollection` only empties
+  the tables it created itself, so without this a sign-out would leave every
+  cached photo behind — the exact leftover `deleteAccountStorage` exists to
+  sweep up.
+- **The table has to be created before `MatrixSdkDatabase.open()`, not after.**
+  Extending `clearCache()` is what makes the order matter: `open()` runs the
+  SDK's own schema migration when the stored version is behind, and the default
+  migration ends in `clearCache()` — which now reaches for a table that would
+  not exist yet.
+
+  Creating it afterwards works perfectly, for years, and then the app stops
+  starting on the day some future `matrix` release bumps
+  `MatrixSdkDatabase.version`. Nothing in this repository would have changed;
+  the failure arrives with a dependency bump and looks like it came from the
+  SDK. `test/storage/hardline_store_test.dart` writes an older version into
+  `box_client` and reopens, which is the only way to see it before then.
+
+### Why a passphrase and not the OS keystore
+
+DPAPI on Windows and libsecret on Linux would make this invisible and
+unlosable, and were deliberately not built. A keystore is only as strong as the
+OS account, which is most of what the feature is defending against, and it would
+add a native plugin to two platforms to buy that. A passphrase is the option
+that actually delivers what the settings pane claims.
+
+If one is ever added it belongs *beside* the passphrase, labelled as the weaker
+choice, and never as a silent default.
+
 ## File attachments
 
 Notes that are expensive to rediscover. Code lives in

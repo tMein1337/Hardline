@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:matrix/matrix.dart';
 
 import '../../bootstrap/matrix_bootstrap.dart';
+import '../settings/device_encryption.dart';
 
 /// The live [Client] and the account whose database it has open.
 ///
@@ -82,6 +83,7 @@ class ActiveClientController extends Notifier<ActiveClient> {
     final next = await buildMatrixClient(
       encryptionAvailable: ref.read(encryptionAvailableProvider),
       storageKey: storageKey,
+      storePassphrase: ref.read(devicePassphraseProvider),
     );
 
     try {

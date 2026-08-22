@@ -12,8 +12,11 @@ import 'bootstrap/matrix_bootstrap.dart';
 import 'bootstrap/vodozemac_bootstrap.dart';
 import 'core/app_info.dart';
 import 'core/providers/injected_providers.dart';
+import 'core/storage/store_cipher.dart';
 import 'features/accounts/account_registry.dart';
 import 'features/accounts/active_client.dart';
+import 'features/auth/unlock_screen.dart';
+import 'features/settings/device_encryption.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,25 +43,63 @@ Future<void> main() async {
 
   // Which account was last in use decides which database to open. Everything
   // after this point goes through ActiveClientController.
-  final storageKey = bootStorageKey(readAccounts(prefs));
+  var storageKey = bootStorageKey(readAccounts(prefs));
+
+  // Whether this device's data is encrypted is asked of the store itself, not
+  // of a setting: an encrypted SQLite file does not begin with the words
+  // "SQLite format 3", and a file cannot be wrong about what it is. A
+  // preference could, in either direction, and both directions are bad.
+  //
+  // When it is locked, the launch stops here and a lock screen runs in place of
+  // the app until the passphrase opens the store — see `unlock_screen.dart`.
+  String? passphrase;
+  if (await storeIsEncrypted(await accountStorePath(storageKey))) {
+    final outcome = await runUnlockGate(prefs: prefs, storageKey: storageKey);
+    passphrase = outcome.passphrase;
+    // Erasing deletes the stores *and* the account list, so which account to
+    // open has to be asked again. It now answers "the default one", which does
+    // not exist yet, and the launch continues as a first run.
+    if (outcome.erased) storageKey = bootStorageKey(readAccounts(prefs));
+  }
+
   final client = await buildMatrixClient(
     encryptionAvailable: encryptionAvailable,
     storageKey: storageKey,
+    storePassphrase: passphrase,
   );
 
   runApp(
-    ProviderScope(
-      overrides: [
-        bootClientProvider.overrideWithValue(
-          ActiveClient(client: client, storageKey: storageKey),
-        ),
-        prefsProvider.overrideWithValue(prefs),
-        encryptionAvailableProvider.overrideWithValue(encryptionAvailable),
-      ],
-      child: const HardlineApp(),
+    hardlineRoot(
+      prefs: prefs,
+      boot: ActiveClient(client: client, storageKey: storageKey),
+      encryptionAvailable: encryptionAvailable,
+      passphrase: passphrase,
     ),
   );
 }
+
+/// The app's root, with everything `main()` had to settle before `runApp`.
+///
+/// A named builder rather than an inline tree so that a test can pump it
+/// straight after the lock screen's root and prove the two can follow one
+/// another — see `test/auth/launch_sequence_test.dart` and [kAppScopeKey].
+@visibleForTesting
+Widget hardlineRoot({
+  required SharedPreferences prefs,
+  required ActiveClient boot,
+  required bool encryptionAvailable,
+  required String? passphrase,
+  Widget child = const HardlineApp(),
+}) => ProviderScope(
+  key: kAppScopeKey,
+  overrides: [
+    bootClientProvider.overrideWithValue(boot),
+    prefsProvider.overrideWithValue(prefs),
+    encryptionAvailableProvider.overrideWithValue(encryptionAvailable),
+    bootPassphraseProvider.overrideWithValue(passphrase),
+  ],
+  child: child,
+);
 
 /// Reads the bundled `LICENSE` asset for the license registry.
 ///

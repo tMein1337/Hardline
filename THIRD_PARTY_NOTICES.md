@@ -11,7 +11,7 @@ whenever `pubspec.lock` changes, and verify it with
 `--check` before tagging a release.
 
 - Packages listed: 161
-- Declared directly by this project: 20
+- Declared directly by this project: 22
 
 ## Platform and native components
 
@@ -29,7 +29,15 @@ release also contains components that are not resolved through
   cryptographic primitives, reached through
   `flutter_vodozemac` (Apache-2.0).
 - **SQLite** (public domain), reached through
-  `sqflite_common_ffi`.
+  `sqflite_common_ffi`. The library actually shipped is the
+  **SQLite3 Multiple Ciphers** build of it (MIT, for its own
+  code; the SQLite it embeds stays public domain), which is
+  what provides the optional passphrase encryption of the
+  local store. `package:sqlite3` selects it through the
+  `hooks:` block in `pubspec.yaml` and downloads a prebuilt
+  copy at build time, so it is not resolved through
+  `pubspec.lock` and is not listed as a package below.
+  See <https://github.com/utelle/SQLite3MultipleCiphers>.
 - The **Microsoft Visual C++ runtime** — `msvcp140*.dll`,
   `vcruntime140*.dll` and `concrt140.dll` — which IS
   redistributed here, unmodified, beside the executable, so
@@ -6101,7 +6109,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### path_provider_platform_interface 2.1.3
 
 - Source: hosted
-- Dependency: transitive
+- Dependency: direct dev
 - https://pub.dev/packages/path_provider_platform_interface
 
 ```text
@@ -6264,7 +6272,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### plugin_platform_interface 2.1.8
 
 - Source: hosted
-- Dependency: transitive
+- Dependency: direct dev
 - https://pub.dev/packages/plugin_platform_interface
 
 ```text

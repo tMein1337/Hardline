@@ -77,10 +77,24 @@ Out of scope:
 
 Stated plainly, because they are design positions rather than oversights:
 
-- **The local database is not encrypted at rest by Hardline.** Access tokens and
-  encryption keys are protected by operating-system file permissions and by
-  whatever full-disk encryption is enabled. Hardline does not currently use the
-  Windows credential store or DPAPI. See [`PRIVACY.md`](PRIVACY.md).
+- **The local database is not encrypted at rest by default.** Out of the box,
+  access tokens and encryption keys are protected only by operating-system file
+  permissions and by whatever full-disk encryption is enabled.
+  `Settings → Security` can turn on passphrase encryption of everything
+  Hardline stores — see [`PRIVACY.md`](PRIVACY.md) for what that does and does
+  not cover. Three limits of it are worth stating here:
+  - It protects the files **at rest**. It does nothing against code running as
+    you while the app is unlocked, which holds the passphrase in memory.
+  - The passphrase is not recoverable. Hardline does not use the Windows
+    credential store or DPAPI, and does not escrow the passphrase anywhere; a
+    forgotten one means erasing the stored data.
+  - Turning it on **cannot erase plaintext already written**. The database is
+    re-encrypted in place, and fragments of the previous contents may remain in
+    unused disk space. Full-disk encryption is what covers that.
+- **On the Nix/Linux package, that setting is unavailable and says so.**
+  nixpkgs builds `package:sqlite3` against the system SQLite, which has no
+  cipher, so Hardline refuses to enable the feature there rather than appearing
+  to encrypt and writing plaintext. See [`NIX-PACKAGING.md`](NIX-PACKAGING.md).
 - **There is no auto-updater.** Updates are downloaded and installed manually,
   so there is no update channel to compromise — and no automatic delivery of
   security fixes either. Watch the releases page.

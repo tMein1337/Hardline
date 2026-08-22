@@ -70,7 +70,8 @@ fixes five distinct NixOS breakages, each of which failed differently:
    is never shown. Prepended to `LD_LIBRARY_PATH`.
 4. **`libsqlite3.so`** *(silent — throws before `runApp`, so no window).*
    `sqflite_common_ffi` opens the Matrix store via a bare-name `dlopen`. Added
-   via `pkgs.sqlite`.
+   via `pkgs.sqlite`. See "The store cipher is missing on Nix" below for what
+   that costs.
 5. **The app's own bundled Rust libs** *(silent — E2EE quietly disabled).*
    `libvodozemac_bindings_dart.so` lives in `build/…/bundle/lib` and is
    `dlopen`'d by bare name, but the Flutter runner leaves the executable with no
@@ -170,6 +171,56 @@ packages.default = pkgs.flutter.buildFlutterApplication {
   # postFixup: patchelf --add-rpath runtimeLibs into the bundled libwebrtc.so
 };
 ```
+
+## The store cipher is missing on Nix
+
+**Optional on-device encryption (`Settings → Security`) does not work on the Nix
+build.** The app detects this and refuses to turn the setting on, with a message
+saying why. It is not silently degraded, and everything else is unaffected.
+
+**Why.** `pubspec.yaml` asks `package:sqlite3` for the
+[SQLite3 Multiple Ciphers](https://github.com/utelle/SQLite3MultipleCiphers)
+build — stock SQLite plus a page-level cipher behind `PRAGMA key`:
+
+```yaml
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
+```
+
+That request is honoured everywhere except here. nixpkgs carries its own source
+builder for the `sqlite3` pub package
+(`pkgs/development/compilers/dart/package-source-builders/sqlite3`), which
+patches the package's build hook:
+
+```nix
+substituteInPlace lib/src/hook/compile/description.dart \
+  --replace-fail "return fromGitHub(LibraryType.sqlite3);" "return LookupSystem('sqlite3');"
+```
+
+It has to: the unpatched hook *downloads* a prebuilt library from GitHub
+releases at build time, which no hermetic build can allow. But the patch is
+unconditional, so it overrides the `user_defines` above and links `pkgs.sqlite`
+— plain SQLite, which accepts `PRAGMA key` and **ignores it**. Silently writing
+plaintext behind a padlock is the one outcome that must not happen, which is why
+`requireCipherSupport()` in `lib/core/storage/store_cipher.dart` probes for
+`sqlite3mc_version()` before it will key anything.
+
+**Two routes out**, neither taken yet because neither can be tested from the
+machine this was written on:
+
+1. **Package SQLite3 Multiple Ciphers in this flake** and supply our own
+   `customSourceBuilders.sqlite3` patching to `LookupSystem('sqlite3mc')`, the
+   way `nix/flutter_webrtc.nix` already supplies a fixed-output derivation for
+   a prebuilt library. Keeps one cipher and one on-disk format across every
+   platform, which is why it is the preferred route. It needs a `sha256` that
+   only a real `nix build` can produce.
+2. **Use `pkgs.sqlcipher`**, which nixpkgs already has, patching to
+   `LookupSystem('sqlcipher')`. Much less work — but SQLCipher is a *different*
+   cipher with different pragmas, so `store_cipher.dart` would have to learn
+   both, and a store written on Linux would not open on Windows. Only worth it
+   if route 1 proves impractical.
 
 ## Toward nixpkgs proper
 
