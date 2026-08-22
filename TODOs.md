@@ -52,7 +52,7 @@ itself. What needs a second client:
 
 1. **The shield is the acceptance test.** Send a message and look at it in
    Element. Before setup it shows "encrypted by a device not verified by its
-   owner"; after Settings → Sessions & Security → *Set up encryption* (or *Use
+   owner"; after Settings → Sessions → *Set up encryption* (or *Use
    recovery key*) it must show nothing. That single check is what the whole
    cross-signing path exists for — see "Why Element flags your messages" in
    [notes.md](notes.md).
@@ -283,22 +283,15 @@ verify, done *inside* a TODO-6 build-and-run pass — never a blind
 
 ## last: Smaller things
 
-- **A link in a message is not clickable.** `message_body.dart` draws every
-  body as a plain `SelectableText`, so the only way to follow a URL somebody
-  sent is to select it by hand and paste it into a browser. Detect them and
-  open them in the system browser on click. `url_launcher` is already a
-  dependency, and `about_pane.dart` already holds the pattern worth copying:
-  `launchUrl(..., mode: LaunchMode.externalApplication)`, and on failure copy
-  the address to the clipboard rather than reporting a dead end — a machine
-  with no browser association must still be able to get at it. Three things to
-  keep in mind. The text has to stay **selectable**, so this is a recognizer on
-  the existing `SelectableText`, not a swap to `RichText`. A `matrix.to` link
-  is not a web link — it addresses a room or a person in *this* app, and
-  handing it to a browser to bounce back is the wrong answer. And the visible
-  text is safe to trust only for as long as `_Text` keeps passing
-  `plaintextBody: true`; the moment a formatted body is rendered, the label and
-  the target become two different fields and a link from a stranger has to show
-  where it really goes before it is opened.
+- Only `http` and `https` links in a message are clickable. A bare `www.host`,
+  a `mailto:` address and a `matrix:` URI are left as plain text on purpose:
+  each would need a scheme invented for it, and the moment the target stops
+  being exactly the characters on screen, a link stops being self-evident.
+  Adding any of them means inventing that scheme, so they would need the
+  confirmation in Settings → Security to be *mandatory* rather than a default
+  that can be switched off. The same is true the day `formatted_body` is
+  rendered — an `<a href>` can say anything — see the note in
+  `message_body.dart`.
 
 - Matrix device ids change on every logout/login, so per-device volumes are
   forgotten when someone re-authenticates. Inherent to keying by device — the

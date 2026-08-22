@@ -28,7 +28,7 @@ class SessionsPane extends ConsumerWidget {
     final encryptionAvailable = ref.watch(encryptionAvailableProvider);
 
     return SettingsPane(
-      title: 'Sessions & Security',
+      title: 'Sessions',
       description:
           'Every device signed in to this account. Verify the ones you '
           'recognise and sign out the ones you do not.',

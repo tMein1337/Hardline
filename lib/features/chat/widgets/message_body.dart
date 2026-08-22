@@ -9,6 +9,7 @@ import '../attachments/attachment_errors.dart';
 import '../attachments/attachment_kind.dart';
 import 'attachment_card.dart';
 import 'attachment_image.dart';
+import 'linkified_text.dart';
 
 const _localizations = MatrixDefaultLocalizations();
 
@@ -63,7 +64,7 @@ class MessageBody extends StatelessWidget {
         if (isPending && !event.status.isError) _UploadProgress(event: event),
         if (caption != null) ...[
           const SizedBox(height: 4),
-          SelectableText(caption, style: context.text.messageBody),
+          LinkifiedText(text: caption, style: context.text.messageBody),
         ],
       ],
     );
@@ -80,6 +81,13 @@ class _Text extends StatelessWidget {
   Widget build(BuildContext context) {
     // Resolves replies, edits and non-text message types to something
     // presentable, and handles pending sends.
+    //
+    // `plaintextBody: true` is also what makes the detected links in
+    // [LinkifiedText] safe to open without asking first: the body is the
+    // literal text the sender typed, so a link's label and its target are the
+    // same characters. Rendering `formatted_body` one day would separate the
+    // two — an <a href> can say anything — and the link handling has to gain a
+    // confirmation step in the same change.
     final body = event.calcLocalizedBodyFallback(
       _localizations,
       hideReply: true,
@@ -87,8 +95,8 @@ class _Text extends StatelessWidget {
       plaintextBody: true,
     );
 
-    return SelectableText(
-      body,
+    return LinkifiedText(
+      text: body,
       style: context.text.messageBody.copyWith(
         color: isPending
             ? context.colors.textMuted

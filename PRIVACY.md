@@ -5,11 +5,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Privacy information for Hardline
 
-Last updated: 2026-08-18. Applies to Hardline 0.1.0.
+Last updated: 2026-08-22.
 
 This document describes what Hardline stores, what it sends, and to whom. It
-describes the software as it is built from this repository. If you build a
-modified version, this document may no longer be accurate for it.
+describes the software **as it is built from this repository**, rather than any
+one release — the version and commit your own copy was built from are shown in
+`Settings → About`. If you build a modified version, this document may no
+longer be accurate for it.
 
 ## The short version
 
@@ -84,14 +86,21 @@ is a JSON file inside the same application data directory:
 
 | Key | Contents |
 |---|---|
+| `accounts_v1` | Every account signed in on this machine: user id, homeserver, cached display name and avatar, and which one is active |
+| `last_homeserver` | The homeserver address last typed at the sign-in screen |
 | `app_theme_v1` | Selected theme, tooltip delay |
 | `theme_library_v1` | Your themes, including any you imported |
 | `voice_prefs_v1:<user id>` | Chosen microphone and output device, per-person volumes and local mutes |
 | `activity_prefs_v1:<user id>` | Which people you have chosen to follow |
 | `sas_display_v1` | Whether verification shows emoji or numbers |
+| `security_prefs_v1` | Whether a link is confirmed before it is opened |
 
 Per-person volume settings name the other person's user id and device id. They
 never leave your computer.
+
+The account list is what lets the account switcher show a row for an account
+whose session is not currently running, which is why it holds a display name and
+avatar rather than only a user id. Signing an account out removes its entry.
 
 ### What is *not* stored
 
@@ -148,6 +157,18 @@ reach the same one. If that matters for a given room, do not join its calls.
 Your IP address is visible to your homeserver and to the call server, as it is
 with any network client.
 
+### Links you click
+
+Hardline never fetches a link in a message. Clicking one hands the address to
+your operating system, which opens it in your browser, and from that moment the
+site sees an ordinary visit from your browser — including your IP address.
+
+Because the address was written by somebody else, **Hardline asks first by
+default**, showing where the link goes before anything opens. That confirmation
+can be turned off, and back on, under `Settings → Security`. A link that points
+at a room or a message you are already in opens inside the app and is not handed
+to anything.
+
 ### Nobody else
 
 There are no other outbound destinations. There is no analytics endpoint, no
@@ -175,8 +196,8 @@ a share.
 ## Removing your data
 
 - **Sign out of an account:** Hardline deletes that account's database file and
-  its cached attachment directory. See `deleteAccountStorage` in
-  `lib/bootstrap/matrix_bootstrap.dart`.
+  its cached attachment directory, and removes its entry from the account list.
+  See `deleteAccountStorage` in `lib/bootstrap/matrix_bootstrap.dart`.
 - **Remove everything:** sign out of all accounts, close Hardline, and delete
   the application data directory named above.
 - Deleting local data does not delete anything from your homeserver. To remove

@@ -11,10 +11,11 @@ import 'package:flutter/material.dart';
 /// to one place while being forgotten in the other.
 enum SettingsSection {
   account('My Account', Icons.person_outline, group: SettingsGroup.user),
-  sessions('Sessions & Security', Icons.devices, group: SettingsGroup.user),
+  sessions('Sessions', Icons.devices, group: SettingsGroup.user),
   voice('Voice & Video', Icons.mic_none, group: SettingsGroup.app),
   activity('Activity', Icons.bolt, group: SettingsGroup.app),
   appearance('Appearance', Icons.palette_outlined, group: SettingsGroup.app),
+  security('Security', Icons.shield_outlined, group: SettingsGroup.app),
   about('About', Icons.info_outline, group: SettingsGroup.about);
 
   const SettingsSection(this.label, this.icon, {required this.group});
