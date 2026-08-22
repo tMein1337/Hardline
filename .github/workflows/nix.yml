@@ -22,13 +22,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # A cold build (Flutter SDK + build closure) is large; the GitHub runner
-      # ships only ~14 GB free, so reclaim space first.
-      - uses: easimon/maximize-build-space@v10
-        with:
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
+      # A cold build (Flutter SDK, libwebrtc, two Rust toolchains) is large and
+      # the runner ships with little free space, so reclaim some first.
+      #
+      # Every byte Nix writes lands in /nix, which is on the root filesystem, so
+      # the space has to be freed *there*. That rules out the obvious answer:
+      # easimon/maximize-build-space was here before and failed two different
+      # ways, both silently.
+      #
+      #  * It mounts its new volume at $GITHUB_WORKSPACE unless told otherwise
+      #    — on top of the checkout, which ran before it. `nix build .#hardline`
+      #    then had no flake.nix to find and failed in *zero seconds*.
+      #  * It leaves only `root-reserve-mb` free on / (1 GB by default), and
+      #    /nix is on /. Installing Nix exhausted what was left, and the runner
+      #    died writing its own log: "No space left on device".
+      #
+      # Deleting the preinstalled toolchains outright frees the same ~35 GB with
+      # no second filesystem to reason about, and it frees it on the volume that
+      # actually needs it. `df` brackets it so the next failure has numbers.
+      - name: Free disk space for the Nix store
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          df -h /
 
       - uses: cachix/install-nix-action@v30
         with:

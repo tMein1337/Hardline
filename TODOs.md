@@ -250,15 +250,12 @@ Without a cache every consumer rebuilds all of it from source; with one they
 download only the runtime closure and never materialise the toolchain. This is
 the single biggest thing for anyone consuming the flake.
 
-The wiring is in place: `flake.nix` advertises the substituter via `nixConfig`,
-and `.github/workflows/nix.yml` builds `.#hardline` on every push to `main` and
-pushes it to Cachix. Three manual steps remain, which cannot be committed:
+The wiring is in place: `flake.nix` advertises the substituter via `nixConfig`
+and carries the cache's real public key, and `.github/workflows/nix.yml` builds
+`.#hardline` on every push to `main` and pushes it to Cachix. One manual step
+remains, which cannot be committed:
 
-1. Create the `hardline` cache at cachix.org.
-2. Replace `REPLACE_WITH_PUBLIC_KEY` in `flake.nix`'s
-   `nixConfig.extra-trusted-public-keys` with the cache's real public key (and
-   confirm the cache name/URL).
-3. Add a write auth token as the `CACHIX_AUTH_TOKEN` repository secret so CI can
+1. Add a write auth token as the `CACHIX_AUTH_TOKEN` repository secret so CI can
    push.
 
 **Keep the pin on a recent `nixos-unstable`.** The input already tracks
