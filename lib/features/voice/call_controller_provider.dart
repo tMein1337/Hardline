@@ -5,12 +5,15 @@
 // colliding with the widgets library imported below.
 import 'dart:ui' show AppExitResponse;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/injected_providers.dart';
 import 'livekit_call_controller.dart';
 import 'livekit_token_service.dart';
+import 'noise_gate.dart';
+import 'speaking_participants.dart';
 import 'voice_prefs_controller.dart';
 
 /// Exchanges Matrix OpenID tokens for LiveKit JWTs. Stateless apart from its
@@ -76,3 +79,23 @@ final callControllerProvider = Provider<LiveKitCallController>((ref) {
   ref.onDispose(controller.dispose);
   return controller;
 });
+
+/// Who is audible right now.
+///
+/// A provider of its own rather than reaching through `callControllerProvider`,
+/// so the widgets that draw a speaking ring depend on exactly this and a test
+/// can hand them a notifier without building a controller — which would want a
+/// Matrix client, a token service and a live SFU.
+final speakingParticipantsProvider =
+    Provider<ValueListenable<SpeakingParticipants>>(
+      (ref) => ref.watch(callControllerProvider).speaking,
+    );
+
+/// What the microphone is picking up, for the meter in the settings pane.
+///
+/// Separate from [speakingParticipantsProvider] for the same reason that one is
+/// separate from the controller's own notifications: this changes ten times a
+/// second while a call is up, and only one screen ever wants it.
+final micLevelProvider = Provider<ValueListenable<MicLevel>>(
+  (ref) => ref.watch(callControllerProvider).micLevel,
+);

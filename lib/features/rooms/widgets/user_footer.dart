@@ -9,6 +9,7 @@ import '../../../theme/theme_context.dart';
 import '../../accounts/account_entry.dart';
 import '../../common/mx_avatar.dart';
 import '../../settings/settings_screen.dart';
+import '../../voice/widgets/speaking_ring.dart';
 
 /// The signed-in user's strip at the bottom of the channel column.
 ///
@@ -34,13 +35,28 @@ class UserFooter extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          MxAvatar(
-            name: displayName,
-            seed: userId,
-            mxcUri: profile?.avatarUrl?.toString(),
+          // Your own avatar rings while your microphone is picking you up.
+          //
+          // The participant list already shows it, but only for whoever is
+          // scrolled into view in the sidebar — this strip is on screen for as
+          // long as the app is, which is what makes it the honest answer to
+          // "am I actually being heard". No ring while muted is the same
+          // answer, correctly given.
+          //
+          // No `roomId`: this asks about the call we are in, whichever room
+          // that is, because the footer is not tied to one.
+          SpeakingRing(
+            userId: userId,
             size: 32,
+            child: MxAvatar(
+              name: displayName,
+              seed: userId,
+              mxcUri: profile?.avatarUrl?.toString(),
+              size: 32,
+            ),
           ),
-          const SizedBox(width: 8),
+          // 6 rather than 8: the ring reserves 2px of its own.
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

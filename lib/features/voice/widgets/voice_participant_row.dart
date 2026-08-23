@@ -9,6 +9,7 @@ import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
 import '../voice_participant.dart';
 import '../voice_prefs_controller.dart';
+import 'speaking_ring.dart';
 import 'user_audio_menu.dart';
 
 /// One person inside a channel's voice call, drawn under the channel row.
@@ -16,7 +17,17 @@ import 'user_audio_menu.dart';
 /// Indented past the channel's `#` glyph so the nesting reads at a glance, the
 /// way call members are listed beneath the room they are in.
 class VoiceParticipantRow extends ConsumerWidget {
-  const VoiceParticipantRow({super.key, required this.participant});
+  const VoiceParticipantRow({
+    super.key,
+    required this.roomId,
+    required this.participant,
+  });
+
+  /// The channel this row is listed under.
+  ///
+  /// Only the speaking ring needs it, and only to refuse to light up for a
+  /// call other than the one we joined.
+  final String roomId;
 
   final VoiceParticipant participant;
 
@@ -68,15 +79,31 @@ class VoiceParticipantRow extends ConsumerWidget {
                     // Someone silenced locally reads as dimmed rather than
                     // hidden: they are still in the channel, you just cannot
                     // hear them.
+                    //
+                    // The ring dims with them rather than staying bright. It is
+                    // still perfectly legible at this opacity, and the two
+                    // facts belong together: they are talking, and you have
+                    // chosen not to hear it.
                     opacity: audio.locallyMuted ? 0.45 : 1,
-                    child: MxAvatar(
-                      name: participant.displayName,
-                      seed: participant.userId,
-                      mxcUri: participant.avatarMxc,
+                    child: SpeakingRing(
+                      userId: participant.userId,
+                      // Scoped to this channel: somebody in two calls at once
+                      // is listed under both, and only the one we joined can
+                      // say whether they are talking.
+                      roomId: roomId,
                       size: 18,
+                      child: MxAvatar(
+                        name: participant.displayName,
+                        seed: participant.userId,
+                        mxcUri: participant.avatarMxc,
+                        size: 18,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  // 6 rather than 8: the ring reserves 2px of its own on each
+                  // side, so the optical gap to the name is unchanged from
+                  // before there was a ring.
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       participant.displayName,

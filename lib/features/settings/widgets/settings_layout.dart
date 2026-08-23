@@ -103,17 +103,27 @@ class SettingsRow extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.hint,
     this.trailing,
     this.leading,
   });
 
   final String title;
   final String? subtitle;
+
+  /// Explanation shown on hover instead of under the title. See [SettingsHint].
+  final String? hint;
+
   final Widget? trailing;
   final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
+    final row = _row(context);
+    return hint == null ? row : SettingsHint(message: hint!, child: row);
+  }
+
+  Widget _row(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -192,6 +202,44 @@ class SettingsChoice<T> extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Puts an explanation behind a hover rather than under the control.
+///
+/// Settings panes accumulate prose: every switch grows a paragraph saying what
+/// it does and why, and a screen of those is harder to read than a screen of
+/// labels. A hint moves the paragraph to a tooltip, where somebody who wants it
+/// can find it and somebody scanning for a switch is not made to read past it.
+///
+/// **Not everything belongs here.** A warning about what a control will do is
+/// read *before* the click or not at all; a live readout of a value is the
+/// point of the row rather than an aside about it; and a security claim hidden
+/// behind a hover is a security claim nobody sees. Those stay on the page. The
+/// test is roughly: would somebody who never hovers be worse off than annoyed?
+class SettingsHint extends StatelessWidget {
+  const SettingsHint({super.key, required this.message, required this.child});
+
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      // A rich message rather than a plain one, only so the text can be given
+      // a width. `Tooltip` otherwise wraps at the window edge, and these run
+      // long enough to become a single unreadable band across a maximised
+      // window. Delay and styling still come from the theme, which is what
+      // keeps the tooltip-delay setting in charge of all of them.
+      richMessage: WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: Text(message, style: Theme.of(context).tooltipTheme.textStyle),
+        ),
+      ),
+      child: child,
     );
   }
 }

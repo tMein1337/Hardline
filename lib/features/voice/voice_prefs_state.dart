@@ -175,6 +175,40 @@ class VoiceUserPrefs {
       )));
 }
 
+/// The quietest threshold the slider offers, in dB.
+///
+/// The tap's own floor, and not a round number chosen for looks. The first
+/// version stopped at -80 on the theory that the last twenty were only ever a
+/// silent room — which was wrong. The reading comes from one FFT band averaged
+/// across 10Hz to 8kHz, so speech energy is divided among mostly empty high
+/// bins and lands far below the broadband level it feels like; on a dynamic
+/// microphone ordinary talking measured about -90. A floor above somebody's
+/// voice is a threshold they cannot reach, and a gate that never opens.
+const kMinThresholdDb = -100.0;
+
+/// The loudest threshold the slider offers, in dB.
+///
+/// Not a design choice: the visualizer the tap reads clamps its own input here,
+/// so nothing above -30 dB can be told from -30 dB.
+const kMaxThresholdDb = -30.0;
+
+/// Where the threshold starts, in dB.
+///
+/// Low, deliberately. Until somebody has watched the meter this only decides
+/// when their own avatar rings, and a ring that is too eager is a far smaller
+/// annoyance than one that never appears — which is the complaint that started
+/// this whole feature.
+const kDefaultThresholdDb = -95.0;
+
+/// How much the microphone reading can be trimmed up, in dB.
+///
+/// Not a gain on the audio — nothing here changes how loud anybody sounds; see
+/// `audio_level_sampler.dart`. It moves the *measurement* so a quiet microphone
+/// lands somewhere the threshold slider has room to work, instead of pinned
+/// against the bottom of the scale where a decibel of travel is most of the
+/// useful range.
+const kMaxMicGainDb = 60.0;
+
 /// Everything the voice feature remembers between runs.
 ///
 /// Mirrors `AppThemeState` in shape deliberately: immutable, JSON round-trip,
@@ -186,6 +220,9 @@ class VoicePrefsState {
     this.selfMuted = false,
     this.deafened = false,
     this.shareSystemAudio = false,
+    this.micThresholdDb = kDefaultThresholdDb,
+    this.micGainDb = 0,
+    this.noiseGate = false,
     this.inputDevice,
     this.outputDevice,
     this.users = const {},
@@ -203,6 +240,33 @@ class VoicePrefsState {
   /// other participants' voices back to them, and that is a nasty surprise to
   /// spring on someone mid-call — better a choice made once, deliberately.
   final bool shareSystemAudio;
+
+  /// The microphone level, in dB, at which you count as speaking.
+  ///
+  /// Always in force: it is what lights your own avatar's ring, whether or not
+  /// [noiseGate] is on. LiveKit's own answer to "is this person speaking" is
+  /// decided by the SFU with a threshold no client can reach, and it is set
+  /// high enough that ordinary speech does not reliably trip it — which is the
+  /// whole reason this exists.
+  ///
+  /// Decibels rather than an abstract fraction so the number on the slider is
+  /// the number on the meter, and so it means the same thing tomorrow.
+  final double micThresholdDb;
+
+  /// Decibels added to the microphone reading before anything looks at it.
+  ///
+  /// A trim on the *measurement*, not on the audio. It exists because the
+  /// reading is systematically low — see [kMinThresholdDb] — so without it a
+  /// quiet microphone spends the whole scale in its bottom few decibels.
+  final double micGainDb;
+
+  /// Whether [micThreshold] also stops audio being sent.
+  ///
+  /// Off by default, and that is not timidity: a threshold that suits one
+  /// microphone will cut somebody else off mid-sentence, and being inaudible
+  /// is a failure you cannot notice yourself. Turning it on is a decision made
+  /// while watching the meter, which is where the setting lives.
+  final bool noiseGate;
 
   /// Null means "whatever the platform picks".
   ///
@@ -230,6 +294,9 @@ class VoicePrefsState {
     bool? selfMuted,
     bool? deafened,
     bool? shareSystemAudio,
+    double? micThresholdDb,
+    double? micGainDb,
+    bool? noiseGate,
     AudioDeviceRef? inputDevice,
     AudioDeviceRef? outputDevice,
     Map<String, VoiceUserPrefs>? users,
@@ -237,6 +304,9 @@ class VoicePrefsState {
     selfMuted: selfMuted ?? this.selfMuted,
     deafened: deafened ?? this.deafened,
     shareSystemAudio: shareSystemAudio ?? this.shareSystemAudio,
+    micThresholdDb: micThresholdDb ?? this.micThresholdDb,
+    micGainDb: micGainDb ?? this.micGainDb,
+    noiseGate: noiseGate ?? this.noiseGate,
     inputDevice: inputDevice ?? this.inputDevice,
     outputDevice: outputDevice ?? this.outputDevice,
     users: users ?? this.users,
@@ -247,6 +317,9 @@ class VoicePrefsState {
     'selfMuted': selfMuted,
     'deafened': deafened,
     'shareSystemAudio': shareSystemAudio,
+    'micThresholdDb': micThresholdDb,
+    'micGainDb': micGainDb,
+    'noiseGate': noiseGate,
     if (inputDevice != null) 'inputDevice': inputDevice!.toJson(),
     if (outputDevice != null) 'outputDevice': outputDevice!.toJson(),
     'users': {
@@ -262,6 +335,20 @@ class VoicePrefsState {
       selfMuted: json['selfMuted'] == true,
       deafened: json['deafened'] == true,
       shareSystemAudio: json['shareSystemAudio'] == true,
+      // A stored threshold outside the slider's range would be a gate nobody
+      // could reopen from the settings screen.
+      micThresholdDb: switch (json['micThresholdDb']) {
+        final num value => value.toDouble().clamp(
+          kMinThresholdDb,
+          kMaxThresholdDb,
+        ),
+        _ => kDefaultThresholdDb,
+      },
+      micGainDb: switch (json['micGainDb']) {
+        final num value => value.toDouble().clamp(0.0, kMaxMicGainDb),
+        _ => 0.0,
+      },
+      noiseGate: json['noiseGate'] == true,
       inputDevice: AudioDeviceRef.fromJson(json['inputDevice']),
       outputDevice: AudioDeviceRef.fromJson(json['outputDevice']),
       users: rawUsers is Map
@@ -281,6 +368,9 @@ class VoicePrefsState {
           selfMuted == other.selfMuted &&
           deafened == other.deafened &&
           shareSystemAudio == other.shareSystemAudio &&
+          micThresholdDb == other.micThresholdDb &&
+          micGainDb == other.micGainDb &&
+          noiseGate == other.noiseGate &&
           inputDevice == other.inputDevice &&
           outputDevice == other.outputDevice &&
           mapEquals(users, other.users);
@@ -290,6 +380,9 @@ class VoicePrefsState {
     selfMuted,
     deafened,
     shareSystemAudio,
+    micThresholdDb,
+    micGainDb,
+    noiseGate,
     inputDevice,
     outputDevice,
     Object.hashAllUnordered(

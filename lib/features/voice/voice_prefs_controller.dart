@@ -61,6 +61,23 @@ class VoicePrefsController extends Notifier<VoicePrefsState> {
   Future<void> setShareSystemAudio(bool share) =>
       _persist(state.copyWith(shareSystemAudio: share));
 
+  /// Where the microphone stops being background noise.
+  ///
+  /// Written on every change rather than deferred to `onChangeEnd` like the
+  /// volume sliders: the sampler reads this on its next tick, so the meter and
+  /// the ring follow the thumb while it is being dragged. That immediacy is
+  /// the whole way anybody can tell where to put the breakpoint.
+  Future<void> setMicThresholdDb(double db) => _persist(
+    state.copyWith(micThresholdDb: db.clamp(kMinThresholdDb, kMaxThresholdDb)),
+  );
+
+  /// Trims the microphone *reading*, not the audio.
+  Future<void> setMicGainDb(double db) =>
+      _persist(state.copyWith(micGainDb: db.clamp(0.0, kMaxMicGainDb)));
+
+  Future<void> setNoiseGate(bool gate) =>
+      _persist(state.copyWith(noiseGate: gate));
+
   /// [commit] false while a slider is being dragged: state updates so audio
   /// follows the thumb, but the write is deferred to `onChangeEnd`.
   ///

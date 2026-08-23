@@ -33,6 +33,7 @@ class VoiceChannelParticipants extends ConsumerWidget {
         for (final participant in participants.items)
           VoiceParticipantRow(
             key: ValueKey(participant.userId),
+            roomId: roomId,
             participant: participant,
           ),
       ],

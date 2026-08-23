@@ -15,7 +15,10 @@ import 'call_encryption_manager.dart';
 import 'delayed_leave.dart';
 import 'livekit_token_service.dart';
 import 'focus_policy.dart';
+import 'audio_level_sampler.dart';
 import 'matrix_rtc_membership.dart';
+import 'noise_gate.dart';
+import 'speaking_participants.dart';
 import 'voice_joinability.dart';
 import 'voice_prefs_state.dart';
 
@@ -145,6 +148,53 @@ class LiveKitCallController extends ChangeNotifier {
   /// Debug-only leak counter. Should never exceed 1.
   @visibleForTesting
   static int liveInstanceCount = 0;
+
+  /// Who is audible right now, kept off this class's own notifications.
+  ///
+  /// LiveKit reports speaker changes as often as the conversation changes hands
+  /// — several times a second in a lively call. Routing that through
+  /// `notifyListeners()` would repaint the call stage and the voice footer at
+  /// that rate, and neither of them draws who is speaking; it would also pull
+  /// the sidebar into the same churn once the participant rows started
+  /// listening. A separate notifier keeps the cost where the information is
+  /// used, and [SpeakingParticipants] compares by value so a re-report of the
+  /// same speakers is not a change at all.
+  final ValueNotifier<SpeakingParticipants> speaking = ValueNotifier(
+    const SpeakingParticipants.silent(),
+  );
+
+  /// What the microphone is picking up, and what the gate is doing about it.
+  ///
+  /// Separate from [speaking] for the same reason that one is separate from
+  /// `notifyListeners()`: it changes ten times a second while a call is up, and
+  /// the only thing that wants it at that rate is the meter in the settings
+  /// pane, which is usually not on screen.
+  final ValueNotifier<MicLevel> micLevel = ValueNotifier(const MicLevel.none());
+
+  /// Measures levels on this machine, and gates the microphone.
+  late final _levels = AudioLevelSampler(
+    readGateSettings: () {
+      final prefs = readPrefs();
+      return GateSettings(
+        enabled: prefs.noiseGate,
+        thresholdDb: prefs.micThresholdDb,
+        gainDb: prefs.micGainDb,
+      );
+    },
+    onMicLevel: (level) {
+      if (_disposed) return;
+      micLevel.value = level;
+      _publishSpeaking();
+    },
+    onAudible: (identities) {
+      if (_disposed) return;
+      _audible = identities;
+      _publishSpeaking();
+    },
+  );
+
+  /// The remote identities currently making a sound, from [_levels].
+  Set<String> _audible = const {};
 
   lk.Room? _room;
   lk.EventsListener<lk.RoomEvent>? _listener;
@@ -317,6 +367,11 @@ class LiveKitCallController extends ChangeNotifier {
         debugPrint('[voice] WARNING: microphone did not publish');
       }
 
+      // After the microphone is published: the sampler measures the track and
+      // has nothing to look at before there is one. Awaited, because `start`
+      // stops any previous run first and that teardown clears the room.
+      await _levels.start(lkRoom);
+
       await logAudioDevices();
       logDiagnostics('after connect');
 
@@ -383,6 +438,16 @@ class LiveKitCallController extends ChangeNotifier {
   Future<void> _teardown(String? matrixRoomId) async {
     _refreshTimer?.cancel();
     _refreshTimer = null;
+
+    // Before anything can fail. A ring left lit on a call that has ended is
+    // worse than no ring at all — it says somebody is talking to you when
+    // nobody is connected.
+    //
+    // Stopping the sampler also reopens the microphone, so a gate cannot
+    // outlive the call it belonged to and leave the next one muted.
+    _audible = const {};
+    await _levels.stop();
+    if (!_disposed) speaking.value = const SpeakingParticipants.silent();
 
     // Before the membership is cleared, not after. A withdrawal left scheduled
     // fires against whatever the state looks like ~20 s from now, and if the
@@ -871,10 +936,44 @@ class LiveKitCallController extends ChangeNotifier {
         debugPrint('[voice] participant joined ${event.participant.identity}');
         _safeNotify();
       })
-      ..on<lk.ParticipantDisconnectedEvent>((_) => _safeNotify())
+      ..on<lk.ParticipantDisconnectedEvent>((event) {
+        // Somebody who leaves mid-sentence would otherwise keep their ring
+        // until the next sampling tick noticed their track was gone.
+        _audible = _audible.difference({event.participant.identity});
+        _publishSpeaking();
+        _safeNotify();
+      })
       ..on<lk.TrackMutedEvent>((_) => _safeNotify())
-      ..on<lk.TrackUnmutedEvent>((_) => _safeNotify())
-      ..on<lk.ActiveSpeakersChangedEvent>((_) => _safeNotify());
+      ..on<lk.TrackUnmutedEvent>((_) => _safeNotify());
+
+    // `ActiveSpeakersChangedEvent` is deliberately not listened to at all.
+    // It is the SFU's opinion, decided against a threshold no client can
+    // reach and reported a couple of times a second, and it was too
+    // insensitive to be useful — quiet speech never tripped it. Levels are
+    // measured here instead; see `audio_level_sampler.dart`.
+  }
+
+  /// Publishes who is audible, scoped to the call they are in.
+  ///
+  /// Remote people come from measured levels; we come from our own microphone
+  /// against the threshold in settings. That asymmetry is the point: the
+  /// requirement for other people is "any audio at all, however quiet", while
+  /// the requirement for us is "am I over the breakpoint I set" — the same
+  /// line the gate transmits on, so the ring is a direct readout of whether we
+  /// are being sent.
+  ///
+  /// [ValueNotifier] only fires when the value differs, and
+  /// [SpeakingParticipants] compares by value, so a steady state costs nothing.
+  void _publishSpeaking() {
+    if (_disposed) return;
+
+    final identities = <String>{..._audible};
+    final me = _room?.localParticipant?.identity;
+    if (me != null && micLevel.value.speaking && !_micMuted) {
+      identities.add(me);
+    }
+
+    speaking.value = SpeakingParticipants.fromIdentities(_roomId, identities);
   }
 
   void _safeNotify() {
@@ -1099,6 +1198,8 @@ class LiveKitCallController extends ChangeNotifier {
     // Best effort: without this a hard exit leaves our membership advertised
     // until it expires, showing us in a channel we are not in.
     unawaited(_teardown(_roomId));
+    speaking.dispose();
+    micLevel.dispose();
     assert(() {
       liveInstanceCount--;
       return true;

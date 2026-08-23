@@ -103,9 +103,8 @@ class ActivityPane extends ConsumerWidget {
     return best;
   }
 
-  static String _labelOf(Duration window) => window.inMinutes < 60
-      ? '${window.inMinutes} min'
-      : '${window.inHours} h';
+  static String _labelOf(Duration window) =>
+      window.inMinutes < 60 ? '${window.inMinutes} min' : '${window.inHours} h';
 }
 
 /// The opt-in start-up fetch, and the button that runs it now.
@@ -126,32 +125,35 @@ class _HistoryCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: prefs.backfillOnLaunch,
-            title: Text(
-              'Fetch history when the app starts',
-              style: context.text.messageBody,
+          SettingsHint(
+            message:
+                'Without this the summary only knows what has arrived since '
+                'the app opened, plus the newest message in each room, and '
+                'fills in as you use it. With it, the app asks the server for '
+                'each room\'s recent history on start-up — complete '
+                'immediately, at the cost of a few seconds and one request '
+                'per room.',
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: prefs.backfillOnLaunch,
+              title: Text(
+                'Fetch history when the app starts',
+                style: context.text.messageBody,
+              ),
+              onChanged: (value) async {
+                await ref
+                    .read(activityPrefsProvider.notifier)
+                    .setBackfillOnLaunch(value);
+                // Switching it on takes effect now rather than at next launch:
+                // being told to wait for a restart is a poor answer to "why is
+                // this list empty".
+                if (value) {
+                  await ref
+                      .read(messageActivityLogProvider.notifier)
+                      .backfillNow();
+                }
+              },
             ),
-            subtitle: Text(
-              'Without this the summary only knows what has arrived since the '
-              'app opened, plus the newest message in each room, and fills in '
-              'as you use it. With it, the app asks the server for each room\'s '
-              'recent history on start-up — complete immediately, at the cost '
-              'of a few seconds and one request per room.',
-              style: context.text.timestamp,
-            ),
-            onChanged: (value) async {
-              await ref
-                  .read(activityPrefsProvider.notifier)
-                  .setBackfillOnLaunch(value);
-              // Switching it on takes effect now rather than at next launch:
-              // being told to wait for a restart is a poor answer to "why is
-              // this list empty".
-              if (value) {
-                await ref.read(messageActivityLogProvider.notifier).backfillNow();
-              }
-            },
           ),
           const SettingsDivider(),
           Row(
@@ -216,15 +218,22 @@ class _Toggle extends StatelessWidget {
 
   final bool value;
   final String title;
+
+  /// What the section shows, on hover. These describe rather than warn — none
+  /// of the three does anything that needs to be read first — so they sit
+  /// behind the row instead of turning three switches into three paragraphs.
   final String subtitle;
+
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-    value: value,
-    title: Text(title, style: context.text.messageBody),
-    subtitle: Text(subtitle, style: context.text.timestamp),
-    onChanged: onChanged,
+  Widget build(BuildContext context) => SettingsHint(
+    message: subtitle,
+    child: SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      value: value,
+      title: Text(title, style: context.text.messageBody),
+      onChanged: onChanged,
+    ),
   );
 }

@@ -5,10 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1 to 5 are **verifications**, not features: the code is written and
+Items 1 to 6 are **verifications**, not features: the code is written and
 believed correct, but has never been observed working, usually because the test
-needs a second client or a second machine. Items 6 and 7 are the same shape for
-the Nix packaging.
+needs a second client or a second machine. Items 7 to 9 are the Nix packaging:
+one verification and two pieces of work.
 
 ## 1. Verify screen-share system audio
 
@@ -262,7 +262,64 @@ nothing decides to encrypt from a preference, only from the file header.
    is missing on Nix" in [NIX-PACKAGING.md](NIX-PACKAGING.md), which has the
    two routes to fixing it.
 
-## 6. Verify the NixOS package end to end on a clean machine
+## 6. Verify the speaking indicator and the noise gate with other people
+
+Both halves of the voice-level work have been exercised alone, which is exactly
+half of what they are for. The gate is fully testable solo — one person in a
+call is a microphone and a meter — and it passes. **The speaking ring is not.**
+Nobody has seen it light up for somebody else, because with one person in a
+call there is nobody else to light up for.
+
+**What is unproven, and only a second person can prove it.**
+
+1. **Somebody else's ring appears at all.** Have them talk in a channel you are
+   both in. Their avatar rings, in the sidebar participant list under the
+   channel. This is the whole feature and it has never been observed once.
+2. **Quietly counts.** The point of dropping LiveKit's `activeSpeakers` was
+   that the SFU only trips for somebody talking loudly. Have them speak *softly*
+   — the ring must still appear. If it needs a raised voice, the received-level
+   path is not doing what it replaced it for.
+3. **It goes out.** They stop, the ring goes out within a beat. A ring that
+   stays lit is worse than none, because it stops meaning anything.
+4. **The right person.** With two other people in the call, only the one
+   speaking rings. Getting this wrong is a mapping bug between LiveKit
+   identities and Matrix user ids, which one participant cannot expose.
+5. **Somebody on two devices.** If they can join from a phone as well, both
+   their identities collapse to one avatar, and it rings whichever device
+   carries the audio.
+6. **Leaving mid-sentence.** Have them talk and then close the app outright.
+   Their ring must go out with them rather than staying lit on a row that is
+   about to disappear.
+
+**And the gate, from the other end** — everything below needs somebody
+listening, because the entire question is what *they* hear:
+
+7. **The gate actually gates.** Turn it on, set the breakpoint above your room
+   noise, and stay quiet with a fan or a keyboard going. They should hear
+   nothing. Then talk: they hear you, from the first syllable — a gate that
+   clips word onsets is the usual failure and it is obvious to the listener
+   long before it is obvious to you.
+8. **No chopping inside sentences.** Talk normally, with the pauses a sentence
+   has. They must hear continuous speech, not words with holes between them.
+   That is the 400ms hold; if it is too short they will say you sound "cut up".
+9. **The breakpoint set too high.** Deliberately set it above your speaking
+   level and confirm they hear *nothing at all* — and that the meter shows you
+   why. This is the failure mode the settings pane warns about, and it should
+   be diagnosable from your own screen rather than only from their complaint.
+10. **Encryption survives it.** The gate works by deactivating the RTP encoding
+    on the sender, in a call that is end-to-end encrypted with a frame cryptor
+    attached to that same sender. Toggling it repeatedly must not garble their
+    audio or break it permanently. Nothing suggests it will; nothing has tested
+    it either.
+11. **Turning it off restores you.** Switch it off mid-call and confirm they
+    hear you again immediately, without rejoining.
+
+**If the ring never appears for anybody**, check the log for
+`microphone tap is delivering`. Its absence means the local half never started
+and the remote half is measured separately — the two do not share a path, so
+one working is not evidence about the other.
+
+## 7. Verify the NixOS package end to end on a clean machine
 
 The Nix work builds and the process comes up, but "comes up" is all that has
 been checked. `nix develop` + `flutter run -d linux` shows a window and
@@ -285,19 +342,41 @@ What still needs proving:
 3. **A call.** libwebrtc is the reason the whole runtime-libs dance exists.
    Joining a call, sending audio and screen-sharing is what proves the rpath'd
    `DT_NEEDED` libs (libgbm/libdrm/…) resolve at *runtime*, not just at link.
-4. **Non-NixOS via nixGL.** The `nix run --impure …#nixGLIntel -- nix run …`
+4. **The speaking ring, the meter and the noise gate.** Unverified on Linux,
+   but — unlike on-device encryption — nothing is known to be missing.
+   livekit_client implements `startVisualizer` in `linux/livekit_plugin.cpp`
+   with the same `AddSink` on `RTCAudioTrack` that Windows uses, and
+   `rtpSenderSetParameters` lives in flutter_webrtc's shared `common/cpp`. So
+   this is a "run it and see", not a port.
+
+   Three separate things, which fail independently:
+
+   - **The ring for other people** is pure Dart over WebRTC statistics. If
+     anything here works on Linux, this does.
+   - **The meter** wants the native tap and falls back to statistics without it,
+     so a bar that moves proves nothing about the tap. The log does:
+     `microphone tap is delivering`.
+   - **The gate** needs the tap, and refuses to switch on without it — the
+     settings pane says so rather than offering a control that does nothing. If
+     `startVisualizer` fails to build or to run under Nix, this is the half that
+     goes missing, and it will say so on its own.
+
+   Check `buildFlutterApplication` actually compiles livekit_client's Linux
+   plugin, `shared_cpp` FFT sources and all. Nothing in `flake.nix` supplies a
+   `customSourceBuilder` for it, so it goes through the generic path.
+5. **Non-NixOS via nixGL.** The `nix run --impure …#nixGLIntel -- nix run …`
    line in "Run on Linux with Nix" has never been run. Confirm it on a non-NixOS
    distro, and with the Nvidia variant if a card is available.
-5. **A second build reproduces.** Delete the result and `nix build` again: the
+6. **A second build reproduces.** Delete the result and `nix build` again: the
    two fixed-output derivations (the libwebrtc zip, the pub cache) must still
    hash-match. A drifting hash is how a hermetic build quietly stops being one.
-6. **It is an app, not just a binary.** The package now ships a `.desktop` entry
+7. **It is an app, not just a binary.** The package now ships a `.desktop` entry
    and a hicolor icon. Install it (`programs.hardline.enable`, or the overlay),
    rebuild, and confirm **Hardline shows up in the app menu with its icon**.
    Launch it **from the menu** — the window's dock/taskbar tile must show the
    Hardline icon, not a generic one; that is the tell that `StartupWMClass`
    matches the GTK app-id. Check **X11 and Wayland** separately.
-7. **The cache actually serves.** After CI has pushed to Cachix, on a machine
+8. **The cache actually serves.** After CI has pushed to Cachix, on a machine
    that never built this: `nix run --accept-flake-config github:tMein1337/Hardline`
    must **download** from `hardline.cachix.org` rather than compile (the log says
    `copying path … from 'https://hardline.cachix.org'`).
@@ -310,9 +389,9 @@ It is fixed — `_LoginScreenState._submit` read `ref` after `signIn` returned, 
 which point the router had already swapped the login screen for the shell — and
 a first launch should now come up with nothing in the log at all.
 
-## 7. Publish a binary cache, and keep the nixpkgs pin fresh
+## 8. Publish a binary cache, and keep the nixpkgs pin fresh
 
-Two Nix-distribution chores, separate from proving the build works (TODO 6).
+Two Nix-distribution chores, separate from proving the build works (TODO 7).
 
 **A binary cache (Cachix).** The heavy part of this build is the *build-time*
 closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
@@ -340,8 +419,60 @@ setup.** `nix flake update` can move the very things the build is pinned
 against: the Flutter/Dart version (must satisfy `sdk: ^3.12.2`), nixpkgs'
 built-in pub source builders (the `super_native_extensions` 0.9.1 mapping in
 `flake.nix`), and the `cargoHash`es under `nix/`. Treat a bump as a change to
-verify, done *inside* a TODO-6 build-and-run pass — never a blind
+verify, done *inside* a TODO-7 build-and-run pass — never a blind
 `nix flake update` on faith.
+
+## 9. Make on-device encryption work on the Nix build
+
+Today it does not, and the app says so rather than pretending — `Settings →
+Security` refuses to switch on, because `requireCipherSupport()` finds no
+cipher and will not key a store with a library that would ignore the key. TODO
+5 step 8 verifies that refusal is what happens. **This item is about removing
+the need for it.**
+
+**Why it is missing.** `pubspec.yaml` asks `package:sqlite3` for the
+SQLite3MultipleCiphers build through `hooks.user_defines`. Everywhere except
+here that is honoured. nixpkgs carries its own source builder for the `sqlite3`
+pub package which patches the build hook:
+
+```nix
+substituteInPlace lib/src/hook/compile/description.dart \
+  --replace-fail "return fromGitHub(LibraryType.sqlite3);" "return LookupSystem('sqlite3');"
+```
+
+It has to: the unpatched hook downloads a prebuilt library from GitHub at build
+time, which no hermetic build can allow. But the patch is unconditional, so it
+overrides the request and links `pkgs.sqlite` — plain SQLite, which accepts
+`PRAGMA key` and ignores it.
+
+**Two routes, and they are not equivalent.**
+
+1. **Package SQLite3MultipleCiphers in this flake**, and supply a
+   `customSourceBuilders.sqlite3` of our own that patches to
+   `LookupSystem('sqlite3mc')` instead. `flake.nix` already does exactly this
+   shape for `flutter_webrtc`, whose builder pre-fetches a prebuilt library as
+   a fixed-output derivation (`nix/flutter_webrtc.nix`) — so the pattern is
+   established and the file to copy is sitting there.
+
+   **Preferred, and the reason is on-disk format.** One cipher everywhere means
+   one store format everywhere: a database written on Windows opens on Linux,
+   and `store_cipher.dart` keeps its single pinned `chacha20` and its single
+   set of pragmas. The cost is a `sha256` that only a real `nix build` can
+   produce, which is why this could not be done from the machine the feature
+   was written on.
+
+2. **Use `pkgs.sqlcipher`**, which nixpkgs already has, patching to
+   `LookupSystem('sqlcipher')`. Far less work. But SQLCipher is a *different*
+   cipher with different pragmas and a different header: `store_cipher.dart`
+   would have to learn both and choose at runtime, `requireCipherSupport()`
+   would need to accept either, and a store written on one platform would not
+   open on the other. Worth it only if route 1 proves impractical.
+
+**When it works, TODO 5 step 8 inverts** — the Linux package should then pass
+the whole of TODO 5 rather than correctly refusing its last step. Update that
+step and the "The store cipher is missing on Nix" section of
+[NIX-PACKAGING.md](NIX-PACKAGING.md), which is where the detail lives, along
+with the `sqlite` comment in `flake.nix`'s `runtimeLibsFor`.
 
 ## second to last Plattform Support
 - Linux
@@ -349,41 +480,15 @@ verify, done *inside* a TODO-6 build-and-run pass — never a blind
 - iOS
 - Android
 
-## last: Smaller things
-
-- Only `http` and `https` links in a message are clickable. A bare `www.host`,
-  a `mailto:` address and a `matrix:` URI are left as plain text on purpose:
-  each would need a scheme invented for it, and the moment the target stops
-  being exactly the characters on screen, a link stops being self-evident.
-  Adding any of them means inventing that scheme, so they would need the
-  confirmation in Settings → Security to be *mandatory* rather than a default
-  that can be switched off. The same is true the day `formatted_body` is
-  rendered — an `<a href>` can say anything — see the note in
-  `message_body.dart`.
-
-- On-device encryption takes a passphrase and nothing else. An OS keystore
-  (DPAPI on Windows, libsecret on Linux) would make it invisible and unlosable,
-  and was deliberately not built: it is only as strong as the OS account, which
-  is most of what the feature is trying to defend against, and it would add a
-  native plugin to two platforms to buy that. A passphrase is the option that
-  actually delivers what the settings pane claims. If a keystore is ever added
-  it belongs *beside* the passphrase as a stated, weaker choice — never as a
-  silent default.
-
-- Turning encryption on rewrites the database in place, so the plaintext pages
-  it used to occupy are not scrubbed. Fixing that properly means writing a new
-  file, fsync'ing it, and overwriting the old one — which on a modern SSD still
-  does not guarantee erasure, because the drive decides where writes land. The
-  settings pane says so instead of implying otherwise.
-
-- Matrix device ids change on every logout/login, so per-device volumes are
-  forgotten when someone re-authenticates. Inherent to keying by device — the
-  LiveKit identity carries `@user:server:DEVICEID` and nothing else about the
-  far end is stable, so there is nothing better to key on. Switching accounts
-  does **not** lose them: the session is restored from its own database rather
-  than re-authenticated, so the device id survives.
-
 ## ideas
 - An always-on-top call overlay for use over a full-screen application.
-- A live speaking indicator on the space rail, so an unopened room still shows
-  that somebody in it is talking.
+- ~~A live speaking indicator on the space rail, so an unopened room still shows
+  that somebody in it is talking.~~ Half of this is built — avatars in the
+  participant list and your own in the user footer ring while their owner is
+  audible. The other half, an **unopened** room showing it, is not something
+  that was left undone: who is speaking is computed by the SFU and pushed to
+  the clients connected to it, and nothing about it reaches Matrix room state.
+  A room whose call you have not joined cannot be asked. It would take either
+  a bot in every call republishing speaker activity as state — noisy, and
+  everybody in the room would see who talks and when — or joining calls in the
+  background to listen, which is worse.

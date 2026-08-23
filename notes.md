@@ -969,6 +969,20 @@ across.
 Volume is stored **per device**, local mute **per person**: a gain calibrates
 one microphone, while muting is a statement about a human.
 
+That has a price, and it is not fixable rather than unfixed. **A Matrix device
+id changes on every logout and login**, so somebody who signs out and back in
+comes back as a device nobody has ever set a volume for, and the gain you
+calibrated for their headset is gone. There is nothing better to key on: the
+LiveKit identity carries `@user:server:DEVICEID` and that is the whole of what
+we know about the far end, so the only alternative is per-person volume — which
+is the wrong unit, because the point of the setting is that one person's laptop
+microphone and their desk microphone need different gains.
+
+Switching *accounts* does **not** lose them, and the difference is worth
+knowing: an account switch restores a session from that account's own database
+rather than re-authenticating, so the device id survives. Only an actual
+logout/login cycle — theirs, not yours — resets it.
+
 ### Media encryption
 
 LiveKit encrypts frames; Matrix is only the transport that gets the keys to the
@@ -1039,3 +1053,264 @@ happens only after an explicit confirmation — it is permanent, room-wide and
 visible to everyone.
 
 Note room version 12 gives creators implicit power with no entry in `users`.
+
+### The SFU's idea of "speaking" was too blunt to use
+
+`Room.activeSpeakers` and `Participant.isSpeaking` are the obvious source, and
+the first version used them. They do not work well enough: the SFU decides who
+counts as active against a threshold configured on the server, no client can
+reach it, and in practice it only trips for somebody talking loudly. Ordinary
+speech left the ring dark. It also reports a couple of times a second, which is
+sluggish for something meant to track a conversation.
+
+So `ActiveSpeakersChangedEvent` is **deliberately not listened to at all**, and
+levels are measured on this machine instead. `audio_level_sampler.dart` polls
+WebRTC's own statistics every 100ms:
+
+- **Remotely**, `inbound-rtp.totalAudioEnergy` over `totalSamplesDuration`,
+  polled every other tick. Both accumulate, so the RMS across a tick is
+  `sqrt(Δenergy / Δduration)`. Cumulative counters are used rather than an
+  instantaneous reading precisely because they *cannot miss a burst between
+  two polls* — everything that arrived since the last look is in the total.
+- **Locally**, not from statistics at all, but from `MicTap`. `media-source.
+  audioLevel` is the obvious reading and is the wrong one; see below.
+
+Two things about the source that no amount of work changes:
+
+- **It exists only inside a call you are connected to.** Nothing about who is
+  talking reaches Matrix room state; `m.call.member` says who claims to be in
+  the call and nothing more. A speaking indicator for a room you have *not*
+  joined is not a feature left undone, it is one the protocol cannot supply.
+  That is why `SpeakingParticipants` carries the room id: somebody in two calls
+  at once is listed under both channels in the sidebar, and only the one we
+  joined can answer for them.
+- **Muted is silent, correctly.** A muted microphone publishes nothing, so no
+  level is read and no ring appears. That is the right answer arrived at for
+  the right reason, not a special case.
+
+### The ring asks a different question about you than about everybody else
+
+Deliberate asymmetry, and worth knowing before "fixing" it:
+
+- **Other people ring for any audio at all**, down to about -80 dBFS. There is
+  no breakpoint to set for somebody else's microphone and no way to know what
+  their room sounds like, so the only honest rule is "we are receiving sound
+  from them".
+- **You ring when you are over your own breakpoint** — the same line the gate
+  transmits on when it is switched on.
+
+### "Am I speaking" and "is anything being withheld" are different questions
+
+They look like one question, and treating them as one lit an avatar for the
+whole of a call.
+
+`MicLevel.gateOpen` means *audio is going out*. With the gate switched off —
+which is how it ships — nothing is ever withheld, so it is permanently true. An
+avatar wired to it lights on the first sample of a call and never goes out. The
+same thing happens with the gate *on* the moment its fail-safe fires, since a
+defeated gate reports open for ever after.
+
+So `MicLevel.speaking` is its own field, decided by its own `NoiseGate` running
+against the breakpoint whether or not the gate is switched on. It shares the
+hold, so the ring does not strobe on the gaps inside a sentence, and it is
+built with `failSafe: null`: an instance that silences nothing cannot blind
+itself, and one that gave up would just stay lit — the same bug wearing a
+different hat.
+
+### Four ways to stop sending, three of which also stop listening
+
+The gate has to silence the outgoing audio *without* silencing the measurement
+that decides when to unsilence it. That turns out to be a narrow target, and it
+was found by elimination. Every one of these looked right first:
+
+1. **`Helper.setVolume(0)` on the local track.** A gain rather than a switch,
+   and the app already uses it for per-person volumes. It lands on
+   `AudioSourceInterface::SetVolume`, which libwebrtc implements for *remote*
+   sources — where it is playout gain — and leaves as an empty base method for
+   a local capture source. Accepted, and does nothing. Even granting it worked,
+   automatic gain control is on by default and would spend the next second or
+   two pulling the level back up.
+2. **LiveKit's `setMuted`.** Signalled to the server and drawn as a muted
+   microphone by every other client, so gating through it would make everyone's
+   participant list flicker in time with the speaker's breathing.
+3. **`mediaStreamTrack.enabled = false`.** Works, and blinds the tap: a
+   disabled track stops feeding its sinks, and the tap is one.
+4. **`sender.replaceTrack(null)`.** Also blinds it, and for a more fundamental
+   reason — **WebRTC only runs the capture pipeline while a sender is consuming
+   the track.** Detach it and the microphone stops being read at all. Observed:
+   the gate closed, went blind, and had to be rescued by the fail-safe every
+   single time.
+
+What works is **deactivating the RTP encoding**: `sender.setParameters` with
+`encodings[].active = false`. The track stays attached, so the encoder keeps
+pulling audio and the tap keeps seeing it, while nothing goes on the wire.
+flutter_webrtc's Windows plugin honours it — `flutter_peerconnection.cc` calls
+`param->set_active(...)` — and it is signalled to nobody.
+
+Worth knowing before "simplifying" this: three of the four alternatives above
+fail *silently*, and two of them fail by breaking the measurement rather than
+the audio, which presents as a gate that closes once and never reopens.
+
+**A hard cut rather than a ramp is fine, and that is the hold's doing.** A real
+noise gate ramps because cutting mid-waveform clicks; this one closes 400ms
+*after* the level drops, so the transition happens during silence and there is
+nothing to click. The hold is there for a different reason — speech is bursts
+with gaps of tens to hundreds of milliseconds, and closing on the first quiet
+sample would chop the pauses out of sentences — but it pays for the ramp as a
+side effect.
+
+### The reading is systematically low, which is what the gain is for
+
+The tap asks the visualizer for **one** band spanning 10Hz to 8kHz and gets the
+*average* magnitude across it. Speech lives between roughly 100Hz and 4kHz, so
+its energy is divided among a majority of near-empty bins and the number comes
+out far below the broadband level the same voice would show. Measured: ordinary
+talking on a dynamic microphone reads about **-90 dB** on this scale.
+
+Two things follow, and both were bugs before they were features.
+
+**The breakpoint slider reaches to -100 dB**, not to a tidier -80. A floor above
+somebody's speaking level is a breakpoint they cannot set, and therefore a gate
+that never opens — which is exactly what the first version did on a quiet
+microphone.
+
+**There is a gain control, and it trims the measurement rather than the audio.**
+It cannot do otherwise: WebRTC exposes no gain on a local capture source, per
+the elimination above. It exists so a quiet microphone can be moved into the
+part of the scale where the breakpoint has room to work, instead of pinned
+against the bottom where one decibel is most of the useful range. Anybody too
+quiet for *other people* needs their microphone's own level, in the operating
+system — this control cannot help with that, and the tooltip says so.
+
+**The gain applies before the breakpoint**, which is the only order that makes
+sense: a breakpoint compared against the untrimmed reading would be comparing
+against the very number the trim exists to fix. `noise_gate_test.dart` holds it.
+
+**Silence is not trimmed.** A reading pinned at the absolute floor is how the
+fail-safe recognises that measurements have stopped arriving; adding gain to it
+hid that completely. With a +40 dB trim the floor read -60, the fail-safe
+concluded the microphone was merely quiet, and a gate that had closed stayed
+closed for the rest of the call. That was the whole of "turning the gate on
+mutes me permanently".
+
+### The measurement is tapped above the gate, not below it
+
+The first version of this read `media-source.audioLevel` from the published
+track — the same track the gate mutes. That is a circular design, and the
+circle closes badly: if disabling a track also zeroes its reported source level
+(platform behaviour we do not control), a closed gate reads silence, concludes
+the room is quiet, and never reopens. Somebody would be inaudible, with a
+microphone that looks perfectly live, until they restarted the app.
+
+The fix is the ordinary one for any audio chain: **tap the signal upstream of
+the thing that attenuates it.** `MicTap` attaches LiveKit's `AudioVisualizer`
+to the capture track, which in the plugin's native code is an `AddSink` on the
+`RTCAudioTrack` — fed from the capture source, not from the send path. The
+measurement and the gated signal diverge at the source and never meet again, so
+the question of whether disabling a track affects its statistics simply stops
+mattering.
+
+It also fixes a plainer problem that had nothing to do with the deadlock: with
+the measurement downstream, **the meter went dead the moment the gate closed** —
+so the one screen built for watching your level while you set the threshold
+would stop showing a level exactly when the gate started working.
+
+The price is real: a 2048-point FFT on every 10ms audio frame, pushed over an
+event channel about a hundred times a second, for the whole duration of a call.
+It runs natively and it is microseconds per frame, which on a desktop is worth
+paying for a measurement the gate cannot blind. `AudioLevelSampler` reads the
+tap's *peak since the last look* rather than its latest value, for the same
+reason the remote half reads cumulative counters — it samples ten times a
+second and the tap delivers a hundred, so taking one instant in ten would miss
+the attack of a syllable, which is exactly the moment a gate must open on.
+
+### The breakpoint is stored, compared and displayed in decibels
+
+The visualizer does not hand back a level. It hands back frequency-band
+magnitudes already squashed by its own curve, `sqrt(1 - |dB| / 100)`, over a
+window clamped to -100..-30 dB. `MicTap` asks for **one** band, which makes it
+a broadband reading, and then **undoes that curve** to recover the decibels.
+
+Everything downstream is then in dB and nothing converts again: the tap
+reports dB, `NoiseGate.thresholdDb` compares dB, `micThresholdDb` stores dB,
+and the slider is labelled in dB. That is the point — the number under the
+thumb is the number on the meter, and it still means the same thing tomorrow.
+
+Reconstructing rather than passing the raw band through is what makes it
+possible at all. Left alone, a quiet room lands around 0.63 and ordinary speech
+around 0.80: the entire useful range in the top fifth of a 0..1 scale, which is
+precisely where a threshold has to be placed. Decibels are also the right unit
+on principle, because loudness is logarithmic — a control linear in amplitude
+spends most of its travel on differences nobody can hear.
+
+Two ends of the range are inherited rather than chosen. `MicTap.silenceDb`
+(-100) is the visualizer's own floor, so a band of zero lands exactly there.
+`MicTap.ceilingDb` (-30) is where it clamps its own input, so nothing louder can
+be told apart — which is why the slider stops there and not at 0 dB. The
+slider's bottom is -80 rather than -100 because the last twenty are a silent
+room's noise floor, and a threshold there is a gate that never closes, which is
+what the off switch is for.
+
+It is a *relative* reading, not a calibrated one: one FFT band spanning 10Hz to
+8kHz, referenced to full scale. It behaves like dBFS and is repeatable on one
+microphone, which is all a gate needs, without being a number anybody should
+quote.
+
+`test/voice/mic_tap_test.dart` holds the reconstruction against an independent
+restatement of the visualizer's formula — feeding it the band a known dB level
+would produce and checking the same dB comes back.
+
+### The gate still has a fail-safe, now as a backstop
+
+With the tap above the gate the deadlock cannot happen, but `NoiseGate` keeps
+its fail-safe anyway: closed for three seconds with the level pinned at
+*exactly* zero, it gives up and stays open. It costs nothing and the failure it
+guards against is silent, which is the worst kind for a microphone.
+
+It turns on the fact that a genuinely quiet room never reads a hard zero —
+there is always a noise floor, a fan, the microphone's own hiss. Only an exact
+zero says the measurement has stopped arriving.
+
+`MicTap.isLive` is the other half of the same caution: a tap that has never
+delivered a single reading is *not* a quiet microphone, and the gate must not
+act on it. An older plugin or a platform without the native visualizer leaves
+the gate switched off and says so, rather than muting somebody on the strength
+of a measurement that is not happening.
+
+### The speaking notifier is deliberately not the controller's own
+
+`LiveKitCallController` is a `ChangeNotifier`, and every other LiveKit event it
+listens to ends in `notifyListeners()`. Speakers do not. They go to a separate
+`ValueNotifier<SpeakingParticipants>`.
+
+The reason is the rate. `ActiveSpeakersChangedEvent` fires as often as a
+conversation changes hands — several times a second — and the things listening
+to the controller are the call stage and the voice footer, neither of which
+draws who is speaking. Routing it through the usual channel would repaint both
+at that rate for nothing, and would drag the sidebar in as soon as the
+participant rows started listening. The sidebar is built around *not*
+repainting; see the `ListSnapshot` note under "Accounts and verification".
+
+Two things keep the cost down, and both are load-bearing:
+
+- `SpeakingParticipants` compares by value, including an unordered set compare.
+  `ValueNotifier` only fires when the value differs, so one person talking for
+  ten seconds is one notification at the start and one at the end — not one per
+  report.
+- `SpeakingRing` is a `StatefulWidget` rather than a `ValueListenableBuilder`.
+  A builder would rebuild every ring on screen on every change; this one asks
+  the single question it cares about and calls `setState` only when *its own*
+  answer moves. Somebody else taking over the conversation is not a rebuild.
+  `test/voice/speaking_ring_test.dart` counts child builds to hold that.
+
+### A ring must not change the layout
+
+The ring reserves its width whether or not anybody is talking, and appears by
+gaining a colour rather than a size. Anything else shoves every name in the
+sidebar sideways each time somebody draws breath.
+
+It also has to match the avatar's shape. Avatars are rounded squares, not
+circles, so `kAvatarRadiusFraction` is public and the ring's radius is the
+avatar's plus the ring's width — concentric corners. A ring with its own idea
+of the radius does not read as slightly wrong; it reads as a box somebody drew
+badly.

@@ -34,23 +34,23 @@ class SecurityPane extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: prefs.confirmLinks,
-                title: Text(
-                  'Ask before opening a link',
-                  style: context.text.messageBody,
+              SettingsHint(
+                message:
+                    'A link in a message was written by somebody else, and '
+                    'following it leaves Hardline and tells that address you '
+                    'were here. With this on, clicking one shows where it '
+                    'goes and waits for an answer.',
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: prefs.confirmLinks,
+                  title: Text(
+                    'Ask before opening a link',
+                    style: context.text.messageBody,
+                  ),
+                  onChanged: (value) => ref
+                      .read(securityPrefsProvider.notifier)
+                      .setConfirmLinks(value),
                 ),
-                subtitle: Text(
-                  'A link in a message was written by somebody else, and '
-                  'following it leaves Hardline and tells that address you '
-                  'were here. With this on, clicking one shows where it goes '
-                  'and waits for an answer.',
-                  style: context.text.timestamp,
-                ),
-                onChanged: (value) => ref
-                    .read(securityPrefsProvider.notifier)
-                    .setConfirmLinks(value),
               ),
               const SettingsDivider(),
               Text(
@@ -92,6 +92,8 @@ class _DeviceEncryptionCard extends ConsumerWidget {
               'Encrypt the data stored on this device',
               style: context.text.messageBody,
             ),
+            // Stays on the page: it reports the current state rather than
+            // explaining the control, which is the row's whole point.
             subtitle: Text(
               enabled
                   ? 'Hardline asks for the passphrase each time it starts. '

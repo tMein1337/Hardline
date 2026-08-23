@@ -9,6 +9,7 @@ import '../../voice/audio_devices_provider.dart';
 import '../../voice/call_controller_provider.dart';
 import '../../voice/voice_prefs_controller.dart';
 import '../../voice/voice_prefs_state.dart';
+import '../../voice/widgets/mic_level_meter.dart';
 import '../widgets/settings_layout.dart';
 
 /// Voice & video settings: which microphone to capture and where to play.
@@ -84,6 +85,116 @@ class VoicePane extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 24),
+        const SettingsLabel('Microphone breakpoint'),
+        SettingsCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              MicLevelMeter(thresholdDb: prefs.micThresholdDb),
+              const SizedBox(height: 12),
+              SettingsHint(
+                message:
+                    'Moves the reading, not your voice — nobody hears you any '
+                    'louder, and this cannot make you louder to them. A quiet '
+                    'microphone can measure far below where the breakpoint '
+                    'can be placed, so raise this until talking fills about '
+                    'two thirds of the bar, then set the breakpoint '
+                    'underneath it.',
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 74,
+                      child: Text('Gain', style: context.text.subtitle),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: prefs.micGainDb.clamp(0.0, kMaxMicGainDb),
+                        max: kMaxMicGainDb,
+                        divisions: kMaxMicGainDb.round(),
+                        label: '+${prefs.micGainDb.round()} dB',
+                        onChanged: (value) => ref
+                            .read(voicePrefsProvider.notifier)
+                            .setMicGainDb(value),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 56,
+                      child: Text(
+                        '+${prefs.micGainDb.round()} dB',
+                        style: context.text.messageBody,
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SettingsHint(
+                message:
+                    'Where you stop being background noise and start being '
+                    'speech. Talk normally and put it between the two.',
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 74,
+                      child: Text('Breakpoint', style: context.text.subtitle),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: prefs.micThresholdDb.clamp(
+                          kMinThresholdDb,
+                          kMaxThresholdDb,
+                        ),
+                        min: kMinThresholdDb,
+                        max: kMaxThresholdDb,
+                        // One decibel a step. Finer would be false precision on a
+                        // reading taken from one FFT band.
+                        divisions: (kMaxThresholdDb - kMinThresholdDb).round(),
+                        label: '${prefs.micThresholdDb.round()} dB',
+                        onChanged: (value) => ref
+                            .read(voicePrefsProvider.notifier)
+                            .setMicThresholdDb(value),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 56,
+                      child: Text(
+                        '${prefs.micThresholdDb.round()} dB',
+                        style: context.text.messageBody,
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SettingsDivider(),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: prefs.noiseGate,
+                title: Text(
+                  'Stop sending audio below the breakpoint',
+                  style: context.text.messageBody,
+                ),
+                // Kept on the page rather than moved to a hover. Everything
+                // else here explains a control; this one says what happens if
+                // you get it wrong, and being inaudible is the one failure you
+                // cannot notice from this end.
+                subtitle: Text(
+                  'Keyboard noise, a fan and breathing never reach the call. '
+                  'Set the breakpoint too high and people stop hearing you — '
+                  'which is not something you can notice from this end, so '
+                  'watch the meter while you talk before turning it on.',
+                  style: context.text.timestamp,
+                ),
+                onChanged: (value) =>
+                    ref.read(voicePrefsProvider.notifier).setNoiseGate(value),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
         const SettingsLabel('Screen sharing'),
         SettingsCard(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -99,8 +210,9 @@ class VoicePane extends ConsumerWidget {
               'the others back to them — headphones avoid that.',
               style: context.text.timestamp,
             ),
-            onChanged: (value) =>
-                ref.read(voicePrefsProvider.notifier).setShareSystemAudio(value),
+            onChanged: (value) => ref
+                .read(voicePrefsProvider.notifier)
+                .setShareSystemAudio(value),
           ),
         ),
       ],
@@ -177,9 +289,7 @@ class _DeviceSection extends StatelessWidget {
                 ],
                 onChanged: (deviceId) {
                   if (deviceId == null) return;
-                  onChanged(
-                    devices.firstWhere((d) => d.deviceId == deviceId),
-                  );
+                  onChanged(devices.firstWhere((d) => d.deviceId == deviceId));
                 },
               ),
             ),
