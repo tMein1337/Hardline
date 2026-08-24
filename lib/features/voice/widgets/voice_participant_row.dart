@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme_context.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
+import '../call_controller_provider.dart';
 import '../voice_participant.dart';
 import '../voice_prefs_controller.dart';
 import 'speaking_ring.dart';
@@ -141,22 +142,56 @@ class VoiceParticipantRow extends ConsumerWidget {
                       style: context.text.timestamp,
                     ),
                   ],
-                  // Screenshare is the only per-participant state that reaches
-                  // room state, so it is the only badge we can honestly draw
-                  // for someone whose call we have not joined.
-                  if (participant.isScreensharing) ...[
-                    const SizedBox(width: 4),
-                    Tooltip(
-                      message: 'Sharing their screen',
-                      child: Icon(
-                        Icons.screen_share,
-                        size: 14,
-                        color: colors.voiceControlIconActive,
-                      ),
-                    ),
-                  ],
+                  _ScreenShareBadge(
+                    roomId: roomId,
+                    userId: participant.userId,
+                  ),
                 ],
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The "sharing their screen" badge, for the call we are actually in.
+///
+/// Its own widget because the fact lives on a `ChangeNotifier` rather than in
+/// provider state — the same reason `voice_activity_row.dart` reads
+/// `isInCallFor` through a listenable. Scoping the rebuild to the badge keeps
+/// LiveKit's event rate out of the row, and out of the sidebar behind it.
+///
+/// Draws nothing for a call we have not joined. That is not a gap to fill
+/// later: a screen share is a LiveKit publication and nothing about it reaches
+/// Matrix room state, so from outside the call there is nothing to know.
+class _ScreenShareBadge extends ConsumerWidget {
+  const _ScreenShareBadge({required this.roomId, required this.userId});
+
+  final String roomId;
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.watch(callControllerProvider);
+
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        if (!controller.isInCallFor(roomId) ||
+            !controller.isScreenSharing(userId)) {
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Tooltip(
+            message: 'Sharing their screen',
+            child: Icon(
+              Icons.screen_share,
+              size: 14,
+              color: context.colors.voiceControlIconActive,
             ),
           ),
         );

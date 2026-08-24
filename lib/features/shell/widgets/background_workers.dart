@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../activity/message_activity_log.dart';
+import '../../overlay/overlay_provider.dart';
 import '../../voice/stale_membership_sweeper.dart';
 import '../../voice/stale_ring_sweeper.dart';
 
@@ -26,6 +27,11 @@ import '../../voice/stale_ring_sweeper.dart';
 /// `stale_ring_sweeper.dart` clears the unread badge a dead ring left behind,
 /// `stale_membership_sweeper.dart` withdraws a membership this device was
 /// killed before it could withdraw itself.
+///
+/// The **overlay driver** is here for the same reason the sweeps are: its
+/// hotkeys have to be bound whether or not anybody has opened its settings, or
+/// the chord that switches the overlay on would only work after the pane that
+/// describes it had been visited once.
 class BackgroundWorkers extends ConsumerWidget {
   const BackgroundWorkers({super.key});
 
@@ -34,6 +40,7 @@ class BackgroundWorkers extends ConsumerWidget {
     ref.listen(messageActivityLogProvider, (_, _) {});
     ref.watch(staleRingSweepProvider);
     ref.watch(staleMembershipSweepProvider);
+    ref.watch(overlayDriverProvider);
     return const SizedBox.shrink();
   }
 }

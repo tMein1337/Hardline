@@ -13,6 +13,7 @@ enum SettingsSection {
   account('My Account', Icons.person_outline, group: SettingsGroup.user),
   sessions('Sessions', Icons.devices, group: SettingsGroup.user),
   voice('Voice & Video', Icons.mic_none, group: SettingsGroup.app),
+  overlay('Call overlay', Icons.layers_outlined, group: SettingsGroup.app),
   activity('Activity', Icons.bolt, group: SettingsGroup.app),
   appearance('Appearance', Icons.palette_outlined, group: SettingsGroup.app),
   security('Security', Icons.shield_outlined, group: SettingsGroup.app),

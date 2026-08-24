@@ -5,10 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1 to 6 are **verifications**, not features: the code is written and
-believed correct, but has never been observed working, usually because the test
-needs a second client or a second machine. Items 7 to 9 are the Nix packaging:
-one verification and two pieces of work.
+Items 1 to 6 and 10 to 11 are **verifications**, not features: the code is
+written and believed correct, but has never been observed working, usually
+because the test needs a second client or a second machine. Items 7 to 9 are the
+Nix packaging: one verification and two pieces of work.
 
 ## 1. Verify screen-share system audio
 
@@ -474,6 +474,144 @@ step and the "The store cipher is missing on Nix" section of
 [NIX-PACKAGING.md](NIX-PACKAGING.md), which is where the detail lives, along
 with the `sqlite` comment in `flake.nix`'s `runtimeLibsFor`.
 
+## 10. Verify the call grid and multiple screen shares
+
+The grid replaces `CallStage` and is covered by tests that drive it from
+hand-built values (`test/voice/call_grid_test.dart`,
+`call_grid_layout_test.dart`, `live_participant_test.dart`). What no test can
+cover is a real SFU with real video in it, and half the list below needs a
+second person because one participant cannot demonstrate a grid.
+
+**Alone.**
+
+1. **The shape.** Join a call. One tile with your face in it — *not* an empty
+   chat column, which is what the old stage gave a voice-only call. Turn the
+   camera on: the avatar tile becomes a video tile. Turn it off again: it goes
+   back, rather than vanishing.
+2. **One tile per stream.** Camera on, then share a screen, then share a second
+   screen. Three tiles, all the same size, shared screens first, each captioned
+   in its **bottom right** corner. This is the requirement in one step: three
+   streams take three people's worth of the grid.
+3. **The toggle.** *Chat* in the header brings the timeline back with its scroll
+   position intact; *Call* returns to the grid. Switch rooms while in a call and
+   confirm the other room shows its timeline, not the grid.
+4. **Resize.** Drag the window narrow and wide with four or more tiles up. The
+   arrangement should re-flow — a wide window puts tiles across, a narrow one
+   stacks them — and nothing should ever be clipped.
+
+**Multiple shares, which is the risky half.**
+
+5. **Two shares at once really are two.** Share window A, then use *Share
+   another…* for window B. The other side must see **two distinct** tiles, not
+   the same window twice. This is the exact failure `setScreenShareEnabled`
+   produces silently, so seeing it twice is the tell that the direct-publish
+   path was bypassed somewhere.
+6. **Stopping one leaves the other.** Stop share A from the menu; B keeps
+   running on both sides. Then leave the call and confirm nothing is left
+   published (`getTrackPublicationBySource` empty, no orphaned
+   `screenShareAudio`).
+7. **In an encrypted room.** Repeat 5 with *"Share system audio"* on, in an
+   encrypted room. Both streams must be decodable and the audio audible — the
+   frame cryptor has to attach to each new sender independently, and this is the
+   only step that proves it. Garbled video on the *second* share only is the
+   signature of that going wrong.
+8. **Windows stops it from outside.** Start a share and stop it from Windows'
+   own sharing banner rather than from the app. The tile must disappear and the
+   footer must stop claiming to be sharing — that is what
+   `LocalTrackUnpublishedEvent` is now listened to for, and nothing else covers
+   it.
+
+**With a second person.** All of this is first-observation, not regression:
+
+9. **They appear as an avatar tile** the moment they join, before they send
+   anything.
+10. **Their tile's border lights while they speak** and nobody else's does. Note
+    this is the *first* observation of the received-level path in a grid; TODO 6
+    covers the same signal in the sidebar and the two share
+    `SpeakingWatch` now, so a failure here is a failure there.
+11. **Their mute icon appears when they mute themselves.** New, and only
+    possible inside a call — the sidebar cannot show it and never will.
+12. **Their screen-share badge in the sidebar lights**, which was dead code
+    before this. Then leave the call and confirm it goes out, because from
+    outside a call there is nothing to know.
+13. **Nine tiles.** Get to six or more streams between you and confirm the grid
+    stays regular and the video stays smooth. `adaptiveStream` and `dynacast`
+    are now on, so the SFU should be sending small layers for small tiles;
+    without them this is where it would fall over.
+
+## 11. Verify the call overlay, and prove the transparency first
+
+**Step 1 is a gate.** The overlay's per-pixel transparency rests on
+`SetWindowCompositionAttribute`, which is undocumented. It is resolved at
+runtime with a documented fallback behind it, and neither has been observed on
+this machine — the app builds and launches, and the overlay window has never
+been on screen, because it only appears during a call.
+
+Everything testable without a second person is testable alone here, which makes
+this the rare list that one person can finish.
+
+1. **Transparency, before anything else.** Settings → *Call overlay* → switch it
+   on, join a call, and look. The HUD must appear over the desktop with the
+   background **fully transparent** — not black, not grey, not a rectangle. If
+   it is an opaque rectangle, `SetWindowCompositionAttribute` was not resolved
+   or was ignored, and `ApplyTransparency` in
+   `windows/runner/overlay_window.cpp` is where the two fallbacks are.
+2. **Silence is invisible.** With nobody speaking, nothing at all is drawn.
+   Speak: your own avatar and name appear at full opacity with the ring around
+   them, and fade out again a beat after you stop. Raise *Visible when silent*
+   and confirm the quiet entries come up to that opacity and no further.
+3. **Clicks fall through.** Over a game, click where the HUD is. The game must
+   receive the click. This is `WS_EX_TRANSPARENT`, and it is the difference
+   between an overlay and an obstruction.
+4. **Borderless, then true fullscreen.** Minecraft in Borderless Fullscreen: the
+   HUD is there. The same game in true Fullscreen: it is not, and the app does
+   not crash or hang waiting for it. The second half is the documented
+   limitation behaving as documented, not a bug — see "Exclusive fullscreen is
+   out of reach" in [notes.md](notes.md).
+5. **Alt-tab.** Switch to the app and back to the game a few times. The overlay
+   must still be on top afterwards; that is what the two-second `HWND_TOPMOST`
+   timer is for and it is the only thing covering it.
+6. **The chords.** Bind both in settings, then use them from *inside* a game.
+   The toggle chord switches the overlay off and on. The edit chord makes the
+   HUD draggable — the game loses the foreground, which is expected — and
+   pressing it again returns to click-through. A chord another program already
+   holds must be **refused visibly**, not silently ignored.
+7. **The position survives.** Drag the HUD somewhere, leave edit mode, restart
+   the app, rejoin a call. It comes back where it was put. Then change the
+   game's resolution and confirm it is still in the same *place*, not the same
+   pixel — positions are fractions of the monitor.
+8. **One layout, several games.** Assign a second executable to a layout the
+   first already uses (settings, or the *Assign…* control after tabbing back
+   from it). Tab into it and confirm the HUD arrives already arranged, with
+   nothing rebuilt. Then edit that layout and confirm **both** games get the
+   change — that is the point of layouts being named rather than per-game.
+9. **A layout with users, deleted.** Delete a layout two games point at. They
+   must fall back to the default rather than leaving the overlay blank. Then try
+   to delete the last remaining layout: the control must be disabled.
+10. **Multi-monitor.** With two monitors, put the overlay on the second one and
+    confirm it covers that monitor. Unplug it (or disable it in Windows) and
+    confirm the overlay reappears on the primary rather than disappearing to a
+    screen that is not there.
+11. **Capture exclusion.** With the overlay up, share your screen and have the
+    other side confirm they do **not** see your HUD. Then turn the setting off
+    and confirm they do. Windows 10 2004 is the floor for this; on anything
+    older the call fails and the overlay is simply visible, which is cosmetic.
+12. **The graceful exit still works.** Close the window mid-call with the
+    overlay showing. You must still disappear from the participant list at once.
+    The overlay bridge sits in the same message pump as the exit request that
+    TODO 4 covers, and this is the regression it could cause.
+13. **Two engines, one process.** After using the overlay, check the log for
+    anything from flutter_webrtc about a plugin registering twice, and confirm
+    audio still works after the overlay has been shown and hidden a few times.
+    The overlay engine registers no plugins precisely to avoid this, and the
+    symptom if it were wrong would be the app's own call going deaf rather than
+    anything about the overlay.
+
+**Not implemented, deliberately:** the overlay cannot show video streams. That
+is the architecture, not an omission — see "Which is also why the overlay cannot
+show video" in [notes.md](notes.md), which also records the one route to it
+(`DwmRegisterThumbnail`) if it is ever wanted.
+
 ## second to last Plattform Support
 - Linux
 - Macos
@@ -481,14 +619,9 @@ with the `sqlite` comment in `flake.nix`'s `runtimeLibsFor`.
 - Android
 
 ## ideas
-- An always-on-top call overlay for use over a full-screen application.
-- ~~A live speaking indicator on the space rail, so an unopened room still shows
-  that somebody in it is talking.~~ Half of this is built — avatars in the
-  participant list and your own in the user footer ring while their owner is
-  audible. The other half, an **unopened** room showing it, is not something
-  that was left undone: who is speaking is computed by the SFU and pushed to
-  the clients connected to it, and nothing about it reaches Matrix room state.
-  A room whose call you have not joined cannot be asked. It would take either
-  a bot in every call republishing speaker activity as state — noisy, and
-  everybody in the room would see who talks and when — or joining calls in the
-  background to listen, which is worse.
+- Video streams inside the always-on-top overlay. Not possible as the overlay
+  is built — a second Flutter engine cannot render the app engine's textures —
+  but `DwmRegisterThumbnail` could mirror the grid's tiles into it. See "Which
+  is also why the overlay cannot show video" in notes.md.
+- The overlay on Linux and macOS. The Dart half is platform-agnostic already;
+  what does not exist is the equivalent of `windows/runner/overlay_window.cpp`.

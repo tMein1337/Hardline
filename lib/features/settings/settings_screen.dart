@@ -12,6 +12,7 @@ import 'panes/about_pane.dart';
 import 'panes/account_pane.dart';
 import 'panes/activity_pane.dart';
 import 'panes/appearance_pane.dart';
+import 'panes/overlay_pane.dart';
 import 'panes/security_pane.dart';
 import 'panes/sessions_pane.dart';
 import 'panes/voice_pane.dart';
@@ -101,6 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     SettingsSection.account => const AccountPane(),
     SettingsSection.sessions => const SessionsPane(),
     SettingsSection.voice => const VoicePane(),
+    SettingsSection.overlay => const OverlayPane(),
     SettingsSection.activity => const ActivityPane(),
     SettingsSection.appearance => const AppearancePane(),
     SettingsSection.security => const SecurityPane(),

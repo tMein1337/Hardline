@@ -10,10 +10,13 @@ import 'package:flutter/foundation.dart';
 /// would make equality meaningless and defeat the `ListSnapshot` mechanism that
 /// stops the sidebar repainting on every sync.
 ///
-/// Only fields something actually draws belong here. Notably absent is
-/// `isMuted`: whether someone has muted their own microphone never reaches
-/// room state, so a person who has not joined the call cannot know it, and no
-/// amount of work on our side changes that.
+/// Only fields something actually draws belong here. Notably absent are
+/// `isMuted` and `isScreensharing`. Neither reaches room state under MatrixRTC
+/// — mute is never published at all, and a screen share is a LiveKit track
+/// publication — so a person who has not joined the call cannot know either,
+/// and no amount of work on our side changes that. Both are drawn from
+/// `LiveKitCallController` instead, and only for the call we are in; see
+/// `LiveParticipant`.
 @immutable
 class VoiceParticipant {
   const VoiceParticipant({
@@ -21,7 +24,6 @@ class VoiceParticipant {
     required this.deviceIds,
     required this.displayName,
     required this.avatarMxc,
-    required this.isScreensharing,
     required this.isSelf,
   });
 
@@ -40,12 +42,6 @@ class VoiceParticipant {
   /// Raw `mxc://` string; resolving it to HTTP happens in the avatar widget.
   final String? avatarMxc;
 
-  /// True when any of this person's connected devices is sharing a screen.
-  ///
-  /// Unlike mute, this *is* visible without joining: the screenshare feed's
-  /// purpose is part of the `com.famedly.call.member` state event.
-  final bool isScreensharing;
-
   final bool isSelf;
 
   @override
@@ -56,7 +52,6 @@ class VoiceParticipant {
           listEquals(deviceIds, other.deviceIds) &&
           displayName == other.displayName &&
           avatarMxc == other.avatarMxc &&
-          isScreensharing == other.isScreensharing &&
           isSelf == other.isSelf;
 
   @override
@@ -65,7 +60,6 @@ class VoiceParticipant {
     Object.hashAll(deviceIds),
     displayName,
     avatarMxc,
-    isScreensharing,
     isSelf,
   );
 }

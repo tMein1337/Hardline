@@ -2,7 +2,10 @@
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
+#include <memory>
+
 #include "flutter_window.h"
+#include "overlay_bridge.h"
 #include "utils.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
@@ -34,11 +37,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
   window.SetQuitOnClose(true);
 
+  // The overlay's control channel, its watches, and the wire to its engine.
+  // Constructed after the window because it needs the app engine's messenger,
+  // and destroyed before `CoUninitialize` because it owns a second engine.
+  //
+  // The overlay window and engine themselves are not created here -- the bridge
+  // brings them up on the first `show`, so somebody who never turns the overlay
+  // on never pays for a second Flutter engine.
+  std::unique_ptr<OverlayBridge> overlay_bridge;
+  if (auto* messenger = window.messenger()) {
+    overlay_bridge = std::make_unique<OverlayBridge>(messenger, project);
+  }
+
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
   }
+
+  overlay_bridge = nullptr;
 
   ::CoUninitialize();
   return EXIT_SUCCESS;

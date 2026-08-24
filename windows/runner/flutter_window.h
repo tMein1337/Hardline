@@ -15,6 +15,10 @@ class FlutterWindow : public Win32Window {
   explicit FlutterWindow(const flutter::DartProject& project);
   virtual ~FlutterWindow();
 
+  // The app engine's messenger, for the overlay bridge to hang its channels
+  // on. Null before Create has run, and after the window is destroyed.
+  flutter::BinaryMessenger* messenger() const;
+
  protected:
   // Win32Window:
   bool OnCreate() override;

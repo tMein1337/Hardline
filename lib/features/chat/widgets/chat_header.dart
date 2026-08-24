@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
 import '../../rooms/room_list_provider.dart';
+import '../../voice/widgets/call_view_toggle.dart';
 
-/// Title bar of the chat column: room name, and topic when there is one.
+/// Title bar of the chat column: room name, topic when there is one, and — in
+/// a room whose call we have joined — the switch between the call and the
+/// conversation.
 class ChatHeader extends StatelessWidget {
   const ChatHeader({super.key, required this.header});
 
@@ -49,6 +52,10 @@ class ChatHeader extends StatelessWidget {
               child: Icon(Icons.lock, size: 14, color: colors.success),
             ),
           ],
+          // Before the topic, and outside the `Expanded` that holds it: a
+          // control that slides sideways as the topic is edited is a control
+          // people stop trusting themselves to hit.
+          CallViewToggle(roomId: header.id),
           if (header.topic.isNotEmpty) ...[
             const SizedBox(width: 12),
             Container(width: 1, height: 20, color: colors.divider),

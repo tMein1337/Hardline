@@ -1297,11 +1297,16 @@ Two things keep the cost down, and both are load-bearing:
   `ValueNotifier` only fires when the value differs, so one person talking for
   ten seconds is one notification at the start and one at the end — not one per
   report.
-- `SpeakingRing` is a `StatefulWidget` rather than a `ValueListenableBuilder`.
+- `SpeakingWatch` is a `StatefulWidget` rather than a `ValueListenableBuilder`.
   A builder would rebuild every ring on screen on every change; this one asks
   the single question it cares about and calls `setState` only when *its own*
   answer moves. Somebody else taking over the conversation is not a rebuild.
   `test/voice/speaking_ring_test.dart` counts child builds to hold that.
+
+  It was extracted from `SpeakingRing` when the call grid wanted the same
+  behaviour in a different shape — a border around a tile rather than a ring
+  around a face. The discipline is subtle enough that two copies of it would
+  have meant one correct copy and one that drifted.
 
 ### A ring must not change the layout
 
@@ -1314,3 +1319,231 @@ circles, so `kAvatarRadiusFraction` is public and the ring's radius is the
 avatar's plus the ring's width — concentric corners. A ring with its own idea
 of the radius does not read as slightly wrong; it reads as a box somebody drew
 badly.
+
+## The call grid
+
+### A tile is a stream, not a person
+
+The old `CallStage` drew a `Row` of `Expanded` video surfaces, one per
+publication. Two things followed from that and both were wrong. Ten people in a
+call produced ten slivers, because a `Row` divides rather than wraps. And
+somebody with their camera off produced *nothing at all*, because there was no
+publication to draw — a voice-only call left the chat column exactly as it was,
+which is a strange thing for a call interface to do.
+
+`tilesFor` in `live_participant.dart` replaces both. One tile per published
+feed, or a single avatar tile for somebody sending nothing. That is what makes
+"a person sharing a camera and two screens takes the space of three people"
+fall out with no special case: they occupy three cells, and every cell is the
+same size.
+
+The arrangement comes from `chooseGrid`, which tries every column count and
+scores the result. A formula does not work here — the answer depends on the
+box's shape as much as on the count, and the chat column is nearly square while
+a maximised window is not. Three tiles go across in a wide box and down in a
+tall one, from the same function.
+
+Maximising tile area alone is *almost* right, and wrong in one visible way: for
+nine tiles in a squarish column it picks two columns of five, whose tiles are
+about a tenth larger in area, over three rows of three. Five percent on an edge
+is invisible; a tenth cell sitting empty at the bottom of a two-wide column
+reads as a grid that has gone wrong. Hence `_gapTolerance`: within a tenth of
+the best, no gaps wins. It only ever decides between arrangements that differ in
+emptiness — five tiles leave a gap however they are arranged, so there the
+largest tile still takes it.
+
+### `LiveParticipant` is not `VoiceParticipant`, and both are needed
+
+`VoiceParticipant` is built from Matrix room state, so it exists for calls we
+have **not** joined — that is what the sidebar draws under a channel. It cannot
+know whether somebody's camera is on or whether they have muted themselves,
+because neither reaches room state under MatrixRTC.
+
+`LiveParticipant` is built from LiveKit, so it exists only for the call we are
+connected to, and it knows both. The names follow the distinction "Two halves
+that must stay in sync" already draws: room state says who *claims* to be in the
+call, LiveKit carries the media.
+
+Two consequences worth stating:
+
+- **`isScreensharing` is gone from `VoiceParticipant`.** It was hard-coded
+  `false` with a comment promising it would be filled in from LiveKit later,
+  which never happened, so the sidebar's screen-share badge was dead code. It
+  now asks `LiveKitCallController.isScreenSharing` through a listenable — the
+  same shape `voice_activity_row.dart` uses for `isInCallFor` — and draws
+  nothing for a call we have not joined, because from outside one there is
+  genuinely nothing to know.
+- **Mute can be drawn on a tile but not on a sidebar row.** The SFU reports a
+  remote participant's own mute as the microphone publication's `muted` flag.
+  `voice_participant.dart` is right that it never reaches room state; it does
+  reach *us*, once we are in the call.
+
+### The value type is the point
+
+`CallVideoTile` held a live `lk.VideoTrack` and defined no `==`, so a list of
+them never compared equal to itself. That kept the call UI permanently outside
+the `ListSnapshot` discipline the rest of the app is built on: every LiveKit
+event repainted everything, and most LiveKit events change nothing.
+
+`CallVideoFeed` compares on `key` — `identity|sid` — and **excludes the track**.
+A publication sid is unique for the life of the publication, so the key
+identifies the feed at least as precisely as the object does, and unlike the
+object it can be compared. That one decision is what lets `participants` be
+recomputed on every notify without the grid repainting.
+
+### `adaptiveStream` and `dynacast` were off
+
+`lk.Room` was constructed with only `encryption:` set, so `RoomOptions` defaults
+applied and both were false. With one video that costs nothing. With nine tiles
+it means nine full-resolution streams pulled for a screenful of postage stamps,
+and every layer encoded whether or not anybody subscribed to it. Both are on
+now; there was never a reason for them not to be, only no grid to notice.
+
+### Several screen shares need `publishVideoTrack`, not the convenience method
+
+`setScreenShareEnabled(true, …)` resolves to
+`setSourceEnabled(TrackSource.screenShareVideo, …)`, which looks for an existing
+publication of that source *first* and, if it finds one, unmutes it and discards
+the new source id without a word. Sharing a second screen through it does not
+fail — it silently re-shares the first.
+
+So `startScreenShare` builds the tracks itself with
+`LocalVideoTrack.createScreenShareTracksWithAudio` and publishes each. The pair
+has to be taken down by hand too: the convenience method's paired teardown only
+applies to the pair it created.
+
+Media encryption survives the change. `E2EEManager` attaches a frame cryptor
+from `LocalTrackPublishedEvent`, which direct publication fires exactly as the
+convenience method does — and `LocalTrackPublishedEvent` and its unpublish
+counterpart are now listened to, which they were not, because a share can also
+end from outside the app entirely when Windows' own sharing banner stops it.
+
+**Screen-share audio gain stays per device**, so two shares from one machine
+share one slider. Per-share gain would mean keying `VoiceUserPrefs` off
+publication sids, and those are regenerated every session — a stored preference
+keyed on them would never match again.
+
+## The call overlay
+
+### Two engines, and why there is no choice about it
+
+The overlay is a second top-level window with a **second Flutter engine** in it,
+entered at `overlayMain`. That is not a design preference. Flutter's real
+multi-view API exists in 3.44 but is `@internal` and its own error text says to
+switch to the main channel; `_window_win32.dart` is explicit about it. A shipping
+app on stable gets one view per engine.
+
+The consequence is the whole shape of `lib/features/overlay/`. The two engines
+are different isolates, so nothing is shared by reference — not the call
+controller, not the theme, not `SharedPreferences`, not an avatar already
+decoded. Everything the HUD draws arrives as bytes over a message channel that
+`windows/runner/overlay_bridge.cpp` relays between the two.
+
+**And the overlay engine registers no plugins at all.** flutter_webrtc's Windows
+plugin keeps a process-global `g_shared_instance` that the most recent
+registration overwrites (`flutter_webrtc_plugin.cc`). Registering it a second
+time would leave the *app's* calls talking to the overlay's plugin instance.
+Nothing else it could register is wanted either: a second `Client` on the same
+database would violate the one-handle-per-store rule `active_client.dart`
+documents.
+
+### Which is also why the overlay cannot show video
+
+A texture belongs to the engine whose registrar created it, so the overlay
+engine cannot render a track the app engine owns. This is the one thing the
+overlay does not do, and it is a property of the architecture rather than
+something left undone.
+
+The route to it, if it is ever wanted, is `DwmRegisterThumbnail`: DWM can mirror
+a rectangle of the main window into the overlay window, GPU-side, without the
+pixels crossing the isolate boundary. It needs the main window open and not
+minimised, and it draws opaque rectangles above the destination's own content.
+That is fine for video and useless for anything with alpha.
+
+### Two kinds of message
+
+A snapshot carries avatar images and is sent when the roster, the layout or the
+theme changes. A speaking update is a set of user ids and is sent several times
+a second. One message kind would mean pushing a few hundred kilobytes a second
+between two isolates to redraw a ring.
+
+Avatars are fetched by the app side through the same `avatarUriProvider` the
+rest of the app uses, so the overlay gets the thumbnail already in cache rather
+than a second copy at a size nothing else asked for.
+
+### Transparency is undocumented API
+
+`SetWindowCompositionAttribute` with `ACCENT_ENABLE_TRANSPARENTGRADIENT`, from
+`user32.dll` by `GetProcAddress`, is the only thing on Windows that makes a
+Flutter window per-pixel transparent — there is no supported alternative that
+composites a D3D swapchain against the desktop with alpha, which is why
+`flutter_acrylic` and `bitsdojo_window` both reach for it.
+
+It is resolved at runtime rather than linked: it is in no import library, and a
+missing export has to degrade to an opaque overlay rather than a process that
+will not start. The fallback is `DwmEnableBlurBehindWindow` over an empty
+region, which is documented but less reliable across compositor changes.
+
+### The window is a sheet of glass, not a window
+
+`WS_POPUP` with `WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW |
+WS_EX_NOACTIVATE | WS_EX_TRANSPARENT`. Each bit is load-bearing:
+
+- `WS_EX_TOOLWINDOW` keeps it out of the taskbar *and* out of alt-tab. An
+  overlay that can be tabbed to is an overlay that steals focus from the game by
+  accident.
+- `WS_EX_NOACTIVATE` and `SW_SHOWNOACTIVATE` mean showing it never pulls the
+  foreground, which on a fullscreen game would minimise it.
+- `WS_EX_TRANSPARENT` is what makes clicks fall through. Edit mode drops it
+  **and** `WS_EX_NOACTIVATE`: the first alone keeps the mouse out, the second
+  alone lets the mouse in but never gives the window the keyboard, so the HUD
+  could be clicked but not typed into.
+
+It is deliberately not a `Win32Window`. That class registers one window class
+for the whole application, whose `WM_GETMINMAXINFO` handler enforces the app's
+940x560 minimum, and it creates its window with `CreateWindow` — no extended
+styles at all.
+
+`HWND_TOPMOST` is re-asserted on a two-second timer. Other topmost windows — a
+game's own overlay, a volume OSD — push us down as they come and go, and there
+is no event for "somebody else went on top of you".
+
+### Exclusive fullscreen is out of reach, and that is the end of it
+
+A topmost window composites over borderless and windowed-fullscreen
+applications. It cannot appear over true exclusive fullscreen, because that
+bypasses the desktop compositor entirely. Discord and Steam get around this by
+injecting a DLL into the game and hooking its graphics API. This app will not do
+that. The settings pane says so, because the failure is silent otherwise: the
+overlay is running correctly and simply cannot be seen.
+
+### Layouts are named things, not properties of a game
+
+The foreground application is detected from `EVENT_SYSTEM_FOREGROUND` and
+`QueryFullProcessImageNameW` — an event hook rather than a poll, and
+`PROCESS_QUERY_LIMITED_INFORMATION` because it is the least that can be asked
+for and the only variant that succeeds against an elevated process.
+
+But an executable does not *own* a layout, it points at one. Several games share
+one HUD, and editing that HUD changes it everywhere at once, which is the whole
+point: a newly installed game should be able to adopt an arrangement that
+already works rather than have one rebuilt for it. `assignments` is
+executable-to-layout-id, many-to-one, and everything unassigned gets
+`defaultLayoutId`.
+
+Two rules keep `layoutFor` total, so nothing anywhere has to handle "no layout":
+the layout list is never empty (a file that lost its layouts comes back with
+one), and an assignment to a deleted layout is dropped at parse time rather than
+kept as a dangling id.
+
+Positions are **fractions of the monitor**, not pixels. A layout arranged at
+2560x1440 has to land in the same place when a game drives the same monitor at
+1920x1080, and pixels do not survive that.
+
+### The preferences key is flat
+
+`overlay_prefs_v1`, not namespaced by user id — the same rule
+`security_prefs.dart` follows. Keys holding opinions about *other people* are
+per account because a shared computer must not leak them between logins. A
+screen layout is not that. It answers "where on this monitor do I want things",
+which does not change when a different account signs in.

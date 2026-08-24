@@ -160,4 +160,5 @@ platform traps, and the decisions taken around them - is in
 [`notes.md`](notes.md).
 
 It covers the activity summary, accounts and verification, file attachments,
-custom themes, and the voice architecture.
+custom themes, the voice architecture, the call grid, and the always-on-top
+call overlay.

@@ -12,6 +12,7 @@ import '../call_controller_provider.dart';
 import '../livekit_call_controller.dart';
 import '../voice_prefs_controller.dart';
 import '../../../core/util/display_name.dart';
+import 'screen_share_menu.dart';
 
 /// Connection status and call controls, above the user footer.
 ///
@@ -129,13 +130,15 @@ class _Controls extends ConsumerWidget {
             icon: controller.screenSharing
                 ? Icons.stop_screen_share
                 : Icons.screen_share,
-            tooltip: controller.screenSharing
-                ? 'Stop sharing'
-                : 'Share your screen',
+            tooltip: switch (controller.shares.length) {
+              0 => 'Share your screen',
+              1 => 'Sharing 1 screen',
+              final count => 'Sharing $count screens',
+            },
             color: controller.screenSharing
                 ? colors.voiceControlIconActive
                 : colors.voiceControlIcon,
-            onPressed: live ? () => _toggleScreenShare(context, ref) : null,
+            onPressed: live ? () => _onScreenShare(context, ref) : null,
           ),
         ),
         Expanded(
@@ -176,12 +179,24 @@ class _Controls extends ConsumerWidget {
     );
   }
 
-  Future<void> _toggleScreenShare(BuildContext context, WidgetRef ref) async {
+  /// The screen-share button.
+  ///
+  /// Nothing shared yet means there is nothing to choose between: go straight
+  /// to the picker. Once something is up, the button opens the list instead —
+  /// with several shares running, "stop sharing" is no longer a question with
+  /// one answer.
+  Future<void> _onScreenShare(BuildContext context, WidgetRef ref) async {
     if (controller.screenSharing) {
-      await controller.stopScreenShare();
+      await ScreenShareMenu.show(
+        context,
+        onAddShare: () => _pickAndShare(context, ref),
+      );
       return;
     }
+    await _pickAndShare(context, ref);
+  }
 
+  Future<void> _pickAndShare(BuildContext context, WidgetRef ref) async {
     // livekit_client ships this picker with live thumbnails and screen/window
     // tabs. Reimplementing it would gain nothing today.
     //

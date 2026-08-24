@@ -55,11 +55,6 @@ final voiceParticipantsProvider =
                 .unsafeGetUserFromMemoryOrFallback(userId)
                 .avatarUrl
                 ?.toString(),
-            // Screenshare is not advertised in the membership event under
-            // MatrixRTC — it is a LiveKit track publication. Only participants
-            // who have joined the SFU can see it, so it stays false here and is
-            // filled in from LiveKit state once we are in the call.
-            isScreensharing: false,
             isSelf: userId == client.userID,
           ),
       ]);

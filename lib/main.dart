@@ -16,6 +16,7 @@ import 'core/storage/store_cipher.dart';
 import 'features/accounts/account_registry.dart';
 import 'features/accounts/active_client.dart';
 import 'features/auth/unlock_screen.dart';
+import 'features/overlay/overlay_app.dart';
 import 'features/settings/device_encryption.dart';
 
 Future<void> main() async {
@@ -77,6 +78,22 @@ Future<void> main() async {
     ),
   );
 }
+
+/// The overlay window's entry point.
+///
+/// A **second** Flutter engine enters here, in its own isolate, hosted by the
+/// layered always-on-top window in `windows/runner/overlay_window.cpp`. It
+/// shares nothing with `main` above — no client, no preferences, no provider
+/// container — and takes everything it draws over a message channel. See
+/// `lib/features/overlay/overlay_app.dart` for why that is forced rather than
+/// chosen.
+///
+/// The engine resolves an entry point by *name*, in the library that holds
+/// `main`, which is why this is here rather than beside the code it calls. The
+/// pragma is not optional: without it AOT drops the function as unreachable and
+/// the overlay engine starts into nothing.
+@pragma('vm:entry-point')
+void overlayMain() => runOverlayApp();
 
 /// The app's root, with everything `main()` had to settle before `runApp`.
 ///

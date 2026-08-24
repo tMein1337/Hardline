@@ -9,6 +9,11 @@ FlutterWindow::FlutterWindow(const flutter::DartProject& project)
 
 FlutterWindow::~FlutterWindow() {}
 
+flutter::BinaryMessenger* FlutterWindow::messenger() const {
+  return flutter_controller_ ? flutter_controller_->engine()->messenger()
+                             : nullptr;
+}
+
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;

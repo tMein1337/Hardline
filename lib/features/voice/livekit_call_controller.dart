@@ -10,8 +10,10 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:matrix/matrix.dart';
 
+import '../../core/util/display_name.dart';
 import 'audio_devices_provider.dart';
 import 'call_encryption_manager.dart';
+import 'live_participant.dart';
 import 'delayed_leave.dart';
 import 'livekit_token_service.dart';
 import 'focus_policy.dart';
@@ -24,31 +26,33 @@ import 'voice_prefs_state.dart';
 
 enum CallStatus { idle, joining, connected, leaving, failed }
 
-/// One video surface on the call stage.
+/// One screen this client is currently sharing.
 ///
-/// A plain value so the UI can rebuild from a list without reaching into
-/// LiveKit's mutable participant objects — the same discipline the room list
-/// follows, for the same reason.
+/// A record of a publication rather than the publication itself, for the reason
+/// `CallVideoFeed` gives: LiveKit's objects are mutable and comparing them is
+/// meaningless. The two sids are what stopping a share needs, and they are what
+/// distinguishes one share from another now that there can be several.
 @immutable
-class CallVideoTile {
-  const CallVideoTile({
-    required this.key,
-    required this.userId,
-    required this.displayName,
-    required this.track,
-    required this.isScreenShare,
-    required this.isLocal,
+class LocalShare {
+  const LocalShare({
+    required this.sourceId,
+    required this.label,
+    required this.videoSid,
+    required this.audioSid,
   });
 
-  /// Stable across rebuilds so Flutter keeps the render surface alive instead
-  /// of tearing down and recreating the texture on every notify.
-  final String key;
+  /// The capture source the picker returned. Opaque, and the only thing that
+  /// can tell two shares of the same monitor apart before either is published.
+  final String sourceId;
 
-  final String userId;
-  final String displayName;
-  final lk.VideoTrack track;
-  final bool isScreenShare;
-  final bool isLocal;
+  /// The window or monitor title, for the menu that stops one of several.
+  final String label;
+
+  final String videoSid;
+
+  /// The paired loopback capture, when system audio was requested *and* Windows
+  /// produced one. Null is ordinary, not an error.
+  final String? audioSid;
 }
 
 /// Recovers the Matrix user id from a LiveKit participant identity.
@@ -308,6 +312,15 @@ class LiveKitCallController extends ChangeNotifier {
           encryption: keyProvider == null
               ? null
               : lk.E2EEOptions(keyProvider: keyProvider),
+          // Both default to false, and both matter the moment the call grid
+          // draws more than one video. `adaptiveStream` asks the SFU for a
+          // layer matching the size a tile is actually rendered at, instead of
+          // pulling 1080p for a thumbnail; `dynacast` stops *us* encoding
+          // layers nobody has subscribed to. Without them a nine-tile grid
+          // costs nine full-resolution streams for a screenful of postage
+          // stamps.
+          adaptiveStream: true,
+          dynacast: true,
         ),
       );
       _listener = lkRoom.createListener();
@@ -425,7 +438,9 @@ class LiveKitCallController extends ChangeNotifier {
     _roomId = null;
     _micMuted = false;
     _cameraOn = false;
-    _screenSharing = false;
+    // Cleared rather than unpublished: the room is gone by this point, so
+    // there is nothing left to take down — only our record of it.
+    _shares.clear();
     if (!_disposed) notifyListeners();
   }
 
@@ -534,10 +549,14 @@ class LiveKitCallController extends ChangeNotifier {
   }
 
   bool _cameraOn = false;
-  bool _screenSharing = false;
+  final List<LocalShare> _shares = [];
 
   bool get cameraOn => _cameraOn;
-  bool get screenSharing => _screenSharing;
+
+  /// The screens this client is sharing, in the order they were started.
+  List<LocalShare> get shares => List.unmodifiable(_shares);
+
+  bool get screenSharing => _shares.isNotEmpty;
 
   /// Turns the camera on or off.
   ///
@@ -557,28 +576,76 @@ class LiveKitCallController extends ChangeNotifier {
     }
   }
 
-  /// Starts sharing the capture source [sourceId].
+  /// Starts sharing the capture source [sourceId], alongside any already up.
+  ///
+  /// **Deliberately not `setScreenShareEnabled`.** That call resolves to
+  /// `setSourceEnabled(TrackSource.screenShareVideo, …)`, which looks for an
+  /// existing publication of that source first and, if it finds one, unmutes it
+  /// and *discards the new source id without a word*. Sharing a second screen
+  /// through it does not fail — it silently re-shares the first. Publishing the
+  /// track directly is the only way to have more than one.
   ///
   /// [withSystemAudio] becomes `audio: true` in the underlying
   /// `getDisplayMedia` call, which flutter_webrtc turns into a WASAPI loopback
-  /// track on Windows. LiveKit then publishes it as a separate
-  /// `screenShareAudio` track, which is what the second per-user volume slider
-  /// acts on.
+  /// track on Windows. It is published as a separate `screenShareAudio` track,
+  /// which is what the second per-user volume slider acts on. Windows does not
+  /// always produce one — a source with nothing playing yields video alone — so
+  /// its absence is normal rather than a failure.
+  ///
+  /// Media encryption still applies: `E2EEManager` attaches a frame cryptor
+  /// from `LocalTrackPublishedEvent`, which this path fires exactly as the
+  /// convenience method does.
   Future<void> startScreenShare(
     String sourceId, {
     required bool withSystemAudio,
   }) async {
     final participant = _room?.localParticipant;
     if (participant == null) return;
+
+    // Sharing one window twice would publish two identical streams, and give
+    // everybody else two identical tiles.
+    if (_shares.any((share) => share.sourceId == sourceId)) return;
+
     try {
-      await participant.setScreenShareEnabled(
-        true,
-        captureScreenAudio: withSystemAudio,
-        screenShareCaptureOptions: lk.ScreenShareCaptureOptions(
+      final options = lk.ScreenShareCaptureOptions(sourceId: sourceId);
+      final tracks = withSystemAudio
+          ? await lk.LocalVideoTrack.createScreenShareTracksWithAudio(options)
+          : <lk.LocalTrack>[
+              await lk.LocalVideoTrack.createScreenShareTrack(options),
+            ];
+
+      lk.LocalTrackPublication<lk.LocalVideoTrack>? video;
+      lk.LocalTrackPublication<lk.LocalAudioTrack>? audio;
+      var label = '';
+
+      for (final track in tracks) {
+        if (track is lk.LocalVideoTrack) {
+          // The capturer names the source — the window or monitor title — and
+          // that name is the only human-readable handle available. The picker
+          // returns an opaque id and nothing else.
+          label = track.mediaStreamTrack.label ?? '';
+          video = await participant.publishVideoTrack(track);
+        } else if (track is lk.LocalAudioTrack) {
+          audio = await participant.publishAudioTrack(track);
+        }
+      }
+
+      if (video == null) {
+        // No video means there is nothing to share, whatever became of the
+        // audio. Take the orphaned loopback track down with it rather than
+        // leave a screen share that is audio only.
+        if (audio != null) await participant.removePublishedTrack(audio.sid);
+        throw StateError('screen share produced no video track');
+      }
+
+      _shares.add(
+        LocalShare(
           sourceId: sourceId,
+          label: label.isNotEmpty ? label : 'Screen ${_shares.length + 1}',
+          videoSid: video.sid,
+          audioSid: audio?.sid,
         ),
       );
-      _screenSharing = true;
       notifyListeners();
     } catch (error, stack) {
       debugPrint('[voice] screen share failed: $error\n$stack');
@@ -587,51 +654,84 @@ class LiveKitCallController extends ChangeNotifier {
     }
   }
 
-  Future<void> stopScreenShare() async {
+  /// Stops one share, leaving any others running.
+  ///
+  /// Removed from the list before the unpublish rather than after: the far end
+  /// stops seeing the tile the moment the track goes, and a control that waits
+  /// for a round trip before admitting it worked reads as broken.
+  Future<void> stopScreenShare(String videoSid) async {
     final participant = _room?.localParticipant;
     if (participant == null) return;
+
+    final index = _shares.indexWhere((share) => share.videoSid == videoSid);
+    if (index < 0) return;
+    final share = _shares.removeAt(index);
+    notifyListeners();
+
     try {
-      // Also removes the screen-audio track; LiveKit tears down the pair.
-      await participant.setScreenShareEnabled(false);
-      _screenSharing = false;
-      notifyListeners();
+      await participant.removePublishedTrack(share.videoSid);
+      // Taken down separately, because it was published separately — which is
+      // the whole reason more than one share is possible. The convenience
+      // method's paired teardown only applies to the pair it created itself.
+      final audioSid = share.audioSid;
+      if (audioSid != null) await participant.removePublishedTrack(audioSid);
     } catch (error, stack) {
       debugPrint('[voice] stopping screen share failed: $error\n$stack');
     }
   }
 
-  /// Everything currently worth drawing, screen shares first.
+  /// Stops every share at once.
+  Future<void> stopAllScreenShares() async {
+    for (final share in _shares.toList()) {
+      await stopScreenShare(share.videoSid);
+    }
+  }
+
+  /// Everybody in this call, one entry per connected device.
   ///
   /// Recomputed on read rather than cached: it changes only when LiveKit fires
-  /// a track event, and those already trigger a notify, so caching would add a
-  /// second source of truth for no gain.
-  List<CallVideoTile> get videoTiles {
+  /// a track or participant event, and those already trigger a notify, so
+  /// caching would add a second source of truth for no gain. It compares by
+  /// value, so a notify that changed nothing costs a comparison and no repaint.
+  ///
+  /// Remote participants come first in identity order, and we come last.
+  /// Identity order rather than the map's own is what stops tiles reshuffling
+  /// when somebody unrelated reconnects; putting ourselves last stops our own
+  /// tile jumping around as other people come and go.
+  List<LiveParticipant> get participants {
     final room = _room;
     if (room == null) return const [];
 
-    final tiles = <CallVideoTile>[];
+    final matrixRoom = _roomId == null ? null : client.getRoomById(_roomId!);
 
-    void collect(
-      lk.Participant participant,
-      Iterable<lk.TrackPublication> publications, {
-      required bool isLocal,
-    }) {
-      for (final publication in publications) {
+    LiveParticipant describe(lk.Participant participant, {required bool isLocal}) {
+      final userId = matrixUserIdOf(participant.identity);
+      final feeds = <CallVideoFeed>[];
+      var micMuted = true;
+
+      for (final publication in participant.trackPublications.values) {
+        if (publication.kind == lk.TrackType.AUDIO) {
+          // Their own mute, which room state cannot carry but the SFU can. Only
+          // the microphone counts: a muted screen-share audio track says
+          // nothing about whether the person is talking.
+          if (publication.source == lk.TrackSource.microphone) {
+            micMuted = publication.muted;
+          }
+          continue;
+        }
         if (publication.kind != lk.TrackType.VIDEO) continue;
+
         final track = publication.track;
+        // Null until subscribed. Drawing a publication we have no track for
+        // would be an empty rectangle claiming to be somebody's camera.
         if (track is! lk.VideoTrack) continue;
         // A muted camera still has a publication; drawing it would show a
         // frozen last frame rather than nothing.
         if (publication.muted) continue;
 
-        final userId = matrixUserIdOf(participant.identity);
-        tiles.add(
-          CallVideoTile(
+        feeds.add(
+          CallVideoFeed(
             key: '${participant.identity}|${publication.sid}',
-            userId: userId,
-            displayName: participant.name.isNotEmpty
-                ? participant.name
-                : userId,
             track: track,
             isScreenShare:
                 publication.source == lk.TrackSource.screenShareVideo,
@@ -639,22 +739,69 @@ class LiveKitCallController extends ChangeNotifier {
           ),
         );
       }
+
+      // `participant.name` arrives inside the SFU token, which means it is
+      // supplied by the far end. Everything read out of the SDK goes through
+      // `displaySafeName` at the ingestion point; this is an ingestion point,
+      // and it was missing one — a name carrying a bidi override could
+      // otherwise redraw itself as somebody else's on a video tile.
+      final claimed = displaySafeName(participant.name, fallback: userId);
+
+      return LiveParticipant(
+        userId: userId,
+        identity: participant.identity,
+        deviceId: matrixDeviceIdOf(participant.identity),
+        displayName: claimed,
+        // From the Matrix room member, not from LiveKit, which has no notion
+        // of an avatar. Absent for somebody the room has never loaded, which
+        // the avatar widget renders as initials.
+        avatarMxc: matrixRoom
+            ?.unsafeGetUserFromMemoryOrFallback(userId)
+            .avatarUrl
+            ?.toString(),
+        isLocal: isLocal,
+        micMuted: micMuted,
+        feeds: feeds,
+      );
+    }
+
+    final remotes = room.remoteParticipants.values.toList()
+      ..sort((a, b) => a.identity.compareTo(b.identity));
+
+    return [
+      for (final participant in remotes) describe(participant, isLocal: false),
+      if (room.localParticipant != null)
+        describe(room.localParticipant!, isLocal: true),
+    ];
+  }
+
+  /// Whether [userId] is sharing a screen in the call we are connected to.
+  ///
+  /// Screen sharing is a LiveKit track publication, not part of the MatrixRTC
+  /// membership event, so this is only answerable from inside the call. That is
+  /// why `VoiceParticipant` — which describes calls we have *not* joined —
+  /// cannot carry it, and why the sidebar badge has to ask here instead.
+  ///
+  /// Walks the publications directly rather than going through [participants]:
+  /// every row in the sidebar asks this on every LiveKit event, and building a
+  /// dozen participant lists to answer a dozen booleans is a lot of work to
+  /// throw away.
+  bool isScreenSharing(String userId) {
+    final room = _room;
+    if (room == null) return false;
+
+    bool sharing(lk.Participant participant) {
+      if (matrixUserIdOf(participant.identity) != userId) return false;
+      return participant.trackPublications.values.any(
+        (publication) =>
+            publication.source == lk.TrackSource.screenShareVideo &&
+            !publication.muted,
+      );
     }
 
     final local = room.localParticipant;
-    if (local != null) {
-      collect(local, local.trackPublications.values, isLocal: true);
-    }
-    for (final participant in room.remoteParticipants.values) {
-      collect(participant, participant.trackPublications.values, isLocal: false);
-    }
-
-    // Shared screens are what people are looking at; faces are secondary.
-    tiles.sort((a, b) {
-      if (a.isScreenShare == b.isScreenShare) return 0;
-      return a.isScreenShare ? -1 : 1;
-    });
-    return tiles;
+    if (local != null && sharing(local)) return true;
+    return room.remoteParticipants.values.any(sharing);
   }
 
   /// Whether [userId] is currently sharing screen audio.
@@ -944,7 +1091,18 @@ class LiveKitCallController extends ChangeNotifier {
         _safeNotify();
       })
       ..on<lk.TrackMutedEvent>((_) => _safeNotify())
-      ..on<lk.TrackUnmutedEvent>((_) => _safeNotify());
+      ..on<lk.TrackUnmutedEvent>((_) => _safeNotify())
+      // Our own publications. The camera and microphone toggles notify by hand
+      // because they know when they succeeded, but screen shares are published
+      // directly through `publishVideoTrack` and can also end from outside the
+      // app entirely — Windows' own "stop sharing" banner unpublishes the
+      // track without telling us. Without these two the grid would keep
+      // drawing a share that has already stopped.
+      ..on<lk.LocalTrackPublishedEvent>((_) => _safeNotify())
+      ..on<lk.LocalTrackUnpublishedEvent>((event) {
+        _shares.removeWhere((share) => share.videoSid == event.publication.sid);
+        _safeNotify();
+      });
 
     // `ActiveSpeakersChangedEvent` is deliberately not listened to at all.
     // It is the SFU's opinion, decided against a threshold no client can
