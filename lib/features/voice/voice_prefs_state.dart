@@ -27,10 +27,7 @@ class AudioDeviceRef {
     final id = json['id'];
     final label = json['label'];
     if (id is! String || id.isEmpty) return null;
-    return AudioDeviceRef(
-      deviceId: id,
-      label: label is String ? label : '',
-    );
+    return AudioDeviceRef(deviceId: id, label: label is String ? label : '');
   }
 
   @override
@@ -169,10 +166,12 @@ class VoiceUserPrefs {
           mapEquals(devices, other.devices);
 
   @override
-  int get hashCode =>
-      Object.hash(locallyMuted, Object.hashAllUnordered(devices.entries.map(
-        (e) => Object.hash(e.key, e.value),
-      )));
+  int get hashCode => Object.hash(
+    locallyMuted,
+    Object.hashAllUnordered(
+      devices.entries.map((e) => Object.hash(e.key, e.value)),
+    ),
+  );
 }
 
 /// The quietest threshold the slider offers, in dB.
@@ -220,6 +219,7 @@ class VoicePrefsState {
     this.selfMuted = false,
     this.deafened = false,
     this.shareSystemAudio = false,
+    this.verboseCallLog = false,
     this.micThresholdDb = kDefaultThresholdDb,
     this.micGainDb = 0,
     this.noiseGate = false,
@@ -240,6 +240,15 @@ class VoicePrefsState {
   /// other participants' voices back to them, and that is a nasty surprise to
   /// spring on someone mid-call — better a choice made once, deliberately.
   final bool shareSystemAudio;
+
+  /// Pipe livekit_client's own log to the console.
+  ///
+  /// Off, because it is several lines per second during a call. On, because a
+  /// call that will not connect is close to undiagnosable without it: the
+  /// exception says the media never came up, and only the log says which
+  /// candidates were offered and whether any pair ever connected. See
+  /// `call_logging.dart`.
+  final bool verboseCallLog;
 
   /// The microphone level, in dB, at which you count as speaking.
   ///
@@ -294,6 +303,7 @@ class VoicePrefsState {
     bool? selfMuted,
     bool? deafened,
     bool? shareSystemAudio,
+    bool? verboseCallLog,
     double? micThresholdDb,
     double? micGainDb,
     bool? noiseGate,
@@ -304,6 +314,7 @@ class VoicePrefsState {
     selfMuted: selfMuted ?? this.selfMuted,
     deafened: deafened ?? this.deafened,
     shareSystemAudio: shareSystemAudio ?? this.shareSystemAudio,
+    verboseCallLog: verboseCallLog ?? this.verboseCallLog,
     micThresholdDb: micThresholdDb ?? this.micThresholdDb,
     micGainDb: micGainDb ?? this.micGainDb,
     noiseGate: noiseGate ?? this.noiseGate,
@@ -317,6 +328,7 @@ class VoicePrefsState {
     'selfMuted': selfMuted,
     'deafened': deafened,
     'shareSystemAudio': shareSystemAudio,
+    'verboseCallLog': verboseCallLog,
     'micThresholdDb': micThresholdDb,
     'micGainDb': micGainDb,
     'noiseGate': noiseGate,
@@ -335,6 +347,7 @@ class VoicePrefsState {
       selfMuted: json['selfMuted'] == true,
       deafened: json['deafened'] == true,
       shareSystemAudio: json['shareSystemAudio'] == true,
+      verboseCallLog: json['verboseCallLog'] == true,
       // A stored threshold outside the slider's range would be a gate nobody
       // could reopen from the settings screen.
       micThresholdDb: switch (json['micThresholdDb']) {
@@ -368,6 +381,7 @@ class VoicePrefsState {
           selfMuted == other.selfMuted &&
           deafened == other.deafened &&
           shareSystemAudio == other.shareSystemAudio &&
+          verboseCallLog == other.verboseCallLog &&
           micThresholdDb == other.micThresholdDb &&
           micGainDb == other.micGainDb &&
           noiseGate == other.noiseGate &&
@@ -380,6 +394,7 @@ class VoicePrefsState {
     selfMuted,
     deafened,
     shareSystemAudio,
+    verboseCallLog,
     micThresholdDb,
     micGainDb,
     noiseGate,

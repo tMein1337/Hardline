@@ -34,14 +34,6 @@ final overlayControllerProvider = Provider<OverlayController>((ref) {
     },
   );
 
-  // The toggle chord flips a stored preference rather than a field on the
-  // controller, so that turning the overlay on from a game and turning it on
-  // from settings are the same act and survive a restart the same way.
-  controller.onToggleRequested = () {
-    final notifier = ref.read(overlayPrefsProvider.notifier);
-    notifier.setEnabled(!ref.read(overlayPrefsProvider).enabled);
-  };
-
   ref.onDispose(() => unawaited(controller.dispose()));
   return controller;
 });

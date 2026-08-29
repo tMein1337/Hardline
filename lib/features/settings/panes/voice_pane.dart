@@ -215,6 +215,35 @@ class VoicePane extends ConsumerWidget {
                 .setShareSystemAudio(value),
           ),
         ),
+
+        const SizedBox(height: 24),
+        const SettingsLabel('Diagnostics'),
+        SettingsCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: SwitchListTile(
+            value: prefs.verboseCallLog,
+            activeThumbColor: context.colors.accent,
+            onChanged: (value) =>
+                ref.read(voicePrefsProvider.notifier).setVerboseCallLog(value),
+            title: Text(
+              'Log call connection details',
+              style: context.text.subtitle.copyWith(
+                color: context.colors.textPrimary,
+              ),
+            ),
+            // On the page rather than behind a hover, because somebody reads
+            // this while a call is already refusing to connect — which is
+            // exactly when a control whose meaning is hidden is no use.
+            subtitle: Text(
+              'Prints what the call server offers and whether the media '
+              'connection is ever made. Off by default: it is several lines a '
+              'second during a call. Turn it on when a call will not connect — '
+              'the error alone cannot say whether the problem is the server, '
+              'the network between you, or a firewall.',
+              style: context.text.timestamp,
+            ),
+          ),
+        ),
       ],
     );
   }

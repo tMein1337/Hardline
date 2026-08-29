@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hardline/features/voice/audio_devices_provider.dart';
 import 'package:hardline/features/voice/voice_prefs_state.dart';
@@ -136,6 +138,32 @@ void main() {
     test('unknown users fall back to defaults without null checks', () {
       const state = VoicePrefsState();
       expect(state.forUser('@nobody:example.org'), const VoiceUserPrefs());
+    });
+  });
+
+  group('the diagnostic log switch', () {
+    test('round-trips and defaults to off', () {
+      expect(const VoicePrefsState().verboseCallLog, isFalse);
+
+      final on = const VoicePrefsState().copyWith(verboseCallLog: true);
+      expect(
+        VoicePrefsState.fromJson(
+          jsonDecode(jsonEncode(on.toJson())) as Map<String, Object?>,
+        ).verboseCallLog,
+        isTrue,
+      );
+    });
+
+    // A diagnostic that a corrupt blob could switch *on* would be a preference
+    // nobody chose, printing several lines a second forever.
+    test('anything unreadable leaves it off', () {
+      expect(
+        VoicePrefsState.fromJson(const {
+          'verboseCallLog': 'yes',
+        }).verboseCallLog,
+        isFalse,
+      );
+      expect(VoicePrefsState.fromJson(const {}).verboseCallLog, isFalse);
     });
   });
 

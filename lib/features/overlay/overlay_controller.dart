@@ -70,6 +70,17 @@ class OverlayController {
   bool _editing = false;
   bool _shown = false;
 
+  /// Pushed out of the way by the toggle chord, without switching the feature
+  /// off.
+  ///
+  /// Runtime rather than stored, and deliberately not the same thing as
+  /// `OverlayPrefsState.enabled`. If the chord flipped the *preference* it
+  /// would unbind itself on the way down — the chord is only registered while
+  /// the overlay is enabled — leaving a shortcut that can turn the HUD off and
+  /// never back on. Sticky for the session, like the call/timeline toggle:
+  /// somebody who wanted it out of the way probably still does next call.
+  bool _hidden = false;
+
   /// The last snapshot actually sent, so an unchanged one is not re-sent.
   OverlaySnapshot? _lastSnapshot;
   OverlaySpeaking? _lastSpeaking;
@@ -116,16 +127,12 @@ class OverlayController {
     final previous = _prefs;
     _prefs = prefs;
 
-    if (previous.toggleHotkey != prefs.toggleHotkey || !_hotkeysBound) {
-      await channel.registerHotkey(
-        OverlayHotkeyId.toggle,
-        prefs.toggleHotkey,
-      );
-    }
-    if (previous.editHotkey != prefs.editHotkey || !_hotkeysBound) {
-      await channel.registerHotkey(OverlayHotkeyId.edit, prefs.editHotkey);
-    }
-    _hotkeysBound = true;
+    // Switching the feature on always shows it. Otherwise a HUD hidden by the
+    // chord three days ago would refuse to appear, from a setting that says it
+    // is on, with nothing on screen to explain why.
+    if (!previous.enabled && prefs.enabled) _hidden = false;
+
+    await _applyHotkeys(previous, prefs);
 
     if (previous.monitorId != prefs.monitorId && _shown) {
       await channel.setMonitor(prefs.monitorId);
@@ -141,6 +148,34 @@ class OverlayController {
   }
 
   bool _hotkeysBound = false;
+
+  /// Binds the global chords, but **only while the overlay is switched on**.
+  ///
+  /// A registered hotkey is taken from every other program on the machine for
+  /// as long as it is held. Holding two of them at all times for a feature
+  /// somebody has turned off is not ours to do — it was, until this was
+  /// noticed, and Alt+Shift+O stopped working everywhere else on the system.
+  Future<void> _applyHotkeys(
+    OverlayPrefsState previous,
+    OverlayPrefsState prefs,
+  ) async {
+    if (!prefs.enabled) {
+      if (_hotkeysBound) {
+        await channel.unregisterHotkey(OverlayHotkeyId.toggle);
+        await channel.unregisterHotkey(OverlayHotkeyId.edit);
+        _hotkeysBound = false;
+      }
+      return;
+    }
+
+    if (!_hotkeysBound || previous.toggleHotkey != prefs.toggleHotkey) {
+      await channel.registerHotkey(OverlayHotkeyId.toggle, prefs.toggleHotkey);
+    }
+    if (!_hotkeysBound || previous.editHotkey != prefs.editHotkey) {
+      await channel.registerHotkey(OverlayHotkeyId.edit, prefs.editHotkey);
+    }
+    _hotkeysBound = true;
+  }
 
   void setPalette(OverlayPalette palette) {
     if (_palette == palette) return;
@@ -220,20 +255,17 @@ class OverlayController {
   void _onHotkey(int id) {
     switch (id) {
       case OverlayHotkeyId.toggle:
-        _onToggleRequested?.call();
+        _hidden = !_hidden;
+        // Coming back into view should not come back mid-edit.
+        if (_hidden) _editing = false;
+        unawaited(_reconcile());
       case OverlayHotkeyId.edit:
         _editing = !_editing;
+        // Editing something that is hidden is not a state worth having.
+        if (_editing) _hidden = false;
         unawaited(_reconcile());
     }
   }
-
-  /// Called when the toggle chord fires.
-  ///
-  /// A callback rather than flipping a field, because "the overlay is on" is a
-  /// stored preference and this class does not own storage.
-  void Function()? _onToggleRequested;
-  set onToggleRequested(void Function() handler) =>
-      _onToggleRequested = handler;
 
   void _onOverlayEvent(String payload) {
     final message = decodeOverlayMessage(payload);
@@ -283,7 +315,7 @@ class OverlayController {
 
     // Edit mode is allowed outside a call, so the HUD can be arranged without
     // asking somebody else to join one and talk.
-    final wanted = _prefs.enabled && (_inCall || _editing);
+    final wanted = _prefs.enabled && !_hidden && (_inCall || _editing);
 
     if (!wanted) {
       if (_shown) {

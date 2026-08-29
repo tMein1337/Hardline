@@ -22,6 +22,10 @@ dependencies:
   # and it is what Element Call connects to). livekit_client sits on top of the
   # same flutter_webrtc version, so the two do not fight over native bits.
   livekit_client: ^2.10.0
+  # Already resolved transitively via livekit_client, but listed explicitly
+  # because `call_logging.dart` attaches a listener to its root logger — the
+  # only way to see what livekit says about a connection that will not come up.
+  logging: ^1.3.0
   matrix: ^9.0.0
   # Already resolved transitively via matrix, but listed explicitly because the
   # attachment tray sniffs a dropped file's type before the SDK ever sees it —

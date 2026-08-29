@@ -11,7 +11,7 @@ whenever `pubspec.lock` changes, and verify it with
 `--check` before tagging a release.
 
 - Packages listed: 161
-- Declared directly by this project: 22
+- Declared directly by this project: 23
 
 ## Platform and native components
 
@@ -4305,7 +4305,7 @@ SOFTWARE.
 ### logging 1.3.0
 
 - Source: hosted
-- Dependency: transitive
+- Dependency: direct main
 - https://pub.dev/packages/logging
 
 ```text

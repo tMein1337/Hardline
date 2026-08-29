@@ -13,10 +13,12 @@ import 'package:matrix/matrix.dart';
 import '../../core/util/display_name.dart';
 import 'audio_devices_provider.dart';
 import 'call_encryption_manager.dart';
+import 'call_logging.dart';
 import 'live_participant.dart';
 import 'delayed_leave.dart';
 import 'livekit_token_service.dart';
 import 'focus_policy.dart';
+import 'join_failure.dart';
 import 'audio_level_sampler.dart';
 import 'matrix_rtc_membership.dart';
 import 'noise_gate.dart';
@@ -92,6 +94,28 @@ String matrixDeviceIdOf(String identity) {
 /// deadline means a missed refresh — a suspended laptop, a flaky network — has
 /// a second chance before other clients drop us from their participant lists.
 const _membershipRefreshLead = Duration(minutes: 30);
+
+/// How long ICE is given to find a working path before the join is abandoned.
+///
+/// livekit's own default is **10 seconds**, and that is too tight to survive an
+/// SFU advertising an ICE server that no longer exists — which is not a rare
+/// misconfiguration, and is exactly what a server on a rotating residential IP
+/// produces after every rotation.
+///
+/// A dead STUN/TURN address does not refuse, it drops. The RFC 5389
+/// retransmission schedule then spends around 39 seconds giving up on it, and
+/// candidate gathering is still dragging that behind it when a 10 second budget
+/// expires — so a call that would have connected over a perfectly good direct
+/// path is reported as "no media connection" instead. Browsers do not do this;
+/// they sit on "connecting" and let ICE finish, which is why the same call can
+/// work in a browser-based client and fail here.
+///
+/// 30 seconds is chosen to clear that retransmission window with room to spare.
+/// It costs nothing when the path is good — ICE connects in well under a second
+/// on a healthy network — and it is only ever paid by a call that was going to
+/// fail anyway. The footer says "Connecting…" throughout, and hanging up is
+/// always available.
+const _iceConnectionTimeout = Duration(seconds: 30);
 
 /// Owns the one call this client is in.
 ///
@@ -216,6 +240,13 @@ class LiveKitCallController extends ChangeNotifier {
   CallStatus _status = CallStatus.idle;
   String? _roomId;
   String? _error;
+
+  /// The sentence behind [_error], for a tooltip.
+  ///
+  /// Separate because the call bar is one clipped line in a narrow sidebar: a
+  /// message long enough to say which of the four systems in a join gave up
+  /// would be ellipsised into uselessness there.
+  String? _errorDetail;
   bool _micMuted = false;
   bool _deafened = false;
 
@@ -230,6 +261,7 @@ class LiveKitCallController extends ChangeNotifier {
   CallStatus get status => _status;
   String? get roomId => _roomId;
   String? get error => _error;
+  String? get errorDetail => _errorDetail;
   bool get micMuted => _micMuted;
   bool get deafened => _deafened;
   bool get isInCall => _status == CallStatus.connected;
@@ -267,7 +299,14 @@ class LiveKitCallController extends ChangeNotifier {
     _status = CallStatus.joining;
     _roomId = matrixRoomId;
     _error = null;
+    _errorDetail = null;
     notifyListeners();
+
+    // Declared out here so the catch can still reach it. `_room` is only
+    // assigned once `connect` has returned, which is exactly the case a failed
+    // connection is not — and the peer connections carrying the answer are
+    // destroyed by the teardown a moment later.
+    lk.Room? attempted;
 
     try {
       await room.postLoad();
@@ -285,9 +324,7 @@ class LiveKitCallController extends ChangeNotifier {
       // harder to diagnose than a clean failure.
       final focus = _resolveFocus(room);
       if (focus == null) {
-        throw _VoiceUserError(
-          'No call server is configured for this room.',
-        );
+        throw _VoiceUserError('No call server is configured for this room.');
       }
 
       final credentials = await tokenService.fetch(
@@ -307,7 +344,7 @@ class LiveKitCallController extends ChangeNotifier {
         keyProvider = await createMatrixRtcKeyProvider();
       }
 
-      final lkRoom = lk.Room(
+      final lkRoom = attempted = lk.Room(
         roomOptions: lk.RoomOptions(
           encryption: keyProvider == null
               ? null
@@ -326,7 +363,22 @@ class LiveKitCallController extends ChangeNotifier {
       _listener = lkRoom.createListener();
       _attachListeners();
 
-      await lkRoom.connect(credentials.url, credentials.token);
+      await lkRoom.connect(
+        credentials.url,
+        credentials.token,
+        connectOptions: const lk.ConnectOptions(
+          timeouts: lk.Timeouts(
+            connection: _iceConnectionTimeout,
+            // Everything else stays at livekit's defaults; only the ICE budget
+            // was too small to absorb a dead ICE server.
+            debounce: Duration(milliseconds: 20),
+            publish: Duration(seconds: 10),
+            subscribe: Duration(seconds: 10),
+            peerConnection: Duration(seconds: 10),
+            iceRestart: Duration(seconds: 10),
+          ),
+        ),
+      );
       _room = lkRoom;
 
       if (keyProvider != null) {
@@ -416,11 +468,23 @@ class LiveKitCallController extends ChangeNotifier {
       notifyListeners();
     } catch (error, stack) {
       debugPrint('[voice] joining $matrixRoomId failed: $error\n$stack');
+      // Unconditional, unlike the rest of the call logging. A failed join is
+      // already an event worth a dozen lines, this is the only place they can
+      // be gathered — the peer connections do not survive the teardown below —
+      // and gating them behind a setting means they are never there the one
+      // time somebody needs them. The verbose switch drowns them in signalling
+      // traffic rather than adding to them.
+      await logIceCandidates(attempted);
       await _teardown(matrixRoomId);
       _status = CallStatus.failed;
-      _error = error is _VoiceUserError
-          ? error.message
-          : 'Could not join the call.';
+      // Which of the four systems in a join gave up is the only useful thing
+      // to know when one does, and reporting all of them as "could not join"
+      // throws exactly that away — see `join_failure.dart`.
+      final failure = error is _VoiceUserError
+          ? JoinFailure(error.message, error.message)
+          : describeJoinFailure(error);
+      _error = failure.message;
+      _errorDetail = failure.detail;
       notifyListeners();
     }
   }
@@ -473,7 +537,9 @@ class LiveKitCallController extends ChangeNotifier {
       try {
         await delayedLeave.disarm();
       } catch (error, stack) {
-        debugPrint('[voice] disarming the delayed leave failed: $error\n$stack');
+        debugPrint(
+          '[voice] disarming the delayed leave failed: $error\n$stack',
+        );
       }
     }
 
@@ -572,6 +638,7 @@ class LiveKitCallController extends ChangeNotifier {
     } catch (error, stack) {
       debugPrint('[voice] camera toggle failed: $error\n$stack');
       _error = 'Could not switch the camera on.';
+      _errorDetail = null;
       notifyListeners();
     }
   }
@@ -650,6 +717,7 @@ class LiveKitCallController extends ChangeNotifier {
     } catch (error, stack) {
       debugPrint('[voice] screen share failed: $error\n$stack');
       _error = 'Could not start sharing.';
+      _errorDetail = null;
       notifyListeners();
     }
   }
@@ -704,7 +772,10 @@ class LiveKitCallController extends ChangeNotifier {
 
     final matrixRoom = _roomId == null ? null : client.getRoomById(_roomId!);
 
-    LiveParticipant describe(lk.Participant participant, {required bool isLocal}) {
+    LiveParticipant describe(
+      lk.Participant participant, {
+      required bool isLocal,
+    }) {
       final userId = matrixUserIdOf(participant.identity);
       final feeds = <CallVideoFeed>[];
       var micMuted = true;
@@ -1324,9 +1395,7 @@ class LiveKitCallController extends ChangeNotifier {
       // the platform knows about the chosen source shows up there.
       final track = publication.track;
       if (track != null) {
-        debugPrint(
-          '    settings: ${track.mediaStreamTrack.getSettings()}',
-        );
+        debugPrint('    settings: ${track.mediaStreamTrack.getSettings()}');
       }
     }
 

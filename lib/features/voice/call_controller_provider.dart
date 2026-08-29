@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/injected_providers.dart';
+import 'call_logging.dart';
 import 'livekit_call_controller.dart';
 import 'livekit_token_service.dart';
 import 'noise_gate.dart';
@@ -47,10 +48,19 @@ final callControllerProvider = Provider<LiveKitCallController>((ref) {
   controller.onSelfMuteChanged = (muted) => prefs.setSelfMuted(muted);
   controller.onDeafenChanged = (deafened) => prefs.setDeafened(deafened);
 
+  // Applied from here rather than from the settings pane, so it is in force
+  // from launch instead of from whenever somebody last opened that screen —
+  // which for a diagnostic is the wrong way round, since the launch is often
+  // the part worth seeing.
+  setVerboseCallLogging(ref.read(voicePrefsProvider).verboseCallLog);
+
   // A slider drag has to be audible immediately, so any preference change
   // re-applies to the live tracks. `listen`, not `watch`: watching would
   // rebuild the controller and drop the call on every volume tweak.
-  ref.listen(voicePrefsProvider, (_, _) => controller.onPrefsChanged());
+  ref.listen(voicePrefsProvider, (_, next) {
+    controller.onPrefsChanged();
+    setVerboseCallLogging(next.verboseCallLog);
+  });
 
   // Leave the call before the window closes.
   //

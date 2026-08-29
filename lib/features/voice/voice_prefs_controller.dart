@@ -61,6 +61,9 @@ class VoicePrefsController extends Notifier<VoicePrefsState> {
   Future<void> setShareSystemAudio(bool share) =>
       _persist(state.copyWith(shareSystemAudio: share));
 
+  Future<void> setVerboseCallLog(bool verbose) =>
+      _persist(state.copyWith(verboseCallLog: verbose));
+
   /// Where the microphone stops being background noise.
   ///
   /// Written on every change rather than deferred to `onChangeEnd` like the

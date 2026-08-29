@@ -110,12 +110,30 @@ class OverlayPane extends ConsumerWidget {
 
         const SizedBox(height: 24),
         const SettingsLabel('Shortcuts'),
+        // Said out loud because the alternative is somebody wondering why
+        // their chord does nothing: a global shortcut is taken from every
+        // other program on the machine while it is held, so these are only
+        // bound while the overlay is switched on.
+        SettingsCard(
+          child: Text(
+            prefs.enabled
+                ? 'These are held system-wide while the overlay is switched '
+                      'on, and released when it is off.'
+                : 'These are not bound while the overlay is switched off, so '
+                      'they stay available to everything else on the machine.',
+            style: context.text.subtitle,
+          ),
+        ),
+        const SizedBox(height: 8),
         SettingsCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _HotkeyRow(
-                label: 'Turn the overlay on and off',
+                label: 'Hide and show the overlay',
+                hint:
+                    'Pushes the HUD out of the way without switching the '
+                    'feature off, so the same chord brings it back.',
                 hotkey: prefs.toggleHotkey,
                 onChanged: notifier.setToggleHotkey,
               ),

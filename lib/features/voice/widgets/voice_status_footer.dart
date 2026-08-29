@@ -63,14 +63,21 @@ class VoiceStatusFooter extends ConsumerWidget {
                   ),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(
-                      label,
-                      style: context.text.subtitle.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w600,
+                    // The detail hangs off a tooltip rather than the line
+                    // itself: this row is one clipped line in a narrow
+                    // sidebar, and a sentence long enough to say which half of
+                    // the stack gave up would be ellipsised to nothing.
+                    child: Tooltip(
+                      message: controller.errorDetail ?? label,
+                      child: Text(
+                        label,
+                        style: context.text.subtitle.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
