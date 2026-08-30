@@ -242,8 +242,43 @@ if (-not $SkipInstaller) {
     # ArchitecturesAllowed=x64compatible in hardline.iss needs 6.3 or newer.
     # An older ISCC fails with a message about an unrecognised value, which
     # reads like a mistake in the script rather than an out-of-date toolchain.
+    #
+    # The version cannot be read off ISCC.exe. It ships with no version
+    # resource at all -- 6.7.3 reports 0.0.0.0 for ProductVersion, FileVersion
+    # and both Raw variants -- so a numeric comparison against it parses 0.0
+    # and aborts the release claiming the toolchain is too old on an install
+    # that is current. The uninstall entry Inno Setup writes for itself does
+    # carry the real version, so that is the fallback.
+    #
+    # Unresolvable is not the same as too old. When neither source answers,
+    # warn and continue: ISCC's own error is then what surfaces, which is the
+    # situation this guard exists to make legible. It was never the thing
+    # keeping a bad build from shipping.
     $isccVersion = (Get-Item $iscc).VersionInfo.ProductVersion
-    if ($isccVersion -match '^(\d+)\.(\d+)') {
+    if ([string]::IsNullOrWhiteSpace($isccVersion) -or $isccVersion -eq '0.0.0.0') {
+        $isccVersion = $null
+        $uninstallKeys = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+        )
+        foreach ($key in $uninstallKeys) {
+            if (-not (Test-Path $key)) { continue }
+            try {
+                $found = Get-ChildItem $key | ForEach-Object {
+                    $entry = Get-ItemProperty $_.PSPath
+                    if ($entry.DisplayName -like 'Inno Setup*') { $entry.DisplayVersion }
+                } | Where-Object { $_ } | Select-Object -First 1
+            } catch {
+                $found = $null
+            }
+            if ($found) { $isccVersion = $found; break }
+        }
+    }
+
+    if (-not $isccVersion) {
+        Write-Warning ('Could not determine the Inno Setup version. If the build fails on ' +
+                       'ArchitecturesAllowed, the installed Inno Setup is older than 6.3.')
+    } elseif ($isccVersion -match '^(\d+)\.(\d+)') {
         $major = [int]$Matches[1]
         $minor = [int]$Matches[2]
         if ($major -lt 6 -or ($major -eq 6 -and $minor -lt 3)) {
