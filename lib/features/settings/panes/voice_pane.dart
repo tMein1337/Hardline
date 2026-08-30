@@ -5,11 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
+import '../../hotkeys/call_hotkey_binder.dart';
+import '../../hotkeys/call_hotkey_provider.dart';
+import '../../hotkeys/call_hotkeys_controller.dart';
+import '../../hotkeys/call_hotkeys_state.dart';
+import '../../hotkeys/hotkey.dart';
+import '../../hotkeys/hotkey_action.dart';
 import '../../voice/audio_devices_provider.dart';
 import '../../voice/call_controller_provider.dart';
 import '../../voice/voice_prefs_controller.dart';
 import '../../voice/voice_prefs_state.dart';
 import '../../voice/widgets/mic_level_meter.dart';
+import '../widgets/hotkey_row.dart';
 import '../widgets/settings_layout.dart';
 
 /// Voice & video settings: which microphone to capture and where to play.
@@ -77,7 +84,9 @@ class VoicePane extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Text(
                   'Changing the microphone during a call reopens it, so others '
-                  'may miss a moment. Changing the output is silent.',
+                  'may miss a moment. Changing the output is silent. On the '
+                  'system default, Windows may move you to a different device '
+                  'mid-call without saying so — naming one here avoids that.',
                   style: context.text.timestamp,
                 ),
               ],
@@ -93,13 +102,13 @@ class VoicePane extends ConsumerWidget {
               MicLevelMeter(thresholdDb: prefs.micThresholdDb),
               const SizedBox(height: 12),
               SettingsHint(
+                // One sentence. This was six lines, which is longer than
+                // anybody reads from a tooltip that appeared under their
+                // pointer — the rest of it is on the page below, where it can
+                // be read at leisure instead of raced.
                 message:
-                    'Moves the reading, not your voice — nobody hears you any '
-                    'louder, and this cannot make you louder to them. A quiet '
-                    'microphone can measure far below where the breakpoint '
-                    'can be placed, so raise this until talking fills about '
-                    'two thirds of the bar, then set the breakpoint '
-                    'underneath it.',
+                    'Moves the reading, not your voice: raise it until talking '
+                    'fills about two thirds of the bar.',
                 child: Row(
                   children: [
                     SizedBox(
@@ -128,6 +137,15 @@ class VoicePane extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Gain moves the measurement only — nobody hears you any '
+                'louder, and it cannot make you louder to them. A quiet '
+                'microphone can read far below where the breakpoint is '
+                'allowed to go, which is what this is for: bring the reading '
+                'up first, then set the breakpoint underneath your voice.',
+                style: context.text.timestamp,
               ),
               const SizedBox(height: 12),
               SettingsHint(
@@ -170,24 +188,19 @@ class VoicePane extends ConsumerWidget {
                 ),
               ),
               const SettingsDivider(),
-              SwitchListTile(
+              SettingsSwitchTile(
                 contentPadding: EdgeInsets.zero,
                 value: prefs.noiseGate,
-                title: Text(
-                  'Stop sending audio below the breakpoint',
-                  style: context.text.messageBody,
-                ),
+                title: 'Stop sending audio below the breakpoint',
                 // Kept on the page rather than moved to a hover. Everything
                 // else here explains a control; this one says what happens if
                 // you get it wrong, and being inaudible is the one failure you
                 // cannot notice from this end.
-                subtitle: Text(
-                  'Keyboard noise, a fan and breathing never reach the call. '
-                  'Set the breakpoint too high and people stop hearing you — '
-                  'which is not something you can notice from this end, so '
-                  'watch the meter while you talk before turning it on.',
-                  style: context.text.timestamp,
-                ),
+                subtitle:
+                    'Keyboard noise, a fan and breathing never reach the call. '
+                    'Set the breakpoint too high and people stop hearing you — '
+                    'which is not something you can notice from this end, so '
+                    'watch the meter while you talk before turning it on.',
                 onChanged: (value) =>
                     ref.read(voicePrefsProvider.notifier).setNoiseGate(value),
               ),
@@ -198,18 +211,12 @@ class VoicePane extends ConsumerWidget {
         const SettingsLabel('Screen sharing'),
         SettingsCard(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: SwitchListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+          child: SettingsSwitchTile(
             value: prefs.shareSystemAudio,
-            title: Text(
-              'Share system audio when sharing a screen',
-              style: context.text.messageBody,
-            ),
-            subtitle: Text(
-              'Sends the audio of what you share. On speakers this can echo '
-              'the others back to them — headphones avoid that.',
-              style: context.text.timestamp,
-            ),
+            title: 'Share system audio when sharing a screen',
+            subtitle:
+                'Sends the audio of what you share. On speakers this can echo '
+                'the others back to them — headphones avoid that.',
             onChanged: (value) => ref
                 .read(voicePrefsProvider.notifier)
                 .setShareSystemAudio(value),
@@ -217,31 +224,45 @@ class VoicePane extends ConsumerWidget {
         ),
 
         const SizedBox(height: 24),
+        const SettingsLabel('Joining'),
+        SettingsCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: SettingsSwitchTile(
+            value: prefs.doubleClickToJoin,
+            title: 'Double-click a channel to join its call',
+            subtitle:
+                'Only when a call is already running there. Off by default '
+                'because binding a double-click makes every single click on a '
+                'channel wait to see whether a second one is coming, which '
+                'makes switching rooms feel slow.',
+            onChanged: (value) => ref
+                .read(voicePrefsProvider.notifier)
+                .setDoubleClickToJoin(value),
+          ),
+        ),
+
+        const SizedBox(height: 24),
+        const SettingsLabel('Shortcuts'),
+        const _CallHotkeys(),
+
+        const SizedBox(height: 24),
         const SettingsLabel('Diagnostics'),
         SettingsCard(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: SwitchListTile(
+          child: SettingsSwitchTile(
             value: prefs.verboseCallLog,
-            activeThumbColor: context.colors.accent,
             onChanged: (value) =>
                 ref.read(voicePrefsProvider.notifier).setVerboseCallLog(value),
-            title: Text(
-              'Log call connection details',
-              style: context.text.subtitle.copyWith(
-                color: context.colors.textPrimary,
-              ),
-            ),
+            title: 'Log call connection details',
             // On the page rather than behind a hover, because somebody reads
             // this while a call is already refusing to connect — which is
             // exactly when a control whose meaning is hidden is no use.
-            subtitle: Text(
-              'Prints what the call server offers and whether the media '
-              'connection is ever made. Off by default: it is several lines a '
-              'second during a call. Turn it on when a call will not connect — '
-              'the error alone cannot say whether the problem is the server, '
-              'the network between you, or a firewall.',
-              style: context.text.timestamp,
-            ),
+            subtitle:
+                'Prints what the call server offers and whether the media '
+                'connection is ever made. Off by default: it is several lines '
+                'a second during a call. Turn it on when a call will not '
+                'connect — the error alone cannot say whether the problem is '
+                'the server, the network between you, or a firewall.',
           ),
         ),
       ],
@@ -300,11 +321,23 @@ class _DeviceSection extends StatelessWidget {
                 // rebuilt on every hotplug, so identity comparison would drop
                 // the selection whenever a device appears or disappears.
                 value: selected?.deviceId,
-                hint: Text(
-                  'System default (currently unreliable)',
-                  style: context.text.subtitle,
-                ),
                 items: [
+                  // A real entry rather than a `hint`. It was a hint, which
+                  // meant two things went wrong at once: it drew in the muted
+                  // hint style while every device below it drew in the body
+                  // style — so "System default" looked disabled — and there
+                  // was no way to choose it, because nothing in a dropdown can
+                  // select the hint. Every fresh install starts here, with
+                  // nothing remembered, and could leave but never come back.
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(
+                      'System default',
+                      style: context.text.messageBody,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   for (final device in devices)
                     DropdownMenuItem(
                       value: device.deviceId,
@@ -317,7 +350,13 @@ class _DeviceSection extends StatelessWidget {
                     ),
                 ],
                 onChanged: (deviceId) {
-                  if (deviceId == null) return;
+                  // Null is the system-default entry, and `setInputDevice`
+                  // already takes a nullable ref: forgetting the remembered
+                  // device *is* going back to the default.
+                  if (deviceId == null) {
+                    onChanged(null);
+                    return;
+                  }
                   onChanged(devices.firstWhere((d) => d.deviceId == deviceId));
                 },
               ),
@@ -325,5 +364,74 @@ class _DeviceSection extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// The global chords that work from inside a game.
+///
+/// Unbound out of the box: see [kDefaultCallHotkeys] for why guessing at
+/// Alt+M on somebody's behalf would be taking a chord away from whatever
+/// already used it.
+class _CallHotkeys extends ConsumerWidget {
+  const _CallHotkeys();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bindings = ref.watch(callHotkeysProvider);
+    final notifier = ref.read(callHotkeysProvider.notifier);
+    final binder = ref.watch(callHotkeyBinderProvider);
+
+    return SettingsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'These work while another program has the foreground, which is '
+            'the point of them — the app does not need to be in front, or '
+            'even visible. They do nothing unless you are in a call.',
+            style: context.text.timestamp,
+          ),
+          const SizedBox(height: 8),
+          for (final (index, action) in HotkeyAction.values.indexed) ...[
+            if (index > 0) const SettingsDivider(),
+            HotkeyRow(
+              label: action.label,
+              hotkey: bindings[action] ?? const Hotkey.none(),
+              // Named by the conflict rather than a generic refusal: two
+              // actions on one chord is accepted by Windows and then only one
+              // of them is ever delivered, which reads exactly like the second
+              // binding having silently failed.
+              hint: switch (_problemFor(bindings, binder, action)) {
+                final problem? => problem,
+                _ => null,
+              },
+              onChanged: (hotkey) => notifier.setBinding(
+                action,
+                hotkey.isBound ? hotkey : null,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String? _problemFor(
+    CallHotkeysState bindings,
+    CallHotkeyBinder binder,
+    HotkeyAction action,
+  ) {
+    if (binder.rejected.contains(action)) {
+      return 'Windows refused this chord. Another program is almost certainly '
+          'holding it — pick a different one.';
+    }
+
+    final hotkey = bindings[action];
+    if (hotkey == null) return null;
+
+    final clash = conflictingAction(bindings, action, hotkey);
+    return clash == null
+        ? null
+        : 'Also bound to "${clash.label}". Only one of the two will fire.';
   }
 }

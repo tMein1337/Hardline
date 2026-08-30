@@ -6,13 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/injected_providers.dart';
 import '../../../theme/theme_context.dart';
-import 'package:livekit_client/livekit_client.dart' as lk;
-
 import '../call_controller_provider.dart';
 import '../livekit_call_controller.dart';
 import '../voice_prefs_controller.dart';
 import '../../../core/util/display_name.dart';
 import 'screen_share_menu.dart';
+import 'screen_source_picker.dart';
 
 /// Connection status and call controls, above the user footer.
 ///
@@ -204,23 +203,19 @@ class _Controls extends ConsumerWidget {
   }
 
   Future<void> _pickAndShare(BuildContext context, WidgetRef ref) async {
-    // livekit_client ships this picker with live thumbnails and screen/window
-    // tabs. Reimplementing it would gain nothing today.
-    //
-    // Marked experimental upstream, so it may change or disappear in a future
-    // release. Contained deliberately: it is used in exactly this one place and
-    // returns nothing but a source id, so replacing it means writing a dialog
-    // that returns a string — no other code would have to change.
-    // ignore: experimental_member_use
-    final sourceId = await lk.ScreenSelectDialog.show(context);
-    if (sourceId == null) return;
+    // Ours, not livekit_client's. Theirs is hard-coded white, offers every
+    // shell window Windows will admit to, and returns an id with the window
+    // title thrown away — see `ScreenSourcePicker` for the full account.
+    final source = await ScreenSourcePicker.show(context);
+    if (source == null) return;
 
     // Whether to include system audio is a stored setting rather than another
     // prompt here: it can cause echo, so it deserves a considered choice made
     // once in settings, not a checkbox clicked in a hurry.
     await controller.startScreenShare(
-      sourceId,
+      source.id,
       withSystemAudio: ref.read(voicePrefsProvider).shareSystemAudio,
+      name: source.name,
     );
   }
 }

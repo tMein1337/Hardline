@@ -56,6 +56,9 @@ final voiceParticipantsProvider =
                 .avatarUrl
                 ?.toString(),
             isSelf: userId == client.userID,
+            // Any device of theirs. Somebody listening on one machine is
+            // listening, whatever the other one says.
+            deafened: byUser[userId]!.any((m) => m.deafened),
           ),
       ]);
     });

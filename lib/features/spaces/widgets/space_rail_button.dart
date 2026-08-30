@@ -23,11 +23,16 @@ class SpaceRailButton extends StatelessWidget {
     required this.space,
     required this.selected,
     required this.onTap,
+    this.onSecondaryTap,
   });
 
   final SpaceSummary space;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Right-click. Null on Home, which is not a real space and has nothing to
+  /// manage.
+  final VoidCallback? onSecondaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +43,7 @@ class SpaceRailButton extends StatelessWidget {
 
     return Hoverable(
       onTap: onTap,
+      onSecondaryTap: onSecondaryTap,
       builder: (context, hovered) {
         return SizedBox(
           height: size + 10,
@@ -57,7 +63,9 @@ class SpaceRailButton extends StatelessWidget {
               Expanded(
                 child: Center(
                   child: Tooltip(
-                    message: space.name,
+                    message: onSecondaryTap == null
+                        ? space.name
+                        : '${space.name}\nRight-click to manage',
                     preferBelow: false,
                     verticalOffset: 0,
                     margin: const EdgeInsets.only(left: 8),

@@ -76,6 +76,7 @@ class LiveParticipant {
     required this.avatarMxc,
     required this.isLocal,
     required this.micMuted,
+    this.deafened = false,
     required this.feeds,
   });
 
@@ -99,6 +100,12 @@ class LiveParticipant {
 
   final bool isLocal;
 
+  /// Whether they have their own playback silenced.
+  ///
+  /// Joined in from Matrix room state rather than from LiveKit, which has no
+  /// notion of it — see `kDeafenedKey`. False for anybody on another client.
+  final bool deafened;
+
   /// Whether they have muted their own microphone.
   ///
   /// This is the one thing a joined call knows that the sidebar cannot: mute
@@ -121,6 +128,7 @@ class LiveParticipant {
           displayName == other.displayName &&
           avatarMxc == other.avatarMxc &&
           isLocal == other.isLocal &&
+          deafened == other.deafened &&
           micMuted == other.micMuted &&
           listEquals(feeds, other.feeds);
 
@@ -132,6 +140,7 @@ class LiveParticipant {
     displayName,
     avatarMxc,
     isLocal,
+    deafened,
     micMuted,
     Object.hashAll(feeds),
   );

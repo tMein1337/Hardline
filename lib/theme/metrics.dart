@@ -95,6 +95,33 @@ class AppMetrics extends ThemeExtension<AppMetrics> {
   /// Left inset that aligns continuation text with the first line's text.
   double get messageTextInset => avatarSize + avatarGutter;
 
+  /// Everything that has to grow with the type, multiplied by [scale].
+  ///
+  /// **Not everything does.** The two column widths and the corner radii are
+  /// deliberately left alone:
+  ///
+  ///  * `railWidth` and `sidebarWidth` are the app's structure rather than its
+  ///    text. Widening the channel column with the font would take that space
+  ///    from the timeline, which is the part somebody enlarging the text is
+  ///    trying to read.
+  ///  * `rowRadius` and `railIconRadius` are the shape of the hardware this
+  ///    interface imitates. A radius of 2 scaled to 3 is not a bigger corner,
+  ///    it is a softer one, and the whole surface stops reading as a panel.
+  ///
+  /// Everything else is a height or a gap around text, and clips without this.
+  AppMetrics scaled(double scale) {
+    if (scale == 1.0) return this;
+    return copyWith(
+      railIconSize: railIconSize * scale,
+      avatarSize: avatarSize * scale,
+      avatarGutter: avatarGutter * scale,
+      messageGroupSpacing: messageGroupSpacing * scale,
+      messageBlockSpacing: messageBlockSpacing * scale,
+      headerHeight: headerHeight * scale,
+      contentPadding: contentPadding * scale,
+    );
+  }
+
   @override
   AppMetrics copyWith({
     double? railWidth,

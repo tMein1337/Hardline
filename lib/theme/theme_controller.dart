@@ -58,6 +58,14 @@ class ThemeController extends Notifier<AppThemeState> {
     return _persist(state.copyWith(tooltipDelay: clamped), write: commit);
   }
 
+  /// Same [commit] split as the delay above, and for the same reason: the
+  /// whole window redraws at the new size as the thumb moves, which is the
+  /// only way to judge it.
+  Future<void> setTextScale(double scale, {bool commit = true}) => _persist(
+    state.copyWith(textScale: scale.clamp(kMinTextScale, kMaxTextScale)),
+    write: commit,
+  );
+
   Future<void> resetToDefaults() => _persist(const AppThemeState());
 
   /// [write] false defers the disk write to the caller's next committing call.
@@ -95,6 +103,9 @@ final themeDataProvider = Provider<ThemeData>(
     AppMetrics.standard,
     tooltipDelay: ref.watch(
       themeControllerProvider.select((state) => state.tooltipDelay),
+    ),
+    textScale: ref.watch(
+      themeControllerProvider.select((state) => state.textScale),
     ),
   ),
 );

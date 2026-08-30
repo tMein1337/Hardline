@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:matrix/encryption.dart';
 
 import '../../../core/providers/injected_providers.dart';
+import '../encryption/encryption_status.dart';
+import '../sessions_provider.dart';
 import 'verification_dialog.dart';
 import 'verification_session.dart';
 
@@ -58,5 +60,16 @@ class _IncomingVerificationListenerState
     } finally {
       _showing = false;
     }
+
+    // The same refresh the outgoing path does in `sessions_pane.dart`, and for
+    // a sharper reason. `deviceListProvider` is a plain `FutureProvider` over
+    // `/devices`, so it is fetched once per client and cached; the sync tick
+    // can recompute a badge from the local key store but can never add a row
+    // the cached response did not contain. A session that verified itself into
+    // existence from another machine is exactly that row — without this it does
+    // not appear until the app is restarted.
+    if (!mounted) return;
+    ref.invalidate(deviceListProvider);
+    ref.invalidate(encryptionStatusProvider);
   }
 }

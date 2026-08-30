@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
-import '../../overlay/hotkey_keys.dart';
+import '../../hotkeys/hotkey_keys.dart';
+import '../widgets/hotkey_row.dart';
 import '../../overlay/overlay_channel.dart';
 import '../../overlay/overlay_layout.dart';
 import '../../overlay/overlay_prefs_controller.dart';
@@ -85,11 +87,7 @@ class OverlayPane extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: context.colors.warning,
-              ),
+              Icon(Icons.info_outline, size: 16, color: context.colors.warning),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -103,6 +101,10 @@ class OverlayPane extends ConsumerWidget {
             ],
           ),
         ),
+
+        const SizedBox(height: 24),
+        const SettingsLabel('Fading'),
+        SettingsCard(child: _LingerCard(linger: prefs.linger)),
 
         const SizedBox(height: 24),
         const SettingsLabel('Placement'),
@@ -129,7 +131,7 @@ class OverlayPane extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _HotkeyRow(
+              HotkeyRow(
                 label: 'Hide and show the overlay',
                 hint:
                     'Pushes the HUD out of the way without switching the '
@@ -138,7 +140,7 @@ class OverlayPane extends ConsumerWidget {
                 onChanged: notifier.setToggleHotkey,
               ),
               const SettingsDivider(),
-              _HotkeyRow(
+              HotkeyRow(
                 label: 'Move the overlay',
                 hint:
                     'Lets you drag the overlay into place. The game loses '
@@ -251,151 +253,6 @@ class _MonitorPickerState extends ConsumerState<_MonitorPicker> {
   }
 }
 
-/// A field that binds the next chord pressed into it.
-class _HotkeyRow extends StatefulWidget {
-  const _HotkeyRow({
-    required this.label,
-    required this.hotkey,
-    required this.onChanged,
-    this.hint,
-  });
-
-  final String label;
-  final String? hint;
-  final OverlayHotkey hotkey;
-  final ValueChanged<OverlayHotkey> onChanged;
-
-  @override
-  State<_HotkeyRow> createState() => _HotkeyRowState();
-}
-
-class _HotkeyRowState extends State<_HotkeyRow> {
-  final _focus = FocusNode();
-  bool _capturing = false;
-  String? _refused;
-
-  @override
-  void dispose() {
-    _focus.dispose();
-    super.dispose();
-  }
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
-      setState(() {
-        _capturing = false;
-        _refused = null;
-      });
-      _focus.unfocus();
-      return KeyEventResult.handled;
-    }
-
-    final key = virtualKeyFor(event.logicalKey);
-    // Modifiers arrive as key presses of their own while the chord is being
-    // built. Ignoring them is what lets somebody hold Ctrl+Shift and then reach
-    // for the letter.
-    if (key == null) return KeyEventResult.handled;
-
-    final hotkey = OverlayHotkey(
-      modifiers: modifiersFrom(HardwareKeyboard.instance.logicalKeysPressed),
-      key: key,
-    );
-
-    if (!isBindable(hotkey)) {
-      setState(
-        () => _refused =
-            'A letter or digit on its own would be taken from every other '
-            'program on the machine. Add Ctrl, Alt or Shift — or use a '
-            'function key.',
-      );
-      return KeyEventResult.handled;
-    }
-
-    setState(() {
-      _capturing = false;
-      _refused = null;
-    });
-    _focus.unfocus();
-    widget.onChanged(hotkey);
-    return KeyEventResult.handled;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.label,
-                  style: context.text.subtitle.copyWith(
-                    color: colors.textPrimary,
-                  ),
-                ),
-              ),
-              Focus(
-                focusNode: _focus,
-                onKeyEvent: _onKey,
-                onFocusChange: (focused) {
-                  if (!focused && _capturing) {
-                    setState(() => _capturing = false);
-                  }
-                },
-                child: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _capturing = true;
-                      _refused = null;
-                    });
-                    _focus.requestFocus();
-                  },
-                  child: Text(
-                    _capturing ? 'Press a chord…' : hotkeyLabel(widget.hotkey),
-                    style: TextStyle(
-                      color: _capturing ? colors.accent : colors.textPrimary,
-                    ),
-                  ),
-                ),
-              ),
-              if (widget.hotkey.isBound) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: 'Unbind',
-                  iconSize: 16,
-                  icon: Icon(Icons.close, color: colors.textFaint),
-                  onPressed: () =>
-                      widget.onChanged(const OverlayHotkey.none()),
-                ),
-              ],
-            ],
-          ),
-          if (_refused != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                _refused!,
-                style: context.text.timestamp.copyWith(color: colors.warning),
-              ),
-            )
-          else if (widget.hint != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(widget.hint!, style: context.text.timestamp),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _LayoutList extends ConsumerWidget {
   const _LayoutList({required this.prefs});
 
@@ -414,8 +271,21 @@ class _LayoutList extends ConsumerWidget {
             child: _LayoutEditor(
               layout: layout,
               prefs: prefs,
-              onChanged: (next, {bool write = true}) =>
-                  notifier.updateLayout(next, write: write),
+              onChanged: (next, {bool write = true}) {
+                notifier.updateLayout(next, write: write);
+                // On release, not on every frame of the drag — `write` is
+                // false while a slider is being dragged, which is the same
+                // split the write itself uses.
+                //
+                // Handed the layout rather than merely poked, because the
+                // write above only reaches the controller a rebuild later:
+                // asking it to re-evaluate here would compute the old value,
+                // and the new one would not land until something else caused
+                // a reconcile.
+                if (write) {
+                  ref.read(overlayControllerProvider).applyLayoutNow(next);
+                }
+              },
             ),
           ),
           const SizedBox(height: 8),
@@ -483,7 +353,10 @@ class _LayoutEditor extends ConsumerWidget {
                 onPressed: () => notifier.setDefaultLayout(layout.id),
                 child: Text(
                   'Make default',
-                  style: TextStyle(color: colors.textMuted, fontSize: 12),
+                  style: TextStyle(
+                    color: colors.textMuted,
+                    fontSize: context.text.sized(12),
+                  ),
                 ),
               ),
             IconButton(
@@ -498,7 +371,10 @@ class _LayoutEditor extends ConsumerWidget {
                   ? 'The last layout cannot be deleted'
                   : 'Delete',
               iconSize: 16,
-              icon: Icon(Icons.delete_outline, color: colors.voiceControlDanger),
+              icon: Icon(
+                Icons.delete_outline,
+                color: colors.voiceControlDanger,
+              ),
               onPressed: prefs.layouts.length <= 1
                   ? null
                   : () => notifier.removeLayout(layout.id),
@@ -524,16 +400,60 @@ class _LayoutEditor extends ConsumerWidget {
           onCommit: (value) => onChanged(layout.copyWith(avatarSize: value)),
         ),
         _Slider(
+          label: 'Visible when talking',
+          value: layout.activeOpacity,
+          min: 0,
+          max: 1,
+          // Zero is allowed and is not a mistake: "never show me anything"
+          // with the overlay still switched on is a coherent thing to want
+          // while it is set up, or while a particular game needs the screen.
+          format: (value) => value == 0
+              ? 'Nothing at all'
+              : '${(value * 100).round()}%',
+          onChanged: (value) =>
+              onChanged(layout.copyWith(activeOpacity: value), write: false),
+          onCommit: (value) => onChanged(layout.copyWith(activeOpacity: value)),
+        ),
+        _Slider(
           label: 'Visible when silent',
           value: layout.idleOpacity,
           min: 0,
           max: 1,
-          format: (value) =>
-              value == 0 ? 'Invisible' : '${(value * 100).round()}%',
+          // "Nothing at all", not "Invisible", because that is now literally
+          // what happens. The fade is applied to the whole window rather than
+          // to the individual entries — a layered window has no per-pixel
+          // transparency to give them — so at zero the overlay does not dim,
+          // it disappears, and somebody who switched the feature on and sees
+          // an empty screen has no way to tell that from it being broken.
+          format: (value) => value == 0
+              ? 'Nothing at all'
+              : '${(value * 100).round()}%',
           onChanged: (value) =>
               onChanged(layout.copyWith(idleOpacity: value), write: false),
           onCommit: (value) => onChanged(layout.copyWith(idleOpacity: value)),
         ),
+        if (layout.activeOpacity == 0 || layout.idleOpacity == 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              // Both at zero is the state worth naming loudest: the feature is
+              // switched on, the window is up, and nothing will ever be drawn
+              // — which from the outside is indistinguishable from it being
+              // broken.
+              layout.activeOpacity == 0 && layout.idleOpacity == 0
+                  ? 'Both are zero, so the overlay will never appear even '
+                        'though it is switched on. Raise at least one.'
+                  : layout.activeOpacity == 0
+                  ? 'At zero the overlay stays hidden even while somebody is '
+                        'talking, which is the moment it exists for.'
+                  : 'At zero the whole overlay vanishes once "Stay up for" '
+                        'has elapsed, and comes back only while somebody is '
+                        'talking. Raise it if you expected to see the roster.',
+              style: context.text.timestamp.copyWith(
+                color: context.colors.warning,
+              ),
+            ),
+          ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: layout.showNames,
@@ -691,7 +611,10 @@ class _Assignments extends ConsumerWidget {
           // The only way to name an application without asking somebody to type
           // an executable name from memory: whatever they last had in front of
           // them. Which, on the way back from a game, is the game.
-          _AssignForeground(prefs: prefs, executable: controller.foregroundExecutable),
+          _AssignForeground(
+            prefs: prefs,
+            executable: controller.foregroundExecutable,
+          ),
         ],
       ),
     );
@@ -734,10 +657,114 @@ class _AssignForeground extends ConsumerWidget {
           ],
           onChanged: (value) {
             if (value == null) return;
-            ref
-                .read(overlayPrefsProvider.notifier)
-                .assign(executable, value);
+            ref.read(overlayPrefsProvider.notifier).assign(executable, value);
           },
+        ),
+      ],
+    );
+  }
+}
+
+/// How long the HUD stays up after the last person stops talking.
+///
+/// The slider is logarithmic, and it has to be: the range runs from a tenth of
+/// a second to an hour, which is four decades. Linear, everything under a
+/// minute would live in the first pixel.
+class _LingerCard extends ConsumerWidget {
+  const _LingerCard({required this.linger});
+
+  final Duration linger;
+
+  /// Position on the slider, 0..1, for a duration.
+  static double _positionOf(Duration value) {
+    final min = math.log(kMinOverlayLinger.inMilliseconds.toDouble());
+    final max = math.log(kMaxOverlayLinger.inMilliseconds.toDouble());
+    final here = math.log(
+      value.inMilliseconds
+          .clamp(
+            kMinOverlayLinger.inMilliseconds,
+            kMaxOverlayLinger.inMilliseconds,
+          )
+          .toDouble(),
+    );
+    return ((here - min) / (max - min)).clamp(0.0, 1.0);
+  }
+
+  /// The inverse, rounded to something a person would have chosen.
+  static Duration _durationAt(double position) {
+    final min = math.log(kMinOverlayLinger.inMilliseconds.toDouble());
+    final max = math.log(kMaxOverlayLinger.inMilliseconds.toDouble());
+    final ms = math.exp(min + (max - min) * position.clamp(0.0, 1.0));
+
+    // Snapped so the readout says "5 s" rather than "4.87 s". The step grows
+    // with the value, which is what makes the whole range usable from one
+    // slider.
+    final rounded = switch (ms) {
+      < 1000 => (ms / 100).round() * 100,
+      < 10000 => (ms / 500).round() * 500,
+      < 60000 => (ms / 1000).round() * 1000,
+      < 600000 => (ms / 15000).round() * 15000,
+      _ => (ms / 60000).round() * 60000,
+    };
+
+    return Duration(
+      milliseconds: rounded.clamp(
+        kMinOverlayLinger.inMilliseconds,
+        kMaxOverlayLinger.inMilliseconds,
+      ),
+    );
+  }
+
+  static String _format(Duration value) {
+    if (value.inMilliseconds < 1000) return '${value.inMilliseconds} ms';
+    if (value.inSeconds < 60) {
+      final seconds = value.inMilliseconds / 1000;
+      return seconds == seconds.roundToDouble()
+          ? '${seconds.round()} s'
+          : '${seconds.toStringAsFixed(1)} s';
+    }
+    if (value.inMinutes < 60) return '${value.inMinutes} min';
+    return '1 hour';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(overlayPrefsProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingsRow(
+          title: 'Stay up for',
+          subtitle:
+              'After the last person stops talking, the HUD holds for '
+              '${_format(linger)} before fading to "Visible when silent".',
+          hint:
+              'The overlay fades as a whole rather than per person — a '
+              'layered window has no per-pixel transparency to give the '
+              'individual entries. Holding it up for a moment is what stops '
+              'an ordinary back-and-forth conversation reading as flicker.',
+        ),
+        Slider(
+          value: _positionOf(linger),
+          label: _format(linger),
+          // Dragging redraws live; only the release is written to disk.
+          onChanged: (value) =>
+              notifier.setLinger(_durationAt(value), commit: false),
+          onChangeEnd: (value) => notifier.setLinger(_durationAt(value)),
+        ),
+        Row(
+          children: [
+            Text(_format(kMinOverlayLinger), style: context.text.timestamp),
+            const Spacer(),
+            if (linger != kDefaultOverlayLinger)
+              TextButton(
+                onPressed: () => notifier.setLinger(kDefaultOverlayLinger),
+                child: const Text('Reset'),
+              ),
+            const Spacer(),
+            Text(_format(kMaxOverlayLinger), style: context.text.timestamp),
+          ],
         ),
       ],
     );

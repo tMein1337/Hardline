@@ -55,7 +55,10 @@ class VoiceParticipantRow extends ConsumerWidget {
         return GestureDetector(
           // Right-click opens per-user volume. Left-click is
           // deliberately left free — the row is not a navigation target.
-          onSecondaryTap: () => UserAudioMenu.show(context, participant),
+          // Audio on right-click, because that is what somebody in a call reaches
+      // for: the slider that turns this person down. Their profile is one
+      // click further in, from the menu itself — see `UserAudioMenu`.
+      onSecondaryTap: () => UserAudioMenu.show(context, participant),
           child: Padding(
             // Extra left inset over RoomListTile's 8, so the row sits under the
             // channel name rather than under its icon.
@@ -119,6 +122,22 @@ class VoiceParticipantRow extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  // Theirs, and the one piece of somebody's own audio state
+                  // that room state can carry — because this client puts it
+                  // there. See `kDeafenedKey`. Their *mute* still cannot be
+                  // shown here: that never reaches room state at all, and is
+                  // drawn only on a call we have actually joined.
+                  if (participant.deafened) ...[
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'Deafened — they cannot hear the call',
+                      child: Icon(
+                        Icons.headset_off,
+                        size: 13,
+                        color: colors.voiceDeafenedIcon,
+                      ),
+                    ),
+                  ],
                   // Locally muted, i.e. our own choice — distinct from the
                   // person having muted their own microphone, which does not
                   // reach room state and so cannot be shown here at all.

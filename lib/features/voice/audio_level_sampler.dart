@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
+import 'gate_encodings.dart';
 import 'mic_tap.dart';
 import 'noise_gate.dart';
 
@@ -132,8 +133,6 @@ class AudioLevelSampler {
   /// withheld" is permanently no — wire a ring to that and it lights on the
   /// first sample of a call and stays lit for the rest of it. "Is this person
   /// over their breakpoint" has an answer either way.
-  ///
-  /// No fail-safe: it silences nothing, so nothing can blind it.
   NoiseGate? _indicator;
 
   /// Last cumulative reading per remote track, for the delta.
@@ -141,6 +140,24 @@ class AudioLevelSampler {
 
   /// Whether the gate currently has the microphone shut.
   bool _muzzled = false;
+
+  /// The sender [_muzzled] describes.
+  ///
+  /// Without this, the open/shut state is held against the sampler while the
+  /// thing it describes is replaced underneath it — a device change, an ICE
+  /// restart or a republish all hand out a fresh sender, which starts active.
+  /// The early return in [_setMicrophoneOpen] would then decide there was
+  /// nothing to do and leave the new sender open with the gate believing it
+  /// shut.
+  String? _muzzledSenderId;
+
+  /// Whether the last attempt to shut the microphone was accepted.
+  ///
+  /// False once `setParameters` has reported failure. That answer is
+  /// load-bearing: it is the difference between "the gate is holding your
+  /// microphone shut" and "the gate asked and was ignored", and only one of
+  /// those should be drawn as silence on the meter.
+  bool _gateEffective = true;
 
   /// Reads the microphone upstream of the gate. See [MicTap].
   final _tap = MicTap();
@@ -205,6 +222,8 @@ class AudioLevelSampler {
       _liveGate = null;
       _indicator = null;
       _muzzled = false;
+      _muzzledSenderId = null;
+      _gateEffective = true;
       onMicLevel(const MicLevel.none());
       return;
     }
@@ -238,26 +257,27 @@ class AudioLevelSampler {
     // person reads off the meter is the number they set the threshold to.
     //
     // **Silence is not trimmed.** There is nothing to amplify in nothing, and
-    // the distinction is load-bearing rather than pedantic: the reading pinned
-    // at the absolute floor is how `NoiseGate` recognises that measurements
-    // have stopped arriving. Lifting it by the trim hid that completely — the
-    // floor read -60 with a +40 trim, the fail-safe concluded the microphone
-    // was merely quiet, and a gate that had closed never opened again.
+    // keeping the floor at the floor is what makes the meter honest: a bar
+    // sitting at the very bottom says "no signal at all", which is the reading
+    // somebody needs in order to tell a dead microphone from a quiet room.
+    // Lifting it by the trim would put a +40 dB floor at -60 and make the two
+    // indistinguishable.
     final db = raw <= MicTap.silenceDb
         ? MicTap.silenceDb
         : (raw + settings.gainDb).clamp(MicTap.silenceDb, MicTap.ceilingDb);
 
     // The gate is only allowed to run on the tap. Driving it from statistics
     // would mean measuring the very track it disables: it would read silence,
-    // conclude the room was quiet and never reopen. `NoiseGate` would catch
-    // that with its fail-safe, but not before somebody was inaudible for three
-    // seconds, and repeatedly.
+    // conclude the room was quiet, and never reopen — leaving somebody
+    // inaudible with nothing on screen to say so. That is why the gate refuses
+    // to switch on without the tap rather than falling back.
     // Answered on every tick, gate or no gate: it is what lights the avatar,
     // and the avatar is not a report on whether audio is being withheld.
     final speaking = _indicatorFor(settings.thresholdDb).update(db, now);
 
     if (!settings.enabled || !tapped) {
       _liveGate = null;
+      _gateEffective = true;
       await _openMicrophone();
       onMicLevel(
         MicLevel(
@@ -279,26 +299,19 @@ class AudioLevelSampler {
         ? _liveGate!
         : (_liveGate = NoiseGate(thresholdDb: settings.thresholdDb));
 
-    final wasDefeated = gate.isDefeated;
     final open = gate.update(db, now);
-    if (gate.isDefeated && !wasDefeated) {
-      // Worth a line of its own. It means the reading stopped arriving while
-      // the gate held the microphone shut, which is the one failure this whole
-      // design is arranged to avoid — and the only way to tell from outside.
-      debugPrint(
-        '[voice] the gate blinded itself and gave up; '
-        'the microphone stays open',
-      );
-    }
     await _setMicrophoneOpen(open);
 
     onMicLevel(
       MicLevel(
         db: db,
         speaking: speaking,
-        gateOpen: open,
-        gateActive: !gate.isDefeated,
-        gateAvailable: true,
+        // What is actually happening, not what was asked for. If the sender
+        // refused the change the microphone is open however shut the gate
+        // believes itself to be, and the meter must not claim otherwise.
+        gateOpen: _gateEffective ? open : true,
+        gateActive: _gateEffective,
+        gateAvailable: _gateEffective,
       ),
     );
   }
@@ -306,12 +319,13 @@ class AudioLevelSampler {
   /// The state machine behind the avatar ring.
   ///
   /// Same hold as the gate, so the ring does not strobe on the gaps inside a
-  /// sentence, and **no fail-safe**: it mutes nothing, so it cannot blind
-  /// itself, and a ring that gave up would simply stay lit.
+  /// sentence. A second instance rather than a reading of the first, because
+  /// they answer different questions: this one says whether somebody is
+  /// talking, and runs whether the gate is switched on or not.
   NoiseGate _indicatorFor(double thresholdDb) =>
       _indicator?.thresholdDb == thresholdDb
       ? _indicator!
-      : (_indicator = NoiseGate(thresholdDb: thresholdDb, failSafe: null));
+      : (_indicator = NoiseGate(thresholdDb: thresholdDb));
 
   /// The microphone level in dB, from WebRTC's statistics.
   ///
@@ -414,13 +428,24 @@ class AudioLevelSampler {
   /// the gate closes 400ms *after* the level drops, so the transition happens
   /// during silence rather than across a waveform. There is nothing to click.
   Future<void> _setMicrophoneOpen(bool open) async {
-    if (open == !_muzzled) return;
-    _muzzled = !open;
     final track = _localTrack();
     if (track == null) return;
 
+    final sender = track.sender;
+    final senderId = sender?.senderId;
+
+    // A new sender starts active and knows nothing about the gate, so the
+    // shortcut below is only valid while we are talking about the same one.
+    if (senderId != _muzzledSenderId) {
+      _muzzled = false;
+      _muzzledSenderId = senderId;
+      _gateEffective = true;
+    }
+
+    if (open == !_muzzled) return;
+    _muzzled = !open;
+
     try {
-      final sender = track.sender;
       if (sender != null) {
         // Deactivate the RTP encoding, leaving the track attached.
         //
@@ -439,10 +464,28 @@ class AudioLevelSampler {
         // still sees it — while nothing is put on the wire. Which is the whole
         // requirement: stop sending without stopping listening.
         final parameters = sender.parameters;
-        for (final encoding in parameters.encodings ?? const []) {
-          encoding.active = open;
+        // See `gate_encodings.dart`: an audio sender frequently reports no
+        // encodings at all, and handing that straight back is a request that
+        // sets nothing and still reports success.
+        parameters.encodings = gateEncodings(parameters, open: open);
+        final applied = await sender.setParameters(parameters);
+
+        // The one result that used to be thrown away. A refusal here is the
+        // gate being ignored, and the difference between that and a working
+        // gate is inaudible from this end — which is exactly why it has to be
+        // said out loud rather than inferred.
+        if (!applied) {
+          if (_gateEffective) {
+            debugPrint(
+              '[voice] the sender refused to ${open ? 'reopen' : 'close'} the '
+              'gate; audio is still being sent. The breakpoint cannot work on '
+              'this build.',
+            );
+          }
+          _gateEffective = false;
+        } else {
+          _gateEffective = true;
         }
-        await sender.setParameters(parameters);
       } else {
         // No sender yet — publishing has not finished. Nothing is being sent
         // anyway, so there is nothing to gate.
@@ -455,6 +498,7 @@ class AudioLevelSampler {
         '[voice] could not ${open ? 'open' : 'close'} the gate: $error',
       );
       _muzzled = false;
+      _gateEffective = false;
     }
   }
 

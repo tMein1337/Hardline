@@ -223,6 +223,7 @@ class VoicePrefsState {
     this.micThresholdDb = kDefaultThresholdDb,
     this.micGainDb = 0,
     this.noiseGate = false,
+    this.doubleClickToJoin = false,
     this.inputDevice,
     this.outputDevice,
     this.users = const {},
@@ -277,6 +278,16 @@ class VoicePrefsState {
   /// while watching the meter, which is where the setting lives.
   final bool noiseGate;
 
+  /// Whether double-clicking a channel joins the call running in it.
+  ///
+  /// **Off by default, and not only out of caution.** A `GestureDetector`
+  /// carrying both `onTap` and `onDoubleTap` holds every single tap for the
+  /// double-tap timeout before firing it, so switching rooms would feel
+  /// sluggish for everybody — including everybody who never wanted this. The
+  /// room list only wires the second gesture when this is on, so the cost is
+  /// paid by the people who asked for it and by nobody else.
+  final bool doubleClickToJoin;
+
   /// Null means "whatever the platform picks".
   ///
   /// Worth setting explicitly: livekit_client does not follow the OS default,
@@ -307,6 +318,7 @@ class VoicePrefsState {
     double? micThresholdDb,
     double? micGainDb,
     bool? noiseGate,
+    bool? doubleClickToJoin,
     AudioDeviceRef? inputDevice,
     AudioDeviceRef? outputDevice,
     Map<String, VoiceUserPrefs>? users,
@@ -318,6 +330,7 @@ class VoicePrefsState {
     micThresholdDb: micThresholdDb ?? this.micThresholdDb,
     micGainDb: micGainDb ?? this.micGainDb,
     noiseGate: noiseGate ?? this.noiseGate,
+    doubleClickToJoin: doubleClickToJoin ?? this.doubleClickToJoin,
     inputDevice: inputDevice ?? this.inputDevice,
     outputDevice: outputDevice ?? this.outputDevice,
     users: users ?? this.users,
@@ -332,6 +345,7 @@ class VoicePrefsState {
     'micThresholdDb': micThresholdDb,
     'micGainDb': micGainDb,
     'noiseGate': noiseGate,
+    'doubleClickToJoin': doubleClickToJoin,
     if (inputDevice != null) 'inputDevice': inputDevice!.toJson(),
     if (outputDevice != null) 'outputDevice': outputDevice!.toJson(),
     'users': {
@@ -362,6 +376,7 @@ class VoicePrefsState {
         _ => 0.0,
       },
       noiseGate: json['noiseGate'] == true,
+      doubleClickToJoin: json['doubleClickToJoin'] == true,
       inputDevice: AudioDeviceRef.fromJson(json['inputDevice']),
       outputDevice: AudioDeviceRef.fromJson(json['outputDevice']),
       users: rawUsers is Map
@@ -385,6 +400,7 @@ class VoicePrefsState {
           micThresholdDb == other.micThresholdDb &&
           micGainDb == other.micGainDb &&
           noiseGate == other.noiseGate &&
+          doubleClickToJoin == other.doubleClickToJoin &&
           inputDevice == other.inputDevice &&
           outputDevice == other.outputDevice &&
           mapEquals(users, other.users);
@@ -398,6 +414,7 @@ class VoicePrefsState {
     micThresholdDb,
     micGainDb,
     noiseGate,
+    doubleClickToJoin,
     inputDevice,
     outputDevice,
     Object.hashAllUnordered(

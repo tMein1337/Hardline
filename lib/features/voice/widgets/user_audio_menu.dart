@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
 import '../../activity/activity_prefs_controller.dart';
+import '../../activity/widgets/user_context_menu.dart';
 import '../../common/mx_avatar.dart';
 import '../call_controller_provider.dart';
 import '../voice_participant.dart';
@@ -163,6 +164,22 @@ class UserAudioMenu extends ConsumerWidget {
         ),
       ),
       actions: [
+        // The way through to who this person is, from the two surfaces where
+        // right-click is already spoken for by the volume controls: the
+        // sidebar participant row and the call grid tile.
+        if (!participant.isSelf)
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              UserContextMenu.show(
+                context,
+                userId: participant.userId,
+                displayName: participant.displayName,
+                avatarMxc: participant.avatarMxc,
+              );
+            },
+            child: Text('Profile', style: TextStyle(color: colors.textMuted)),
+          ),
         TextButton(
           onPressed: () => notifier.resetUser(participant.userId),
           child: Text('Reset', style: TextStyle(color: colors.textMuted)),

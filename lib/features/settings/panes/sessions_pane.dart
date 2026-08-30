@@ -19,11 +19,32 @@ import '../widgets/text_prompt.dart';
 import '../widgets/uia_password_prompt.dart';
 
 /// Every session signed in to this account, and what can be done about them.
-class SessionsPane extends ConsumerWidget {
+class SessionsPane extends ConsumerStatefulWidget {
   const SessionsPane({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SessionsPane> createState() => _SessionsPaneState();
+}
+
+class _SessionsPaneState extends ConsumerState<SessionsPane> {
+  @override
+  void initState() {
+    super.initState();
+    // `/devices` is cached for the life of the client, so a session that
+    // appeared or was renamed elsewhere is invisible here until something asks
+    // again. Opening the pane is the moment somebody wants the truth, and the
+    // list stays on screen while it re-fetches (`skipLoadingOnReload` below),
+    // so this costs one request and no flicker.
+    //
+    // After the frame rather than in `initState` proper: invalidating a
+    // provider while the tree is still building is an error.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(deviceListProvider);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final sessions = ref.watch(sessionsProvider);
     final encryptionAvailable = ref.watch(encryptionAvailableProvider);
 

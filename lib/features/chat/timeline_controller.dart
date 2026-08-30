@@ -4,6 +4,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
+import 'mentions.dart';
 import 'message_grouping.dart';
 import 'message_item.dart';
 
@@ -166,7 +167,12 @@ class TimelineController extends ChangeNotifier {
   ///
   /// The local echo appears synchronously via the timeline's onInsert callback,
   /// so the message shows before the network round trip completes.
-  Future<void> send(String text) async {
+  /// [candidates] are the room's members, for turning `@name` into a real
+  /// mention. Empty is fine and means the message goes out as plain text.
+  Future<void> send(
+    String text, {
+    List<MentionCandidate> candidates = const [],
+  }) async {
     final body = text.trim();
     if (body.isEmpty) return;
 
@@ -174,7 +180,26 @@ class TimelineController extends ChangeNotifier {
     if (room == null) return;
 
     try {
-      await room.sendTextEvent(body);
+      // `m.mentions` is what actually pings somebody: the homeserver's push
+      // rules read it, and a message that merely *says* "@Alice" reaches
+      // nobody. Before this, every mention this client sent was decoration.
+      //
+      // The HTML half goes with it so Element draws a pill rather than the
+      // literal text. Both are omitted entirely when nobody is named, so an
+      // ordinary message is byte-for-byte what it always was.
+      final mentioned = mentionedUserIds(body, candidates);
+      if (mentioned.isEmpty) {
+        await room.sendTextEvent(body);
+        return;
+      }
+
+      await room.sendEvent({
+        'msgtype': MessageTypes.Text,
+        'body': body,
+        'format': 'org.matrix.custom.html',
+        'formatted_body': formatMentions(body, candidates),
+        'm.mentions': mentionsBlock(mentioned),
+      });
     } catch (error) {
       debugPrint('Could not send message to $roomId: $error');
     }

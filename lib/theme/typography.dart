@@ -26,6 +26,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
     required this.inputText,
     required this.buttonLabel,
     required this.fieldLabel,
+    this.scale = 1.0,
   });
 
   /// The interface face. Stock Windows, so a release carries no font licences
@@ -59,7 +60,28 @@ class AppTypography extends ThemeExtension<AppTypography> {
   final TextStyle buttonLabel;
   final TextStyle fieldLabel;
 
-  factory AppTypography.from(AppPalette c) {
+  /// The factor every size above was built with. See `kDefaultTextScale`.
+  ///
+  /// Carried so [sized] can exist. A handful of places want a size that is not
+  /// one of the thirteen — a 24px sign-in heading, the 10px timestamp in the
+  /// message hover gutter — and they used to write the number as a literal in
+  /// a `copyWith`, which is exactly the set of places a text-size setting
+  /// would silently fail to reach.
+  final double scale;
+
+  /// A one-off size, scaled like the named ones.
+  ///
+  /// `context.text.title.copyWith(fontSize: context.text.sized(24))`. Prefer a
+  /// named style where one fits; this is for the genuine exceptions.
+  double sized(double px) => px * scale;
+
+  /// [scale] multiplies every size. See `kDefaultTextScale`.
+  ///
+  /// Applied here rather than through `MediaQuery.textScaler` because every
+  /// widget in this app reads `context.text.*` and none of them read
+  /// `TextTheme` — a `textScaler` would scale the handful of stock Material
+  /// widgets and nothing else, which is worse than not scaling at all.
+  factory AppTypography.from(AppPalette c, [double scale = 1.0]) {
     const family = fontFamily;
     const fallback = fontFamilyFallback;
 
@@ -67,14 +89,14 @@ class AppTypography extends ThemeExtension<AppTypography> {
       messageBody: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 15,
+        fontSize: 15 * scale,
         height: 1.375,
         color: c.textPrimary,
       ),
       username: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 15,
+        fontSize: 15 * scale,
         height: 1.375,
         fontWeight: FontWeight.w500,
         color: c.textHeader,
@@ -82,21 +104,21 @@ class AppTypography extends ThemeExtension<AppTypography> {
       timestamp: TextStyle(
         fontFamily: monoFamily,
         fontFamilyFallback: monoFamilyFallback,
-        fontSize: 11,
+        fontSize: 11 * scale,
         letterSpacing: 0.2,
         color: c.textMuted,
       ),
       channelName: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 15,
+        fontSize: 15 * scale,
         fontWeight: FontWeight.w500,
         color: c.textMuted,
       ),
       channelNameActive: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 15,
+        fontSize: 15 * scale,
         fontWeight: FontWeight.w500,
         color: c.textHeader,
       ),
@@ -104,7 +126,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
       sectionHeader: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 11,
+        fontSize: 11 * scale,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.9,
         color: c.textMuted,
@@ -112,20 +134,20 @@ class AppTypography extends ThemeExtension<AppTypography> {
       title: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 16,
+        fontSize: 16 * scale,
         fontWeight: FontWeight.w600,
         color: c.textHeader,
       ),
       subtitle: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 13,
+        fontSize: 13 * scale,
         color: c.textMuted,
       ),
       badge: TextStyle(
         fontFamily: monoFamily,
         fontFamilyFallback: monoFamilyFallback,
-        fontSize: 11,
+        fontSize: 11 * scale,
         fontWeight: FontWeight.w700,
         height: 1,
         color: c.unreadBadgeText,
@@ -133,31 +155,32 @@ class AppTypography extends ThemeExtension<AppTypography> {
       systemEvent: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 14,
+        fontSize: 14 * scale,
         color: c.textMuted,
       ),
       inputText: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 15,
+        fontSize: 15 * scale,
         height: 1.375,
         color: c.textPrimary,
       ),
       buttonLabel: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 15,
+        fontSize: 15 * scale,
         fontWeight: FontWeight.w500,
         color: c.textOnAccent,
       ),
       fieldLabel: TextStyle(
         fontFamily: family,
         fontFamilyFallback: fallback,
-        fontSize: 11,
+        fontSize: 11 * scale,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.8,
         color: c.textMuted,
       ),
+      scale: scale,
     );
   }
 

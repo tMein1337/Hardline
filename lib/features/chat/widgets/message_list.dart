@@ -61,6 +61,16 @@ class _MessageListState extends ConsumerState<MessageList> {
   late final TimelineController _controller;
   late final ReadReceiptSender _receipts;
 
+  /// Re-marks the room read when the window comes back.
+  ///
+  /// The three existing triggers are room open, a new event, and scrolling.
+  /// None of them fires for the commonest case there is: the app was behind
+  /// something else while messages arrived, and is now in front with the
+  /// newest one already on screen. `ReadReceiptSender` refuses to send while
+  /// the window is hidden — correctly — so those events stayed unread until
+  /// something else happened to move.
+  AppLifecycleListener? _lifecycle;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +88,11 @@ class _MessageListState extends ConsumerState<MessageList> {
     _controller.addListener(_onTimelineChanged);
     _markReadIfLooking();
 
+    _lifecycle = AppLifecycleListener(
+      onShow: _markReadIfLooking,
+      onRestart: _markReadIfLooking,
+    );
+
     // A request filed *before* this list existed — which is what clicking an
     // activity row in another room does, since selecting the room rebuilds the
     // chat panel — is already sitting in the provider when we mount.
@@ -90,6 +105,7 @@ class _MessageListState extends ConsumerState<MessageList> {
   @override
   void dispose() {
     _highlightTimer?.cancel();
+    _lifecycle?.dispose();
     _controller.removeListener(_onTimelineChanged);
     _receipts.dispose();
     _scroll.removeListener(_onScroll);

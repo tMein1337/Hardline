@@ -1471,18 +1471,70 @@ Avatars are fetched by the app side through the same `avatarUriProvider` the
 rest of the app uses, so the overlay gets the thumbnail already in cache rather
 than a second copy at a size nothing else asked for.
 
-### Transparency is undocumented API
+### Transparency is a colour key, because the Flutter view is opaque
 
-`SetWindowCompositionAttribute` with `ACCENT_ENABLE_TRANSPARENTGRADIENT`, from
-`user32.dll` by `GetProcAddress`, is the only thing on Windows that makes a
-Flutter window per-pixel transparent — there is no supported alternative that
-composites a D3D swapchain against the desktop with alpha, which is why
-`flutter_acrylic` and `bitsdojo_window` both reach for it.
+This section used to describe `SetWindowCompositionAttribute` with
+`ACCENT_ENABLE_TRANSPARENTGRADIENT`, resolved from `user32.dll`, with
+`DwmEnableBlurBehindWindow` behind it as a fallback. **Neither could ever have
+worked**, and the reason is worth writing down because it is not the one the
+old note assumed.
 
-It is resolved at runtime rather than linked: it is in no import library, and a
-missing export has to degrade to an opaque overlay rather than a process that
-will not start. The fallback is `DwmEnableBlurBehindWindow` over an empty
-region, which is documented but less reliable across compositor changes.
+The Flutter view is a **child `HWND`**, parented into the overlay window in
+`OverlayWindow::Create`. The engine renders it opaque: `flutter_windows.h`
+exposes no clear colour, no background colour and no alpha mode — the only
+handle it gives out on a view is `FlutterDesktopViewGetHWND`. So whatever the
+*window* is told about its own composition, the child paints solid pixels over
+the whole of it, and those are what reach the screen. Switching the overlay on
+filled the monitor with the engine's default clear colour, which is white.
+
+`SetLayeredWindowAttributes` with `LWA_COLORKEY` works at the other end. The
+compositor takes the finished surface, child windows included, and drops every
+pixel that exactly matches a chosen colour. So the overlay engine paints
+`kChromaKey` — pure magenta — everywhere the game should show through, and
+anything else it paints stays. Documented, and it does not care what the engine
+does.
+
+**The cost is that it is 1-bit.** There is no per-pixel alpha, so the HUD's
+per-person `AnimatedOpacity` could not survive: a half-transparent avatar over
+the key blends towards magenta rather than towards the game. `LWA_ALPHA`
+alongside the key gives back the one kind of partial transparency a layered
+window will do — a single value for the whole window — so the fade moved from
+the person to the window. Everybody is drawn solid, and the HUD dims together
+once nobody has spoken for `OverlayPrefsState.linger`.
+
+That linger is what makes a window-wide fade read like the per-person one it
+replaced: without it the roster would snap to its idle opacity between two
+sentences. It is configurable from 100 ms to an hour, because both ends are
+real answers — "show me only who is talking, right now", and "once the call
+gets going, leave it up".
+
+What is lost, and it is the only thing: one person talking brings the whole
+roster to full rather than just them. The speaking ring is what still says
+which of them it is.
+
+**Nothing the HUD paints may carry alpha**, and this has already been got
+wrong twice. The plate was `scrim` — the slot the rest of the app puts behind
+text it has to keep readable over something it does not control, which is
+exactly the right idea and exactly the wrong value, because it is 80% black.
+Over the key that is purple, so the HUD came up purple. The quiet speaking ring
+was `Colors.transparent`, which means "show what is behind" — and behind is the
+key, so every silent person wore a bright magenta ring. Both are now opaque:
+the plate is `floatingSurface`, and the quiet ring is the plate. Translucency
+comes from the window's alpha, applied to everything at once.
+
+A related trap in the same family: the overlay root has to be a `Material`.
+Painting the key with a bare `Container` leaves no `DefaultTextStyle`, and
+Flutter then draws every `Text` in yellow with a double underline — its marker
+for missing style, which looks like a deliberate and very odd theme.
+
+Two more consequences for anything drawn on the HUD:
+
+- **Antialiased edges fringe towards magenta** where they meet the key. The
+  roster draws its content on an opaque plate so only the plate's own rounded
+  corners are exposed to it.
+- **A pixel that happens to be exactly `#FF00FF` becomes a hole.** Avatars are
+  arbitrary images, so this is a real if vanishingly unlikely failure — one
+  transparent pixel in somebody's photograph.
 
 ### The window is a sheet of glass, not a window
 

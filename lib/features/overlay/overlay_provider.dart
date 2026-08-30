@@ -12,6 +12,25 @@ import 'overlay_channel.dart';
 import 'overlay_controller.dart';
 import 'overlay_prefs_controller.dart';
 
+/// The one channel to the runner, shared by everything that talks to it.
+///
+/// **There can only be one.** `OverlayChannel`'s event channel is a static
+/// `MethodChannel`, and `setMethodCallHandler` is global per channel name — so
+/// constructing a second instance silently replaces the first one's handler
+/// and the first one stops receiving anything at all.
+///
+/// That is not hypothetical: the call-hotkey binder built its own, which meant
+/// whichever provider happened to be created second won. The binder won, so
+/// every `WM_HOTKEY` arrived at the binder, which ignores the overlay's own
+/// two ids by design — and the toggle and edit chords stopped working, along
+/// with the foreground-app watch and the drag-to-edit wire, with nothing in
+/// the log to say why.
+final overlayChannelProvider = Provider<OverlayChannel>((ref) {
+  final channel = OverlayChannel();
+  ref.onDispose(() => unawaited(channel.dispose()));
+  return channel;
+});
+
 /// Owns the one [OverlayController].
 ///
 /// App-scoped and never auto-disposed, like `callControllerProvider` and for
@@ -20,7 +39,7 @@ import 'overlay_prefs_controller.dart';
 /// overlay flicker every time the settings screen closed.
 final overlayControllerProvider = Provider<OverlayController>((ref) {
   final controller = OverlayController(
-    channel: OverlayChannel(),
+    channel: ref.watch(overlayChannelProvider),
     persistLayout: (layout) =>
         ref.read(overlayPrefsProvider.notifier).updateLayout(layout),
     fetchAvatar: (mxcUri, pixels) async {
@@ -60,10 +79,23 @@ final overlayDriverProvider = Provider<void>((ref) {
     overlayPaletteFrom(
       speakingRing: palette.voiceSpeakingRing,
       text: palette.textPrimary,
-      // The scrim is what the rest of the app puts behind text that has to
-      // stay readable over something it does not control. A game is the
-      // strongest case of that there is.
-      plate: palette.scrim,
+      // `floatingSurface`, not `scrim`, and the difference is the whole of
+      // why the HUD came up purple.
+      //
+      // The scrim is the right *idea* — it is what the app puts behind text
+      // that has to stay readable over something it does not control, and a
+      // game is the strongest case of that there is. But it is `0xCC000000`,
+      // 80% black, and the overlay window is colour-keyed: a translucent
+      // colour there blends towards the magenta key rather than towards the
+      // game behind it. 80% black over magenta is purple, which is what
+      // appeared.
+      //
+      // Nothing the HUD paints may carry alpha. `floatingSurface` is opaque,
+      // and it is the surface the app already uses for a panel floating above
+      // everything else — which is precisely what this is. Translucency now
+      // comes from the window's own alpha instead, applied to the whole HUD
+      // at once.
+      plate: palette.floatingSurface,
     ),
   );
 

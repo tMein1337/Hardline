@@ -20,6 +20,16 @@ Future<void> joinVoiceCall(
   String roomId,
   VoiceJoinability joinability,
 ) async {
+  // Reachable now that the icon is also shown for a call somebody else
+  // started. Joining means writing our own call-membership state event, so
+  // without the power to send it there is nothing to attempt — and letting the
+  // join run anyway produced a failure that read like the call was broken
+  // rather than like a permission we do not have.
+  if (joinability == VoiceJoinability.forbidden) {
+    await _explainForbidden(context);
+    return;
+  }
+
   if (joinability == VoiceJoinability.needsEnabling) {
     final confirmed = await _confirmEnable(context);
     if (!confirmed || !context.mounted) return;
@@ -38,6 +48,33 @@ Future<void> joinVoiceCall(
   }
 
   await ref.read(callControllerProvider).join(roomId);
+}
+
+Future<void> _explainForbidden(BuildContext context) async {
+  final colors = context.colors;
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: colors.floatingSurface,
+      title: Text('You cannot join this call', style: context.text.title),
+      content: Text(
+        'A call is running here, but this room only lets moderators join '
+        'one.\n\n'
+        'Somebody who can change the room permissions has to enable calls for '
+        'everyone. In this app that happens the first time such a person '
+        'joins a call here; in Element it is under the room settings, in '
+        'Roles & Permissions.',
+        style: context.text.messageBody,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Close', style: TextStyle(color: colors.accent)),
+        ),
+      ],
+    ),
+  );
 }
 
 Future<bool> _confirmEnable(BuildContext context) async {

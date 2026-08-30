@@ -15,6 +15,19 @@ const String kCallMemberEventType = 'org.matrix.msc3401.call.member';
 /// The MatrixRTC "slot"/application id for ordinary voice+video calls.
 const String kCallApplication = 'm.call';
 
+/// Where this client publishes "I have my headphones off".
+///
+/// Namespaced to Hardline because MatrixRTC does not define it. Deafening is
+/// otherwise entirely local — see `LiveKitCallController.setDeafened` — which
+/// means nobody else can tell the difference between somebody thinking and
+/// somebody not listening, and being told is the whole value of the state.
+///
+/// Element ignores an unknown key, which is the intended outcome: this is a
+/// Hardline-to-Hardline courtesy, not a protocol change. Anything reading it
+/// must treat its absence as "not deafened" rather than "unknown", since every
+/// other client omits it always.
+const String kDeafenedKey = 'io.hardline.deafened';
+
 /// The timeline events a client sends to make everyone else's phone ring.
 ///
 /// Three spellings because the MSC was renamed twice and clients in the wild
@@ -30,6 +43,37 @@ const Set<String> kRtcRingEventTypes = {
   'org.matrix.msc4075.rtc.notification',
   'org.matrix.msc4075.call.notify',
   'm.call.notify',
+};
+
+/// The ring spelling this client sends.
+///
+/// One of the three in [kRtcRingEventTypes], which is the read side and stays
+/// tolerant of all of them. Writing needs exactly one, and the newest name is
+/// the one current Element understands.
+const String kRingEventType = 'org.matrix.msc4075.rtc.notification';
+
+/// The body of a ring for a call starting now.
+///
+/// `m.mentions: {room: true}` is what makes it count: the homeserver's `@room`
+/// push rule gives the event a highlight tweak, which is what actually rings
+/// somebody's client and badges the room. Without it the event arrives and
+/// nothing happens.
+///
+/// `sender_ts` rather than relying on `origin_server_ts` because that is what
+/// MSC4075 defines the lifetime against, and it is what [isRingExpired] reads
+/// first.
+Map<String, Object?> ringContent({
+  String intent = 'audio',
+  Duration lifetime = kDefaultRingLifetime,
+  DateTime? now,
+}) => {
+  'application': kCallApplication,
+  'call_id': '',
+  'm.mentions': {'room': true, 'user_ids': <String>[]},
+  'notification_type': 'notification',
+  'm.call.intent': intent,
+  'lifetime': lifetime.inMilliseconds,
+  'sender_ts': (now ?? DateTime.now()).millisecondsSinceEpoch,
 };
 
 /// How long a ring is meant to stand, absent an explicit `lifetime`.
@@ -156,6 +200,7 @@ class MatrixRtcMembership {
     required this.expires,
     required this.focusPreferred,
     required this.intent,
+    this.deafened = false,
   });
 
   final String userId;
@@ -181,6 +226,12 @@ class MatrixRtcMembership {
 
   /// `audio` or `video`, per `m.call.intent`. Advisory only.
   final String? intent;
+
+  /// Whether this device has its own playback silenced. See [kDeafenedKey].
+  ///
+  /// False for every client that does not publish it, which is all of them
+  /// except this one.
+  final bool deafened;
 
   DateTime get expiresAt => createdTs.add(expires);
 
@@ -240,6 +291,7 @@ class MatrixRtcMembership {
       expires: expires,
       focusPreferred: foci,
       intent: intent is String ? intent : null,
+      deafened: content[kDeafenedKey] == true,
     );
   }
 

@@ -12,27 +12,43 @@ import 'package:flutter/foundation.dart';
 /// body being plain text — see `message_body.dart`.
 @immutable
 class BodySpan {
-  const BodySpan.text(this.text) : target = null;
-  const BodySpan.link(this.text, Uri this.target);
+  const BodySpan.text(this.text) : target = null, userId = null;
+  const BodySpan.link(this.text, Uri this.target) : userId = null;
+  const BodySpan.mention(this.text, String this.userId) : target = null;
 
   final String text;
 
   /// Null on a plain run.
   final Uri? target;
 
+  /// Set on a mention run: whose it is.
+  ///
+  /// Mentions are found from `m.mentions.user_ids` rather than by parsing
+  /// `formatted_body`, which is why they can be drawn without giving up the
+  /// property the rest of this file rests on — the body stays the literal text
+  /// the sender typed, so a run's label and its meaning cannot disagree.
+  final String? userId;
+
   bool get isLink => target != null;
+  bool get isMention => userId != null;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is BodySpan && text == other.text && target == other.target;
+      other is BodySpan &&
+          text == other.text &&
+          target == other.target &&
+          userId == other.userId;
 
   @override
-  int get hashCode => Object.hash(text, target);
+  int get hashCode => Object.hash(text, target, userId);
 
   @override
-  String toString() =>
-      isLink ? 'BodySpan.link($text -> $target)' : 'BodySpan.text($text)';
+  String toString() => switch (this) {
+    _ when isLink => 'BodySpan.link($text -> $target)',
+    _ when isMention => 'BodySpan.mention($text -> $userId)',
+    _ => 'BodySpan.text($text)',
+  };
 }
 
 /// `http` and `https` only, and only where they are written out.
@@ -84,6 +100,54 @@ List<BodySpan> splitBodyLinks(String body) {
 
   if (cursor < body.length) spans.add(BodySpan.text(body.substring(cursor)));
   return spans;
+}
+
+/// Splits the plain runs of [spans] further, on the mentions in [names].
+///
+/// [names] maps a user id to the display name as written in the body, and
+/// comes from `m.mentions.user_ids` — the authoritative list — resolved
+/// against the room's members. Nothing is inferred from the text itself, so a
+/// message that merely contains an `@` cannot produce a pill.
+///
+/// Link runs are left alone: a URL that happens to contain somebody's name is
+/// still a URL.
+List<BodySpan> splitMentions(List<BodySpan> spans, Map<String, String> names) {
+  if (names.isEmpty) return spans;
+
+  // Longest first, so "Alice Smith" wins over "Alice" and does not leave
+  // "Smith" stranded outside the pill.
+  final ordered = names.entries.toList()
+    ..sort((a, b) => b.value.length.compareTo(a.value.length));
+
+  var current = spans;
+  for (final entry in ordered) {
+    if (entry.value.isEmpty) continue;
+    current = _splitOn(current, '@${entry.value}', entry.key);
+  }
+  return current;
+}
+
+List<BodySpan> _splitOn(List<BodySpan> spans, String needle, String userId) {
+  final out = <BodySpan>[];
+
+  for (final span in spans) {
+    if (span.isLink || span.isMention) {
+      out.add(span);
+      continue;
+    }
+
+    var rest = span.text;
+    var at = rest.indexOf(needle);
+    while (at >= 0) {
+      if (at > 0) out.add(BodySpan.text(rest.substring(0, at)));
+      out.add(BodySpan.mention(needle, userId));
+      rest = rest.substring(at + needle.length);
+      at = rest.indexOf(needle);
+    }
+    if (rest.isNotEmpty) out.add(BodySpan.text(rest));
+  }
+
+  return out;
 }
 
 String _trimTrailing(String candidate) {

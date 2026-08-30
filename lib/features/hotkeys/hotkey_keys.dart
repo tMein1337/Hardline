@@ -3,7 +3,7 @@
 
 import 'package:flutter/services.dart';
 
-import 'overlay_layout.dart';
+import 'hotkey.dart';
 
 /// Translates a key press into the virtual-key code `RegisterHotKey` wants.
 ///
@@ -38,7 +38,7 @@ int? virtualKeyFor(LogicalKeyboardKey key) {
 }
 
 /// A chord, spelled the way it would be written down.
-String hotkeyLabel(OverlayHotkey hotkey) {
+String hotkeyLabel(Hotkey hotkey) {
   if (!hotkey.isBound) return 'Not set';
 
   final parts = <String>[
@@ -75,7 +75,7 @@ int modifiersFrom(Set<LogicalKeyboardKey> pressed) {
 /// F13 and up do not appear on most keyboards, but F1 to F12 with no modifier
 /// is a binding people genuinely make for a push-to-talk-shaped control, and
 /// refusing it would be us deciding for them.
-bool isBindable(OverlayHotkey hotkey) {
+bool isBindable(Hotkey hotkey) {
   if (!hotkey.isBound) return false;
   if (hotkey.modifiers != 0) return true;
   return hotkey.key >= 0x70 && hotkey.key <= 0x7B;

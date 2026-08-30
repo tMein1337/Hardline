@@ -61,7 +61,7 @@ class OverlayController {
   OverlayPalette _palette = const OverlayPalette(
     speakingRing: 0xFFFF7A18,
     text: 0xFFFFFFFF,
-    plate: 0xCC000000,
+    plate: 0xFF08080A,
   );
 
   List<OverlayPerson> _people = const [];
@@ -110,13 +110,18 @@ class OverlayController {
 
   Future<void> dispose() async {
     _disposed = true;
+    _lingerTimer?.cancel();
+    _lingerTimer = null;
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
-    await channel.unregisterHotkey(OverlayHotkeyId.toggle);
-    await channel.unregisterHotkey(OverlayHotkeyId.edit);
+    await channel.unregisterHotkey(HotkeyId.toggle);
+    await channel.unregisterHotkey(HotkeyId.edit);
     await channel.hide();
-    await channel.dispose();
+    // Deliberately not `channel.dispose()`. The channel is shared — see
+    // `overlayChannelProvider` — and closing it here would take the hotkey
+    // binder's subscription down with it.
+
   }
 
   // ---------------------------------------------------------------------------
@@ -161,18 +166,18 @@ class OverlayController {
   ) async {
     if (!prefs.enabled) {
       if (_hotkeysBound) {
-        await channel.unregisterHotkey(OverlayHotkeyId.toggle);
-        await channel.unregisterHotkey(OverlayHotkeyId.edit);
+        await channel.unregisterHotkey(HotkeyId.toggle);
+        await channel.unregisterHotkey(HotkeyId.edit);
         _hotkeysBound = false;
       }
       return;
     }
 
     if (!_hotkeysBound || previous.toggleHotkey != prefs.toggleHotkey) {
-      await channel.registerHotkey(OverlayHotkeyId.toggle, prefs.toggleHotkey);
+      await channel.registerHotkey(HotkeyId.toggle, prefs.toggleHotkey);
     }
     if (!_hotkeysBound || previous.editHotkey != prefs.editHotkey) {
-      await channel.registerHotkey(OverlayHotkeyId.edit, prefs.editHotkey);
+      await channel.registerHotkey(HotkeyId.edit, prefs.editHotkey);
     }
     _hotkeysBound = true;
   }
@@ -180,7 +185,13 @@ class OverlayController {
   void setPalette(OverlayPalette palette) {
     if (_palette == palette) return;
     _palette = palette;
-    unawaited(_reconcile());
+    // The runner has to know the key before the HUD paints with it. Chained
+    // rather than fired alongside: a reconcile that pushed the new palette
+    // first would give the overlay a frame painting a colour the window is
+    // not keying, which is an opaque sheet over the game.
+    unawaited(
+      channel.setChromaKey(palette.chromaKey).then((_) => _reconcile()),
+    );
   }
 
   /// The call changed: who is in it, or whether we are in one at all.
@@ -206,8 +217,26 @@ class OverlayController {
       ));
     }
 
-    // Fetched before the list is swapped in, so the HUD never appears with a
-    // row of initials that fill in a moment later.
+    // Drawn first, with whatever avatars are already cached, and *then* the
+    // missing ones are fetched.
+    //
+    // This used to be the other way round, so that the HUD never appeared with
+    // a row of initials that filled in a moment later. That preference cost
+    // the whole feature on the first call of a session: nothing is cached yet,
+    // so every avatar is a real HTTP request, and the overlay could not appear
+    // until all of them had come back. Worse, each superseding update returns
+    // early below — correctly, the newer roster owns the state — so a
+    // participant list that changes while a fetch is out, which is exactly
+    // what a call does while it connects, abandoned the reconcile with it.
+    // The overlay simply never came up until the next call, by which point the
+    // avatars were cached and it was instant.
+    //
+    // A face that arrives a beat late is a far smaller thing than an overlay
+    // that does not arrive at all.
+    _people = _describe(people);
+    await _reconcile();
+
+    var filled = false;
     for (final person in people) {
       final mxc = person.mxc;
       if (mxc == null || mxc.isEmpty || _avatars.containsKey(mxc)) continue;
@@ -216,19 +245,26 @@ class OverlayController {
       // still worth keeping — it is keyed by the avatar, not by the roster —
       // but this list is stale and the newer call owns the state now.
       if (_disposed || generation != _generation) return;
+      filled = true;
     }
 
-    _people = [
-      for (final person in people)
-        OverlayPerson(
-          userId: person.userId,
-          name: person.name,
-          avatar: person.mxc == null ? null : _avatars[person.mxc],
-        ),
-    ];
+    // Nothing arrived that the first pass did not already have.
+    if (!filled) return;
 
+    _people = _describe(people);
     await _reconcile();
   }
+
+  List<OverlayPerson> _describe(
+    List<({String userId, String name, String? mxc})> people,
+  ) => [
+    for (final person in people)
+      OverlayPerson(
+        userId: person.userId,
+        name: person.name,
+        avatar: person.mxc == null ? null : _avatars[person.mxc],
+      ),
+  ];
 
   /// The hot path, called several times a second while anybody is talking.
   void setSpeaking(SpeakingParticipants speaking) {
@@ -237,6 +273,128 @@ class OverlayController {
     _lastSpeaking = next;
     if (!_shown) return;
     unawaited(channel.pushState(next.encode()));
+    _onSpeechChanged(speaking.userIds.isNotEmpty);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fade
+  //
+  // The HUD's opacity is a property of the *window*, not of the widgets. A
+  // layered window has no per-pixel alpha to give them — see `kChromaKey` — so
+  // everything is drawn solid and the window dims as a whole.
+  //
+  // Which would snap the roster to its idle opacity the instant a sentence
+  // ended, and an ordinary conversation is full of instants like that. The
+  // linger is what stops it flickering: the HUD stays up for `prefs.linger`
+  // after the last person stops, and only then fades.
+  // ---------------------------------------------------------------------------
+
+  /// Pending drop to idle. Restarted whenever somebody speaks again.
+  Timer? _lingerTimer;
+
+  /// The last value sent, so a tick that changes nothing costs no channel call.
+  int? _sentOpacity;
+
+  /// Whether anybody was talking as of the last update.
+  ///
+  /// Kept because the opacity has to be recomputed at moments that are not
+  /// speech changes — leaving edit mode, and the settings sliders moving — and
+  /// those need to know which of the two values applies without disturbing a
+  /// linger that is already running.
+  bool _speakingNow = false;
+
+  void _onSpeechChanged(bool anybodySpeaking) {
+    _speakingNow = anybodySpeaking;
+    _lingerTimer?.cancel();
+
+    // Arranging a HUD that fades out from under the pointer is not arranging
+    // anything. Edit mode holds it at full until it ends, and `_reconcileOnce`
+    // re-applies that whenever edit mode is entered.
+    if (anybodySpeaking) {
+      _applyOpacity(_activeOpacityByte);
+      return;
+    }
+
+    // Edit mode is the one case that ignores both settings. Arranging a HUD
+    // somebody has set to 20% means arranging something they can barely see,
+    // and the point of edit mode is to see it.
+    if (_editing) {
+      _applyOpacity(255);
+      return;
+    }
+
+    // Held rather than dropped now. Restarting the timer on every new speaker
+    // is what makes a conversation read as one continuous stretch of talking
+    // rather than as one fade per sentence.
+    _lingerTimer = Timer(_prefs.linger, () {
+      _lingerTimer = null;
+      _applyOpacity(_idleOpacityByte);
+    });
+  }
+
+  /// The idle opacity of whichever layout is in force, as a byte.
+  int get _idleOpacityByte =>
+      (activeLayout.idleOpacity.clamp(0.0, 1.0) * 255).round();
+
+  /// The same, for while somebody is talking.
+  int get _activeOpacityByte =>
+      (activeLayout.activeOpacity.clamp(0.0, 1.0) * 255).round();
+
+  /// Recomputes the window's opacity from the current state.
+  ///
+  /// Distinct from [_onSpeechChanged], which *is* a speech change and restarts
+  /// the linger. This one answers "what should it be right now" without
+  /// touching the timer, and exists for the two moments that change the answer
+  /// while nobody has started or stopped talking:
+  ///
+  ///  * **Leaving edit mode.** Edit mode pins the window at full, and nothing
+  ///    put it back afterwards — so once a HUD had been arranged it stayed at
+  ///    full opacity for the rest of the session. That is why toggling the
+  ///    edit chord looked like it "refreshed" the overlay.
+  ///  * **The opacity sliders.** The value was stored and never pushed, so
+  ///    moving one did nothing at all until the next time somebody spoke.
+  /// Adopts [layout] now, without waiting for it to arrive through prefs.
+  ///
+  /// The settings pane calls this when a slider is released. Writing the
+  /// preference and then asking the controller to re-evaluate does not work on
+  /// its own: the write updates provider state, `setPrefs` reaches this object
+  /// a rebuild later, and a `refreshOpacity()` called in between computes the
+  /// *old* value. The symptom was an opacity that only took effect when
+  /// something else happened to trigger a reconcile — closing the settings
+  /// screen, which changes the foreground application.
+  ///
+  /// Taking the layout directly removes the ordering question entirely. The
+  /// prefs copy catches up a moment later with the same content.
+  void applyLayoutNow(OverlayLayout layout) {
+    _prefs = _prefs.copyWith(
+      layouts: [
+        for (final existing in _prefs.layouts)
+          existing.id == layout.id ? layout : existing,
+      ],
+    );
+    refreshOpacity();
+    unawaited(_reconcile());
+  }
+
+  void refreshOpacity() {
+    if (!_shown) return;
+    if (_editing) {
+      _applyOpacity(255);
+      return;
+    }
+    // Still inside the linger counts as talking: the point of the hold is
+    // that the HUD has not dropped yet.
+    if (_speakingNow || _lingerTimer != null) {
+      _applyOpacity(_activeOpacityByte);
+      return;
+    }
+    _applyOpacity(_idleOpacityByte);
+  }
+
+  void _applyOpacity(int alpha) {
+    if (_sentOpacity == alpha) return;
+    _sentOpacity = alpha;
+    unawaited(channel.setOpacity(alpha));
   }
 
   // ---------------------------------------------------------------------------
@@ -254,17 +412,28 @@ class OverlayController {
 
   void _onHotkey(int id) {
     switch (id) {
-      case OverlayHotkeyId.toggle:
+      case HotkeyId.toggle:
         _hidden = !_hidden;
         // Coming back into view should not come back mid-edit.
         if (_hidden) _editing = false;
         unawaited(_reconcile());
-      case OverlayHotkeyId.edit:
-        _editing = !_editing;
-        // Editing something that is hidden is not a state worth having.
-        if (_editing) _hidden = false;
-        unawaited(_reconcile());
+      case HotkeyId.edit:
+        setEditing(!_editing);
     }
+  }
+
+  /// Enters or leaves the mode where the HUD can be dragged into place.
+  ///
+  /// Public because the chord is not the only thing that should be able to
+  /// reach it, and because "what happens on the way out" is worth a test —
+  /// leaving edit mode used to leave the window pinned at full opacity for
+  /// the rest of the session.
+  void setEditing(bool editing) {
+    if (_editing == editing) return;
+    _editing = editing;
+    // Editing something that is hidden is not a state worth having.
+    if (_editing) _hidden = false;
+    unawaited(_reconcile());
   }
 
   void _onOverlayEvent(String payload) {
@@ -321,6 +490,12 @@ class OverlayController {
       if (_shown) {
         _shown = false;
         _lastSnapshot = null;
+        // The window keeps whatever opacity it had, and the next `show` is a
+        // different call in a different state — so the cached value has to go
+        // or the first frame back could be sent nothing and stay faded.
+        _lingerTimer?.cancel();
+        _lingerTimer = null;
+        _sentOpacity = null;
         await channel.hide();
       }
       return;
@@ -334,6 +509,8 @@ class OverlayController {
     );
 
     if (!_shown) {
+      // Before the window exists, so its very first frame is keyed correctly.
+      await channel.setChromaKey(_palette.chromaKey);
       _shown = await channel.show(
         monitorId: _prefs.monitorId,
         clickThrough: !_editing,
@@ -346,10 +523,29 @@ class OverlayController {
       if (_shown && _lastSpeaking != null) {
         await channel.pushState(_lastSpeaking!.encode());
       }
+      // Full for the first moment either way. Coming up already faded would
+      // look like the overlay had failed to appear, and the linger below puts
+      // it right a second or two later if nobody is in fact talking.
+      if (_shown) {
+        // Comes up as though somebody were talking, then settles to idle once
+        // the linger runs out. Coming up at full when the user has chosen a
+        // dimmer talking opacity would announce the overlay with a flash of
+        // exactly the brightness they asked it not to use.
+        _applyOpacity(_activeOpacityByte);
+        _onSpeechChanged(_lastSpeaking?.userIds.isNotEmpty ?? false);
+      }
       return;
     }
 
     await channel.setClickThrough(!_editing);
+
+    // Both directions. Entering edit mode pins the window at full; leaving it
+    // has to hand the opacity back to the settings, which nothing did.
+    if (_editing) {
+      _lingerTimer?.cancel();
+      _lingerTimer = null;
+    }
+    refreshOpacity();
 
     if (_lastSnapshot != snapshot) {
       _lastSnapshot = snapshot;
@@ -384,7 +580,13 @@ Future<Uint8List?> fetchAvatarBytes(
 ) async {
   if (uri == null) return null;
   try {
-    final response = await http.get(uri, headers: headers);
+    // Bounded, because this runs in the middle of a roster update and an
+    // unbounded `http.get` against a media endpoint that has gone away holds
+    // the rest of that update behind it. Initials are a perfectly good answer
+    // and arrive instantly; a picture is not worth waiting on.
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 5));
     if (response.statusCode != 200) return null;
     return response.bodyBytes;
   } catch (error) {

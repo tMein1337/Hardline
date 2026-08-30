@@ -3,6 +3,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import '../hotkeys/hotkey.dart';
 import 'overlay_layout.dart';
 
 /// The id every installation starts with, and the one assignments fall back to.
@@ -16,6 +17,23 @@ const kDefaultOverlayLayoutId = 'default';
 /// who is followed — is per account, because a shared computer must not leak
 /// those between logins. A screen layout is not that. It answers "where on this
 /// monitor do I want things", which does not change when a different account
+/// How long the HUD stays up after the last person stops talking.
+///
+/// The overlay fades as a whole rather than per person — a layered window has
+/// no per-pixel alpha to give the widgets, see `kChromaKey`. On its own that
+/// would mean the roster snapping to its idle opacity the instant a sentence
+/// ended, which reads as flicker in an ordinary back-and-forth conversation.
+/// Holding it up for a moment afterwards is what makes a window-wide fade feel
+/// like the per-person one it replaced.
+///
+/// The range is deliberately enormous, because the two ends are both real
+/// answers rather than a default and some slack around it: a tenth of a second
+/// is "show me only who is talking, right now", and an hour is "once the call
+/// gets going, leave it up". Neither is wrong.
+const kDefaultOverlayLinger = Duration(seconds: 2);
+const kMinOverlayLinger = Duration(milliseconds: 100);
+const kMaxOverlayLinger = Duration(hours: 1);
+
 /// signs in.
 @immutable
 class OverlayPrefsState {
@@ -26,14 +44,15 @@ class OverlayPrefsState {
     this.layouts = const [OverlayLayout(id: kDefaultOverlayLayoutId, name: 'Default')],
     this.assignments = const {},
     this.defaultLayoutId = kDefaultOverlayLayoutId,
-    this.toggleHotkey = const OverlayHotkey(
+    this.toggleHotkey = const Hotkey(
       modifiers: HotkeyModifier.alt | HotkeyModifier.shift,
       key: 0x4F, // O
     ),
-    this.editHotkey = const OverlayHotkey(
+    this.editHotkey = const Hotkey(
       modifiers: HotkeyModifier.alt | HotkeyModifier.shift,
       key: 0x50, // P
     ),
+    this.linger = kDefaultOverlayLinger,
   });
 
   factory OverlayPrefsState.fromJson(Map<String, Object?> json) {
@@ -92,11 +111,22 @@ class OverlayPrefsState {
       assignments: assignments,
       defaultLayoutId: defaultId,
       toggleHotkey: toggle is Map
-          ? OverlayHotkey.fromJson(toggle.cast<String, Object?>())
+          ? Hotkey.fromJson(toggle.cast<String, Object?>())
           : const OverlayPrefsState().toggleHotkey,
       editHotkey: edit is Map
-          ? OverlayHotkey.fromJson(edit.cast<String, Object?>())
+          ? Hotkey.fromJson(edit.cast<String, Object?>())
           : const OverlayPrefsState().editHotkey,
+      // Clamped at parse rather than at use, like the tooltip delay: a
+      // hand-edited value outside the range would otherwise be a HUD that
+      // never comes back with nothing on screen to explain it.
+      linger: json['lingerMs'] is int
+          ? Duration(
+              milliseconds: (json['lingerMs']! as int).clamp(
+                kMinOverlayLinger.inMilliseconds,
+                kMaxOverlayLinger.inMilliseconds,
+              ),
+            )
+          : kDefaultOverlayLinger,
     );
   }
 
@@ -124,8 +154,11 @@ class OverlayPrefsState {
   /// What anything unassigned gets.
   final String defaultLayoutId;
 
-  final OverlayHotkey toggleHotkey;
-  final OverlayHotkey editHotkey;
+  final Hotkey toggleHotkey;
+  final Hotkey editHotkey;
+
+  /// See [kDefaultOverlayLinger].
+  final Duration linger;
 
   /// The layout for [executable], falling back to the default.
   ///
@@ -159,8 +192,9 @@ class OverlayPrefsState {
     List<OverlayLayout>? layouts,
     Map<String, String>? assignments,
     String? defaultLayoutId,
-    OverlayHotkey? toggleHotkey,
-    OverlayHotkey? editHotkey,
+    Hotkey? toggleHotkey,
+    Hotkey? editHotkey,
+    Duration? linger,
   }) => OverlayPrefsState(
     enabled: enabled ?? this.enabled,
     monitorId: monitorId ?? this.monitorId,
@@ -170,6 +204,7 @@ class OverlayPrefsState {
     defaultLayoutId: defaultLayoutId ?? this.defaultLayoutId,
     toggleHotkey: toggleHotkey ?? this.toggleHotkey,
     editHotkey: editHotkey ?? this.editHotkey,
+    linger: linger ?? this.linger,
   );
 
   Map<String, Object?> toJson() => {
@@ -182,6 +217,7 @@ class OverlayPrefsState {
     'defaultLayoutId': defaultLayoutId,
     'toggleHotkey': toggleHotkey.toJson(),
     'editHotkey': editHotkey.toJson(),
+    'lingerMs': linger.inMilliseconds,
   };
 
   @override
@@ -195,7 +231,8 @@ class OverlayPrefsState {
           mapEquals(assignments, other.assignments) &&
           defaultLayoutId == other.defaultLayoutId &&
           toggleHotkey == other.toggleHotkey &&
-          editHotkey == other.editHotkey;
+          editHotkey == other.editHotkey &&
+          linger == other.linger;
 
   @override
   int get hashCode => Object.hash(
@@ -207,5 +244,6 @@ class OverlayPrefsState {
     defaultLayoutId,
     toggleHotkey,
     editHotkey,
+    linger,
   );
 }

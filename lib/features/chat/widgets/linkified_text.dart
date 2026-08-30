@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import '../../../core/providers/injected_providers.dart';
 import '../../../core/util/open_link.dart';
 import '../../../theme/theme_context.dart';
 import '../../activity/activity_navigation.dart';
+import '../../activity/widgets/user_context_menu.dart';
 import '../message_links.dart';
 import 'link_confirmation.dart';
 
@@ -22,12 +24,23 @@ import 'link_confirmation.dart';
 /// gesture arena and selects — so pressing a link and dragging highlights text
 /// rather than opening anything, which is the behaviour people expect.
 class LinkifiedText extends ConsumerStatefulWidget {
-  const LinkifiedText({super.key, required this.text, required this.style});
+  const LinkifiedText({
+    super.key,
+    required this.text,
+    required this.style,
+    this.mentions = const {},
+  });
 
   final String text;
 
   /// Applied to the whole body; links add a colour and an underline on top.
   final TextStyle style;
+
+  /// User id to display name, for the people this message actually mentions.
+  ///
+  /// From `m.mentions.user_ids`, never inferred from the text — see
+  /// `splitMentions`. Empty for the overwhelming majority of messages.
+  final Map<String, String> mentions;
 
   @override
   ConsumerState<LinkifiedText> createState() => _LinkifiedTextState();
@@ -53,7 +66,10 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
     // dispose a recognizer mid-press, which is a click that silently does
     // nothing — and recolouring is exactly what happens while a theme slider is
     // being dragged.
-    if (oldWidget.text != widget.text) _parse();
+    if (oldWidget.text != widget.text ||
+        !mapEquals(oldWidget.mentions, widget.mentions)) {
+      _parse();
+    }
   }
 
   @override
@@ -64,12 +80,28 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
 
   void _parse() {
     _disposeRecognizers();
-    _spans = splitBodyLinks(widget.text);
+    _spans = splitMentions(splitBodyLinks(widget.text), widget.mentions);
     for (final span in _spans) {
       final target = span.target;
-      if (target == null) continue;
-      _recognizers.add(TapGestureRecognizer()..onTap = () => _open(target));
+      if (target != null) {
+        _recognizers.add(TapGestureRecognizer()..onTap = () => _open(target));
+        continue;
+      }
+      final userId = span.userId;
+      if (userId != null) {
+        _recognizers.add(
+          TapGestureRecognizer()..onTap = () => _openProfile(userId),
+        );
+      }
     }
+  }
+
+  void _openProfile(String userId) {
+    UserContextMenu.show(
+      context,
+      userId: userId,
+      displayName: widget.mentions[userId] ?? userId,
+    );
   }
 
   void _disposeRecognizers() {
@@ -124,23 +156,88 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
       decorationColor: accent,
     );
 
-    final children = <TextSpan>[];
-    var link = 0;
+    // The orange outline the issue asks for. A mention of *somebody else* has
+    // to be visible as a mention — the accent background and border say "this
+    // names a person" without claiming it names you, which is what the tile's
+    // own highlight is already for.
+    final mentionStyle = widget.style.copyWith(
+      color: accent,
+      fontWeight: FontWeight.w600,
+    );
+
+    final children = <InlineSpan>[];
+    var recognizer = 0;
     for (final span in _spans) {
-      children.add(
-        span.isLink
-            ? TextSpan(
-                text: span.text,
-                style: linkStyle,
-                recognizer: _recognizers[link++],
-                mouseCursor: SystemMouseCursors.click,
-              )
-            : TextSpan(text: span.text),
-      );
+      if (span.isLink) {
+        children.add(
+          TextSpan(
+            text: span.text,
+            style: linkStyle,
+            recognizer: _recognizers[recognizer++],
+            mouseCursor: SystemMouseCursors.click,
+          ),
+        );
+        continue;
+      }
+      if (span.isMention) {
+        children.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: _MentionPill(
+              label: span.text,
+              style: mentionStyle,
+              recognizer: _recognizers[recognizer++],
+            ),
+          ),
+        );
+        continue;
+      }
+      children.add(TextSpan(text: span.text));
     }
 
     return SelectableText.rich(
       TextSpan(style: widget.style, children: children),
+    );
+  }
+}
+
+
+/// A mention, drawn as a pill.
+///
+/// A `WidgetSpan` rather than a styled `TextSpan` because a background with
+/// padding and a border is not something a text style can express. The cost is
+/// that a pill does not participate in text selection — copying a message
+/// leaves a gap where the name was — which is why the plain body is still what
+/// gets sent and what every other client falls back to.
+class _MentionPill extends StatelessWidget {
+  const _MentionPill({
+    required this.label,
+    required this.style,
+    required this.recognizer,
+  });
+
+  final String label;
+  final TextStyle style;
+  final TapGestureRecognizer recognizer;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: recognizer.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            color: colors.accent.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: colors.accent.withValues(alpha: 0.55)),
+          ),
+          child: Text(label, style: style),
+        ),
+      ),
     );
   }
 }

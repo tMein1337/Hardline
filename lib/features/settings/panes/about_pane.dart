@@ -40,7 +40,10 @@ class AboutPane extends StatelessWidget {
             children: [
               Text(
                 kAppName,
-                style: text.title.copyWith(fontSize: 22, letterSpacing: 0.5),
+                style: text.title.copyWith(
+                  fontSize: text.sized(22),
+                  letterSpacing: 0.5,
+                ),
               ),
               const SizedBox(height: 4),
               SelectableText(
@@ -92,6 +95,10 @@ class AboutPane extends StatelessWidget {
                   title: 'GNU Affero General Public License v3',
                   assetPath: 'LICENSE',
                   externalUrl: kLicenseUrl,
+                  // Everything past this is the FSF's "how to apply these
+                  // terms to your new programs" appendix. The bundled file
+                  // still carries it; this screen does not need to.
+                  stopAfter: 'END OF TERMS AND CONDITIONS',
                 ),
               ),
               const _RowDivider(),

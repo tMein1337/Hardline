@@ -107,18 +107,42 @@ class VerificationSession extends ChangeNotifier {
   /// as unverified. [signedWithAccountKeys] reports which of the two happened.
   Future<void> skipSsss() => _guard(() => request.openSSSS(skip: true));
 
-  /// Whether this client held the cross-signing keys needed to publish a
-  /// signature others can check.
+  /// Whether the session just verified now carries a signature others can see.
   ///
   /// The difference between a verification that changes what Element shows and
   /// one that only changes what we show. Resolved rather than stored because
   /// the answer changes during the flow — unlocking secret storage mid-way is
   /// exactly what [unlockSsss] is for.
+  ///
+  /// **This asks about the device, not about us**, and the distinction is the
+  /// whole point. It used to return `crossSigning.isCached()` — "does *this*
+  /// client hold the account's signing keys" — which is a different question
+  /// with a different answer whenever the *other* side is the one holding
+  /// them. A new session verifying against an old one that has the keys is
+  /// signed by that old one and shows as verified everywhere, while
+  /// `isCached()` here says false; the dialog then announced "verified on this
+  /// device only" about a session Element was already showing as verified.
+  ///
+  /// `crossVerified` is a valid signature chain up to a master key, which is
+  /// exactly what any other client checks before drawing a session as trusted.
+  /// The question `isCached()` answers — can *we* sign — is what
+  /// `encryptionStatusProvider` reports, and it is what the dialog's fix-it
+  /// button is driven by.
   Future<bool> signedWithAccountKeys() async {
-    final crossSigning = request.client.encryption?.crossSigning;
+    final client = request.client;
+    final crossSigning = client.encryption?.crossSigning;
     if (crossSigning == null || !crossSigning.enabled) return false;
+
+    // Whose device was verified: our own other session, or somebody else's.
+    final device = client.userDeviceKeys[request.userId]?.deviceKeys[deviceId];
+    if (device != null) return device.crossVerified;
+
+    // No device to look at — an in-room verification that never named one.
+    // Fall back to whether we could have signed anything, which is the old
+    // behaviour and the best answer available without a device.
     return crossSigning.isCached();
   }
+
 
   /// Ends an unfinished verification. Safe to call on a finished one.
   Future<void> cancel() async {

@@ -10,6 +10,7 @@ import 'package:matrix/encryption.dart';
 import '../../../theme/theme_context.dart';
 import '../encryption/encryption_setup_dialog.dart';
 import '../encryption/encryption_status.dart';
+import '../widgets/settings_layout.dart';
 import '../widgets/text_prompt.dart';
 import 'sas_display.dart';
 import 'verification_session.dart';
@@ -369,21 +370,27 @@ class _SasComparison extends StatelessWidget {
         else
           _DigitRow(groups: session.digitGroups),
         if (onSwitch case final callback?) ...[
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: callback,
-              // The escape hatch for the mismatch this whole thing exists to
-              // avoid: both codes are agreed and equally valid, but the other
-              // client draws only one of them, and it may not be this one.
-              child: Text(
-                emoji
-                    ? 'Other device showing numbers? Switch'
-                    : 'Other device showing emoji? Switch',
-                style: context.text.subtitle,
-              ),
-            ),
+          const SizedBox(height: 8),
+          // The escape hatch for the mismatch this whole thing exists to
+          // avoid: both codes are agreed and equally valid, but the other
+          // client draws only one of them, and it may not be this one.
+          //
+          // A switch rather than the "…? Switch" text button it was. That
+          // button asked a question and answered it in the same four words,
+          // and it was drawn in the muted subtitle colour — which in this
+          // palette is what a disabled control looks like. So the one thing
+          // that rescues a mismatched comparison read as unavailable. A switch
+          // states which of the two you are looking at, which is the real
+          // question, and takes the accent colour like every other switch.
+          //
+          // Still not persisted: see `_override` in the dialog state. Which
+          // code the *other* client draws is a fact about that client, not a
+          // preference of this one.
+          SettingsSwitchTile(
+            value: emoji,
+            title: 'Other device is showing emoji',
+            contentPadding: EdgeInsets.zero,
+            onChanged: (_) => callback(),
           ),
         ],
       ],
@@ -418,7 +425,13 @@ class _EmojiRow extends StatelessWidget {
               width: 68,
               child: Column(
                 children: [
-                  Text(emoji.emoji, style: const TextStyle(fontSize: 30)),
+                  Text(
+                    emoji.emoji,
+                    // Scaled like everything else: these are the glyphs somebody
+                    // is being asked to compare against another screen, so
+                    // they are the last thing that should stay small.
+                    style: TextStyle(fontSize: context.text.sized(30)),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     // The name matters as much as the glyph: emoji render
@@ -470,7 +483,7 @@ class _DigitRow extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Consolas',
                     fontFamilyFallback: const ['Courier New', 'monospace'],
-                    fontSize: 30,
+                    fontSize: context.text.sized(30),
                     fontWeight: FontWeight.w600,
                     letterSpacing: 2,
                     color: colors.textHeader,

@@ -8,9 +8,14 @@ import '../../theme/theme_context.dart';
 import '../shell/selection_providers.dart';
 import '../spaces/space_list_provider.dart';
 import '../spaces/space_summary.dart';
+import '../voice/join_voice_action.dart';
+import '../voice/voice_participants_provider.dart';
+import '../voice/voice_prefs_controller.dart';
 import '../voice/widgets/voice_channel_participants.dart';
 import '../voice/widgets/voice_status_footer.dart';
 import 'room_list_provider.dart';
+import 'invites_provider.dart';
+import 'widgets/invite_card.dart';
 import 'widgets/room_list_header.dart';
 import 'widgets/room_list_tile.dart';
 import 'widgets/user_footer.dart';
@@ -25,6 +30,9 @@ class RoomListPanel extends ConsumerWidget {
     final spaceId = ref.watch(selectedSpaceIdProvider);
     final rooms = ref.watch(roomListProvider(spaceId));
     final selectedRoomId = ref.watch(selectedRoomIdProvider);
+    final doubleClickToJoin = ref.watch(
+      voicePrefsProvider.select((prefs) => prefs.doubleClickToJoin),
+    );
 
     final spaceName = ref
         .watch(spaceListProvider)
@@ -38,7 +46,17 @@ class RoomListPanel extends ConsumerWidget {
       color: colors.roomSidebar,
       child: Column(
         children: [
-          RoomListHeader(title: spaceName ?? 'Home'),
+          RoomListHeader(title: spaceName ?? 'Home', spaceId: spaceId),
+          // Only on Home, and above everything else.
+          //
+          // An invitation has no space yet — accepting one is what decides
+          // where the room lands — so there is no space column it could
+          // sensibly belong to, and Home is the list that shows what belongs
+          // nowhere. Above the rooms because it is the only thing here waiting
+          // on an answer.
+          if (spaceId == kHomeSpaceId)
+            for (final invite in ref.watch(roomInvitesProvider).items)
+              InviteCard(key: ValueKey(invite.roomId), invite: invite),
           Expanded(
             child: rooms.isEmpty
                 ? _EmptyRoomList(isHome: spaceId == kHomeSpaceId)
@@ -59,6 +77,25 @@ class RoomListPanel extends ConsumerWidget {
                             onTap: () => ref
                                 .read(selectedRoomIdsProvider.notifier)
                                 .select(spaceId: spaceId, roomId: room.id),
+                            // Only when asked for, and only when there is a
+                            // call to join: binding this on every row would
+                            // put the double-tap delay on every room switch,
+                            // and offering it on a channel with nobody in it
+                            // would mean starting a call by mistiming a click.
+                            onDoubleTap:
+                                doubleClickToJoin &&
+                                    ref
+                                        .watch(
+                                          voiceParticipantsProvider(room.id),
+                                        )
+                                        .isNotEmpty
+                                ? () => joinVoiceCall(
+                                    context,
+                                    ref,
+                                    room.id,
+                                    room.voiceJoinability,
+                                  )
+                                : null,
                           ),
                           VoiceChannelParticipants(roomId: room.id),
                         ],

@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 enum SettingsSection {
   account('My Account', Icons.person_outline, group: SettingsGroup.user),
   sessions('Sessions', Icons.devices, group: SettingsGroup.user),
+  chat('Chat', Icons.chat_bubble_outline, group: SettingsGroup.app),
   voice('Voice & Video', Icons.mic_none, group: SettingsGroup.app),
   overlay('Call overlay', Icons.layers_outlined, group: SettingsGroup.app),
   activity('Activity', Icons.bolt, group: SettingsGroup.app),

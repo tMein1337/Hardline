@@ -9,8 +9,8 @@ import 'mic_tap.dart';
 ///
 /// Pure and synchronous: it takes a level and a timestamp and returns a
 /// decision. Nothing in here knows about LiveKit, WebRTC or Riverpod, which is
-/// what makes the awkward parts — the hold, the release, the fail-safe — worth
-/// testing rather than worth hoping about.
+/// what makes the awkward part — the hold — worth testing rather than worth
+/// hoping about.
 ///
 /// ## Why a gate needs more than a threshold
 ///
@@ -20,28 +20,38 @@ import 'mic_tap.dart';
 /// So the gate opens the instant the level goes over, and closes only after
 /// [hold] has passed *entirely* below.
 ///
-/// ## The fail-safe, and why it exists
+/// ## There is no fail-safe, deliberately
 ///
-/// The gate closes by disabling the capture track. If whatever is measuring
-/// that microphone sits *downstream* of the gate, a closed gate reads silence,
-/// concludes the room is quiet, and never reopens — leaving somebody inaudible
-/// with a microphone that looks perfectly live, until they restart the app.
+/// There used to be one: a gate held shut for three seconds without the level
+/// ever rising off `MicTap.silenceDb` concluded it had blinded itself — that
+/// its own closing had stopped the measurement arriving — gave up, and stayed
+/// open. It rested on the claim that a genuinely quiet room never reads the
+/// absolute floor, because there is always a noise floor of some kind.
 ///
-/// `MicTap` is built so that cannot happen: it reads the capture source, above
-/// the gate, so the two paths never touch. This is the belt to that pair of
-/// braces. A gate closed for [failSafe] without the level ever rising off
-/// `MicTap.silenceDb` concludes it has been blinded anyway, gives up, and stays
-/// open — because the failure it is guarding against is silent, and for a
-/// microphone "no gate" is the only acceptable direction to fail in.
+/// That claim is false on a great many real machines. `takePeakDb` returns
+/// exactly `silenceDb` both when the tap delivered a zero band *and* when it
+/// delivered nothing at all, so "silent" and "blind" are the same number
+/// downstream — and digital silence is what a hardware-muted headset, a
+/// virtual audio cable, and any of the vendor noise suppressors (Sonar,
+/// Nvidia Broadcast, Krisp) emit while they decide you are not talking. Those
+/// setups tripped the fail-safe within seconds of the gate first closing, and
+/// the gate then stopped gating for the rest of the call while the settings
+/// pane went on saying it was on.
 ///
-/// A genuinely quiet room never reads the absolute floor; there is always a
-/// noise floor of some kind. Only a reading pinned at the very bottom of the
-/// scale says the measurement has stopped arriving.
+/// **A false positive is worse than the failure it guarded against**, because
+/// the guarded failure has an obvious symptom and a one-click fix: nobody can
+/// hear you, and the switch is in Settings → Voice & Video. A fail-safe that
+/// fires on ordinary silence has no symptom at all — the gate simply does
+/// nothing, quietly, and the person who turned it on believes it is working.
+///
+/// So the gate now does exactly what it is told, and stopping it is the user's
+/// job rather than a guess this code makes on their behalf. The meter is what
+/// makes that possible: it says whether anything is being sent, which is the
+/// fact somebody needs in order to reach for the switch.
 class NoiseGate {
   NoiseGate({
     required this.thresholdDb,
     this.hold = const Duration(milliseconds: 400),
-    this.failSafe = const Duration(seconds: 3),
   });
 
   /// Decibels at or above which the gate opens, on the same scale [MicTap]
@@ -55,75 +65,36 @@ class NoiseGate {
   /// usual figure for voice gates and is what Discord's own release lands near.
   final Duration hold;
 
-  /// How long a closed gate tolerates a level pinned at the floor before it
-  /// concludes it has blinded itself and reopens. See the class comment.
-  ///
-  /// **Null disables it**, which is right for an instance that gates nothing.
-  /// The whole hazard is a gate silencing the thing it measures; one driving
-  /// only an indicator silences nothing, has nothing to be blinded by, and
-  /// would be wrong to give up — a permanently-lit ring is its own bug.
-  final Duration? failSafe;
-
   bool _open = false;
-  bool _defeated = false;
   DateTime? _lastAbove;
-  DateTime? _closedAt;
 
   /// Whether audio should currently be transmitted.
-  bool get isOpen => _open || _defeated;
-
-  /// True once the fail-safe has fired and the gate has stopped gating.
-  ///
-  /// Surfaced rather than hidden: a gate that has given up is a thing the
-  /// settings pane should be able to say out loud, because the alternative is
-  /// a slider that silently does nothing.
-  bool get isDefeated => _defeated;
+  bool get isOpen => _open;
 
   /// Feeds one measurement in decibels and returns whether the gate is open.
   ///
   /// [now] is passed rather than read so the state machine can be tested
   /// without waiting in real time.
   bool update(double db, DateTime now) {
-    if (_defeated) return true;
-
     if (db >= thresholdDb) {
       _lastAbove = now;
       _open = true;
-      _closedAt = null;
       return true;
     }
 
-    if (!_open) {
-      // Already shut. If nothing but the absolute floor has been seen for long
-      // enough, the measurement has stopped arriving rather than gone quiet.
-      if (db > MicTap.silenceDb) {
-        _closedAt = now;
-      } else if (failSafe != null &&
-          _closedAt != null &&
-          now.difference(_closedAt!) >= failSafe!) {
-        _defeated = true;
-        _open = true;
-      }
-      return isOpen;
-    }
+    if (!_open) return false;
 
     final since = _lastAbove;
     if (since != null && now.difference(since) < hold) return true;
 
     _open = false;
-    _closedAt = now;
     return false;
   }
 
   /// Forgets everything, for a new call or a new microphone.
-  ///
-  /// The fail-safe verdict is forgotten too: it was a conclusion about one
-  /// track on one device, and the next one deserves to be judged fresh.
   void reset() {
     _open = false;
-    _defeated = false;
     _lastAbove = null;
-    _closedAt = null;
   }
 }
 
@@ -173,8 +144,11 @@ class MicLevel {
   /// True whenever the gate is off, because then nothing is being withheld.
   final bool gateOpen;
 
-  /// Whether the gate is switched on and doing anything. False when the user
-  /// has turned it off, and false once the fail-safe has defeated it.
+  /// Whether the gate is switched on and doing anything.
+  ///
+  /// False when the user has turned it off, and false when the sender refused
+  /// the change — see `gateAvailable`. There is no third case: the gate does
+  /// not give up on its own any more, deliberately. See the class comment.
   final bool gateActive;
 
   /// Whether gating is possible at all on this build.

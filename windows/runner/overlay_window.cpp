@@ -22,48 +22,8 @@ constexpr DWORD WDA_EXCLUDEFROMCAPTURE = 0x00000011;
 #endif
 
 // ---------------------------------------------------------------------------
-// SetWindowCompositionAttribute
-//
-// Undocumented, and the only thing on Windows that makes a Flutter window
-// per-pixel transparent. `flutter_acrylic` and `bitsdojo_window` both reach for
-// it for the same reason; there is no supported alternative that composites a
-// D3D swapchain against the desktop with alpha.
-//
-// Resolved at runtime rather than linked: it is not in any import library, and
-// a missing export must degrade to an opaque overlay rather than a process that
-// will not start.
-// ---------------------------------------------------------------------------
-
-enum AccentState {
-  ACCENT_DISABLED = 0,
-  ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-};
-
-struct AccentPolicy {
-  AccentState state;
-  DWORD flags;
-  DWORD gradient_colour;  // AABBGGRR; the alpha is what does the work.
-  DWORD animation_id;
-};
-
-struct WindowCompositionAttributeData {
-  DWORD attribute;  // 19 == WCA_ACCENT_POLICY
-  PVOID data;
-  SIZE_T size;
-};
-
-using SetWindowCompositionAttributeFn =
-    BOOL(WINAPI*)(HWND, WindowCompositionAttributeData*);
-
-SetWindowCompositionAttributeFn ResolveComposition() {
-  static SetWindowCompositionAttributeFn resolved = [] {
-    HMODULE user32 = ::GetModuleHandleW(L"user32.dll");
-    if (!user32) return static_cast<SetWindowCompositionAttributeFn>(nullptr);
-    return reinterpret_cast<SetWindowCompositionAttributeFn>(
-        ::GetProcAddress(user32, "SetWindowCompositionAttribute"));
-  }();
-  return resolved;
-}
+// kDefaultChromaKey lives in the header, because the member that defaults to
+// it does.
 
 using SetWindowDisplayAffinityFn = BOOL(WINAPI*)(HWND, DWORD);
 
@@ -231,6 +191,11 @@ void OverlayWindow::SetClickThrough(bool click_through) {
   }
   ::SetWindowLongPtr(window_, GWL_EXSTYLE, ex_style);
 
+  // Rewriting GWL_EXSTYLE can drop the accent policy, and the window is
+  // WS_EX_LAYERED either way -- so re-establish the alpha rather than leave
+  // edit mode looking different from watch mode.
+  ApplyTransparency();
+
   if (!click_through && visible_) {
     // Taking the foreground costs the game its fullscreen exclusivity. That is
     // the right trade while somebody is dragging avatars around, and it is why
@@ -268,6 +233,10 @@ void OverlayWindow::SetMonitor(const std::string& monitor_id) {
   ::SetWindowPos(window_, HWND_TOPMOST, bounds.left, bounds.top,
                  bounds.right - bounds.left, bounds.bottom - bounds.top,
                  SWP_NOACTIVATE);
+
+  // Monitors can differ in what the compositor will do for a layered window,
+  // and this is cheap.
+  ApplyTransparency();
 }
 
 void OverlayWindow::SetExcludedFromCapture(bool excluded) {
@@ -286,36 +255,56 @@ std::vector<OverlayWindow::Monitor> OverlayWindow::EnumerateMonitors() {
   return monitors;
 }
 
+void OverlayWindow::SetChromaKey(COLORREF key) {
+  chroma_key_ = key;
+  ApplyTransparency();
+}
+
+void OverlayWindow::SetOpacity(int alpha) {
+  opacity_ = alpha < 0 ? 0 : (alpha > 255 ? 255 : alpha);
+  ApplyTransparency();
+}
+
 void OverlayWindow::ApplyTransparency() {
   if (!window_) return;
 
-  auto set_composition = ResolveComposition();
-  if (set_composition) {
-    AccentPolicy policy = {};
-    policy.state = ACCENT_ENABLE_TRANSPARENTGRADIENT;
-    policy.flags = 0;
-    // Fully transparent black. Everything visible on the overlay comes from
-    // what Flutter paints on top of it.
-    policy.gradient_colour = 0x00000000;
-
-    WindowCompositionAttributeData data = {};
-    data.attribute = 19;  // WCA_ACCENT_POLICY
-    data.data = &policy;
-    data.size = sizeof(policy);
-
-    if (set_composition(window_, &data)) return;
-  }
-
-  // Fallback, for a Windows build where the undocumented call is gone. Blur
-  // behind an empty region is the documented way to tell DWM to honour a
-  // layered window's own alpha; it is less reliable across compositor changes,
-  // which is why it is second.
-  DWM_BLURBEHIND blur = {};
-  blur.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-  blur.fEnable = TRUE;
-  blur.hRgnBlur = ::CreateRectRgn(0, 0, -1, -1);
-  ::DwmEnableBlurBehindWindow(window_, &blur);
-  if (blur.hRgnBlur) ::DeleteObject(blur.hRgnBlur);
+  // Colour-key transparency, and deliberately nothing cleverer.
+  //
+  // The two previous attempts here both worked on the *window*:
+  // SetWindowCompositionAttribute with ACCENT_ENABLE_TRANSPARENTGRADIENT, and
+  // DwmEnableBlurBehindWindow over an empty region. Neither could ever have
+  // worked, and the reason is not that the accent policy is undocumented:
+  //
+  //   The Flutter view is a **child HWND**, parented into this window in
+  //   Create(). The engine renders it opaque -- flutter_windows.h exposes no
+  //   clear colour, no background colour, and no alpha mode; the only handle
+  //   it gives out is FlutterDesktopViewGetHWND. So whatever this window is
+  //   told about its own composition, the child paints over the whole of it
+  //   with solid pixels, and those are what reach the screen. The reported
+  //   symptom was the monitor filled with the engine's default clear colour.
+  //
+  // LWA_COLORKEY works at the other end: the compositor takes the finished
+  // surface -- child windows included -- and drops every pixel that exactly
+  // matches the key. So the overlay engine paints kChromaKey everywhere it
+  // wants the game to show through (see overlay_app.dart) and anything else
+  // it paints stays.
+  //
+  // The cost, and it is a real one: this is a hard 1-bit cut, not alpha. An
+  // antialiased edge drawn straight onto the key fringes towards it. The HUD
+  // avoids that by drawing its content on an opaque plate, so only the plate's
+  // own rounded corners meet the key.
+  // LWA_ALPHA alongside the key is what gives the HUD its fade back.
+  //
+  // Colour keying alone is 1-bit — a pixel is the key or it is not — so the
+  // per-person `AnimatedOpacity` the HUD was built on cannot survive it: a
+  // half-transparent avatar blends towards magenta rather than towards the
+  // game. A window-wide alpha is the one kind of partial transparency a
+  // layered window will do without per-pixel alpha, so the fade moves from the
+  // person to the window: everybody is drawn solid, and the whole HUD dims
+  // together once nobody has spoken for a while.
+  ::SetLayeredWindowAttributes(
+      window_, chroma_key_, static_cast<BYTE>(opacity_),
+      LWA_COLORKEY | LWA_ALPHA);
 }
 
 void OverlayWindow::ReassertTopmost() {
@@ -368,6 +357,13 @@ LRESULT OverlayWindow::MessageHandler(HWND window, UINT message, WPARAM wparam,
     // app running with a dead engine and no way to get the HUD back.
     case WM_CLOSE:
       Hide();
+      return 0;
+
+    // DWM restarting, or composition being switched, resets everything
+    // established about this window's transparency. Without this the overlay
+    // survives the restart as an opaque rectangle over the game.
+    case WM_DWMCOMPOSITIONCHANGED:
+      ApplyTransparency();
       return 0;
 
     // Nothing here should ever take the foreground away from the game.

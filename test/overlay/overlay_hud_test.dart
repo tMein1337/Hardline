@@ -9,10 +9,13 @@ import 'package:hardline/features/overlay/widgets/overlay_hud.dart';
 
 void main() {
   const ring = 0xFFFF7A18;
+  // Opaque, like every colour the HUD is given: the overlay window is
+  // colour-keyed, so anything carrying alpha blends towards the key.
+  const plate = 0xFF08080A;
   const palette = OverlayPalette(
     speakingRing: ring,
     text: 0xFFFFFFFF,
-    plate: 0xCC000000,
+    plate: plate,
   );
 
   const alice = '@alice:example.org';
@@ -54,16 +57,15 @@ void main() {
   /// test has on one of several identical-looking entries.
   Finder rowOf(String userId) => find.byKey(ValueKey(userId));
 
-  /// What the row is drawn at, read off the rendered opacity.
-  double opacityOf(WidgetTester tester, String userId) {
-    final widget = tester.widget<AnimatedOpacity>(
-      find.descendant(
-        of: rowOf(userId),
-        matching: find.byType(AnimatedOpacity),
-      ),
-    );
-    return widget.opacity;
-  }
+  /// Whether the person is drawn at all.
+  ///
+  /// There is no per-person opacity to read any more. The window is
+  /// colour-keyed, so everything the HUD paints is solid and the dimming
+  /// happens on the window instead — see `kChromaKey` and
+  /// `OverlayController._onSpeechChanged`. What is left to assert here is who
+  /// is on screen and which of them is ringed.
+  bool isDrawn(WidgetTester tester, String userId) =>
+      rowOf(userId).evaluate().isNotEmpty;
 
   Color? ringOf(WidgetTester tester, String userId) {
     final container = tester.widget<AnimatedContainer>(
@@ -75,23 +77,26 @@ void main() {
     return (container.decoration as BoxDecoration?)?.border?.top.color;
   }
 
-  // The whole feature in one test: a quiet call leaves nothing over the game.
-  testWidgets('nobody speaking means nothing visible', (tester) async {
+  // The roster is always drawn. Whether any of it is *seen* is the window's
+  // opacity, which the controller owns — see overlay_linger_test.dart.
+  testWidgets('everybody in the call is drawn, talking or not', (
+    tester,
+  ) async {
     await tester.pumpWidget(host(snapshot(), const {}));
     await tester.pumpAndSettle();
 
-    expect(opacityOf(tester, alice), 0);
-    expect(opacityOf(tester, bob), 0);
+    expect(isDrawn(tester, alice), isTrue);
+    expect(isDrawn(tester, bob), isTrue);
   });
 
-  testWidgets('the speaker comes up to full, and only the speaker', (
+  testWidgets('the roster does not change when somebody starts talking', (
     tester,
   ) async {
     await tester.pumpWidget(host(snapshot(), const {alice}));
     await tester.pumpAndSettle();
 
-    expect(opacityOf(tester, alice), 1);
-    expect(opacityOf(tester, bob), 0);
+    expect(isDrawn(tester, alice), isTrue);
+    expect(isDrawn(tester, bob), isTrue);
   });
 
   testWidgets('the speaker gets the same ring the sidebar draws', (
@@ -101,12 +106,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(ringOf(tester, alice), const Color(ring));
-    expect(ringOf(tester, bob), Colors.transparent);
+    // The plate, not `Colors.transparent`. Transparent means "show what is
+    // behind", and behind is the colour key — a quiet person would wear a
+    // bright magenta ring.
+    expect(ringOf(tester, bob), const Color(plate));
   });
 
-  // Anyone who would rather see who is in the channel at all times raises this,
-  // and it must not affect the speaker's own contrast.
-  testWidgets('a raised idle opacity shows the quiet people too', (
+  // `idleOpacity` no longer reaches the widgets at all — it is applied to the
+  // window once the linger expires. The HUD must draw the same either way, or
+  // the two would fight over the same fact.
+  testWidgets('a raised idle opacity changes nothing about the drawing', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -119,8 +128,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(opacityOf(tester, alice), 1);
-    expect(opacityOf(tester, bob), 0.4);
+    expect(isDrawn(tester, alice), isTrue);
+    expect(isDrawn(tester, bob), isTrue);
+    expect(ringOf(tester, alice), const Color(ring));
+    // The plate, not `Colors.transparent`. Transparent means "show what is
+    // behind", and behind is the colour key — a quiet person would wear a
+    // bright magenta ring.
+    expect(ringOf(tester, bob), const Color(plate));
   });
 
   testWidgets('names can be turned off without losing the avatars', (
@@ -146,7 +160,8 @@ void main() {
     await tester.pumpWidget(host(snapshot(roster: const []), const {}));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AnimatedOpacity), findsNothing);
+    expect(rowOf(alice), findsNothing);
+    expect(rowOf(bob), findsNothing);
   });
 
   // Laying a HUD out over an empty call would otherwise mean asking somebody
@@ -169,8 +184,8 @@ void main() {
     await tester.pumpWidget(host(snapshot(editing: true), const {}));
     await tester.pumpAndSettle();
 
-    expect(opacityOf(tester, alice), 1);
-    expect(opacityOf(tester, bob), 1);
+    expect(isDrawn(tester, alice), isTrue);
+    expect(isDrawn(tester, bob), isTrue);
   });
 
   testWidgets('the layout decides where the roster sits', (tester) async {

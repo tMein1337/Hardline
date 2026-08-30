@@ -55,7 +55,7 @@ AppCopyright=Copyright (C) 2026 Mein1337. Licensed under the GNU AGPLv3 or later
 ; install instead, which is what PrivilegesRequiredOverridesAllowed permits.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={code:DefaultDirValue}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 
@@ -83,8 +83,21 @@ MinVersion=10.0.17763
 
 ; Offer to close a running copy rather than failing on locked files, and
 ; restart it afterwards.
+;
+; AppMutex is what makes this reliable rather than best-effort. Restart Manager
+; can only close what it can identify, and a Flutter window it fails to
+; associate with these files is a locked DLL and a failed upgrade. The named
+; mutex is created by the application itself (windows/runner/main.cpp), so the
+; installer knows an instance is running before it touches anything.
 CloseApplications=yes
 RestartApplications=yes
+AppMutex=HardlineRunningMutex
+SetupMutex=HardlineSetupMutex
+
+; The install directory is chosen by the code below, which finds the previous
+; install in either registry hive. Warning about a directory that already
+; exists would be warning about the expected case.
+DirExistsWarning=no
 
 ; Version resource on setup.exe itself, so the installer is identifiable in
 ; Explorer and by any signature check applied to it later.
@@ -125,3 +138,70 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; uninstalling and reinstalling does not sign every account out or destroy the
 ; keys needed to read encrypted history. Anyone who wants that data gone can
 ; delete the directory, which PRIVACY.md documents.
+
+[Code]
+
+// Finding a previous install, in either registry hive.
+//
+// This is the fix for an upgrade landing beside the old copy instead of on top
+// of it. PrivilegesRequired=lowest means setup normally runs unelevated, and
+// Inno records a per-user install under HKCU and a machine-wide one under
+// HKLM. An unelevated run only ever looks in HKCU -- so if the first install
+// was elevated (or the user picked "for all users" once and not the next
+// time), no previous install is found, the default program-files constant
+// resolves to %LOCALAPPDATA%\Programs instead of C:\Program Files, and a
+// *second* parallel copy is installed with its own Add/Remove entry. Same
+// AppId, different hive, two Hardlines.
+//
+// So both hives are checked, and the directory the previous install actually
+// used wins over whatever the default would have produced.
+//
+// Note the comments here are // rather than the Pascal { } form: a braced
+// comment cannot contain a { } constant, because the first closing brace ends
+// the comment and the rest is parsed as code.
+
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8FE5F428-E27B-4EC5-AE5A-78B2D4E5FADB}_is1';
+
+// The install directory recorded by a previous install, or '' if there is none.
+function PreviousInstallDir(): String;
+var
+  Path: String;
+begin
+  Result := '';
+
+  // HKCU first: a per-user install is what this installer produces by
+  // default, so it is the likelier of the two.
+  if RegQueryStringValue(HKEY_CURRENT_USER, UninstallKey, 'InstallLocation', Path) then
+  begin
+    if Path <> '' then
+    begin
+      Result := RemoveBackslash(Path);
+      Exit;
+    end;
+  end;
+
+  // HKLM64 explicitly rather than HKLM: this is a 64-bit application, and a
+  // 32-bit setup process reading plain HKLM would be redirected into
+  // Wow6432Node and find nothing.
+  if RegQueryStringValue(HKEY_LOCAL_MACHINE_64, UninstallKey, 'InstallLocation', Path) then
+  begin
+    if Path <> '' then
+      Result := RemoveBackslash(Path);
+  end;
+end;
+
+// Where to install, used by DefaultDirName.
+//
+// Falls back to the program-files default, which is what DefaultDirName said
+// before this existed -- so a first install behaves exactly as it always did.
+function DefaultDirValue(Param: String): String;
+var
+  Previous: String;
+begin
+  Previous := PreviousInstallDir();
+  if Previous <> '' then
+    Result := Previous
+  else
+    Result := ExpandConstant('{autopf}\Hardline');
+end;

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,8 +10,10 @@ import 'package:matrix/matrix.dart';
 
 import '../../../core/matrix/avatar_uri_provider.dart';
 import '../../../theme/theme_context.dart';
+import '../../../theme/color_slots.dart';
 import '../attachments/attachment_kind.dart';
 import 'attachment_icons.dart';
+import 'image_viewer.dart';
 
 /// The inline preview ceiling. Past this an image is scaled down rather than
 /// allowed to push the rest of the timeline off screen.
@@ -118,6 +121,28 @@ class _AttachmentImageState extends ConsumerState<AttachmentImage> {
     final colors = context.colors;
     final size = _boxFor(widget.event);
 
+    // Not clickable while it is still uploading: there is nothing on the
+    // server to fetch at full size yet, and the viewer would open onto its own
+    // error message.
+    final openable =
+        !widget.isPending &&
+        widget.event.hasAttachment &&
+        widget.kind == AttachmentKind.image;
+
+    return GestureDetector(
+      onTap: openable
+          ? () => unawaited(ImageViewer.open(context, widget.event))
+          : null,
+      child: MouseRegion(
+        cursor: openable
+            ? SystemMouseCursors.click
+            : MouseCursor.defer,
+        child: _body(context, colors, size),
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context, AppPalette colors, Size size) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(

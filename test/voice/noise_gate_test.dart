@@ -86,80 +86,6 @@ void main() {
   // a closed gate would see silence forever and never reopen, leaving somebody
   // inaudible with a microphone that looks live. These are the tests that say
   // it fails the other way instead.
-  group('the fail-safe', () {
-    test('gives up after a spell of nothing but exact zero', () {
-      final gate = NoiseGate(
-        thresholdDb: -55,
-        hold: const Duration(milliseconds: 400),
-        failSafe: const Duration(seconds: 3),
-      );
-
-      gate.update(-40, at(0));
-      expect(gate.update(MicTap.silenceDb, at(500)), isFalse, reason: 'closes');
-
-      expect(
-        gate.update(MicTap.silenceDb, at(3000)),
-        isFalse,
-        reason: 'not yet',
-      );
-      expect(
-        gate.update(MicTap.silenceDb, at(3501)),
-        isTrue,
-        reason: 'blinded, so opens',
-      );
-      expect(gate.isDefeated, isTrue);
-    });
-
-    // A real quiet room still reads *something*: a noise floor, a fan, the
-    // microphone's own hiss. Only a reading pinned at the very bottom of the
-    // scale says the measurement has stopped arriving.
-    test('a genuinely quiet room keeps the gate working', () {
-      final gate = NoiseGate(
-        thresholdDb: -55,
-        hold: const Duration(milliseconds: 400),
-        failSafe: const Duration(seconds: 3),
-      );
-
-      gate.update(-40, at(0));
-      gate.update(-78, at(500));
-      for (var t = 1000; t < 20000; t += 500) {
-        expect(gate.update(-78, at(t)), isFalse, reason: 'at $t');
-      }
-      expect(gate.isDefeated, isFalse);
-    });
-
-    test('once defeated it stays open, whatever it is told', () {
-      final gate = NoiseGate(
-        thresholdDb: -55,
-        failSafe: const Duration(seconds: 1),
-      );
-
-      gate.update(-40, at(0));
-      gate.update(MicTap.silenceDb, at(500));
-      gate.update(MicTap.silenceDb, at(2000));
-      expect(gate.isDefeated, isTrue);
-
-      expect(gate.update(MicTap.silenceDb, at(3000)), isTrue);
-      expect(gate.update(MicTap.silenceDb, at(60000)), isTrue);
-    });
-
-    test('a reset gives the next microphone a fresh hearing', () {
-      final gate = NoiseGate(
-        thresholdDb: -55,
-        failSafe: const Duration(seconds: 1),
-      );
-      gate.update(-40, at(0));
-      gate.update(MicTap.silenceDb, at(500));
-      gate.update(MicTap.silenceDb, at(2000));
-      expect(gate.isDefeated, isTrue);
-
-      gate.reset();
-
-      expect(gate.isDefeated, isFalse);
-      expect(gate.update(MicTap.silenceDb, at(3000)), isFalse);
-    });
-  });
-
   // The trim exists to move a quiet microphone into the part of the scale the
   // threshold can work in. Comparing the threshold against the *untrimmed*
   // reading would be comparing against the very number the trim was there to
@@ -195,71 +121,40 @@ void main() {
   // microphone that had stopped reporting looked merely quiet (-100 + 40 = -60)
   // rather than absent. The fail-safe waits for the floor exactly, so it never
   // fired, and a gate that had closed stayed closed for the rest of the call.
+  // The gate used to give up on its own: held shut for three seconds with the
+  // level pinned at the floor, it concluded it had blinded itself and reopened
+  // for good. That is gone, because "pinned at the floor" is what a
+  // hardware-muted headset, a virtual cable and every vendor noise suppressor
+  // emit — so the guard fired on ordinary silence and quietly stopped gating.
   //
-  // `AudioLevelSampler` now leaves silence untrimmed. These hold the gate's
-  // half of that contract.
-  group('a trimmed floor would hide the fail-safe', () {
-    test('the floor still defeats the gate', () {
+  // A gate that will not open is a failure somebody can see and switch off. A
+  // gate that stopped gating without saying so is not.
+  group('silence never makes the gate give up', () {
+    test('a floor for ever keeps it shut', () {
       final gate = NoiseGate(
         thresholdDb: -55,
         hold: const Duration(milliseconds: 400),
-        failSafe: const Duration(seconds: 3),
       );
 
       gate.update(-40, at(0));
       expect(gate.update(MicTap.silenceDb, at(500)), isFalse);
-      expect(gate.update(MicTap.silenceDb, at(4000)), isTrue);
-      expect(gate.isDefeated, isTrue);
-    });
-
-    test('a floor lifted by a trim would not, which is the whole point', () {
-      final gate = NoiseGate(
-        thresholdDb: -55,
-        hold: const Duration(milliseconds: 400),
-        failSafe: const Duration(seconds: 3),
-      );
-
-      gate.update(-40, at(0));
-      // What the sampler used to hand over: the floor plus a +40 trim.
-      const trimmedFloor = MicTap.silenceDb + 40;
-      for (var t = 500; t < 30000; t += 500) {
-        expect(gate.update(trimmedFloor, at(t)), isFalse, reason: 'at $t');
-      }
-      expect(
-        gate.isDefeated,
-        isFalse,
-        reason: 'silence that reads as quiet is never recognised as absent',
-      );
-    });
-  });
-
-  // An instance that gates nothing cannot blind itself, and one that gave up
-  // would simply stay lit — which is the avatar bug in another costume.
-  group('an indicator has no fail-safe', () {
-    test('a floor for ever does not defeat it', () {
-      final indicator = NoiseGate(
-        thresholdDb: -55,
-        hold: const Duration(milliseconds: 400),
-        failSafe: null,
-      );
-
-      indicator.update(-40, at(0));
-      expect(indicator.update(MicTap.silenceDb, at(500)), isFalse);
       for (var t = 1000; t < 60000; t += 1000) {
         expect(
-          indicator.update(MicTap.silenceDb, at(t)),
+          gate.update(MicTap.silenceDb, at(t)),
           isFalse,
           reason: 'at $t',
         );
       }
-      expect(indicator.isDefeated, isFalse);
     });
 
-    test('it still opens on speech', () {
-      final indicator = NoiseGate(thresholdDb: -55, failSafe: null);
+    test('and it still opens the moment somebody speaks', () {
+      final gate = NoiseGate(thresholdDb: -55);
 
-      expect(indicator.update(MicTap.silenceDb, at(0)), isFalse);
-      expect(indicator.update(-40, at(100)), isTrue);
+      expect(gate.update(MicTap.silenceDb, at(0)), isFalse);
+      for (var t = 1000; t < 30000; t += 1000) {
+        gate.update(MicTap.silenceDb, at(t));
+      }
+      expect(gate.update(-40, at(30000)), isTrue);
     });
   });
 

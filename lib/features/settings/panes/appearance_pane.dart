@@ -47,6 +47,9 @@ class AppearancePane extends ConsumerWidget {
           _LegacyOverridesCard(count: theme.overrides.length),
         ],
         const SizedBox(height: 24),
+        const SettingsLabel('Text size'),
+        _TextScaleCard(scale: theme.textScale),
+        const SizedBox(height: 24),
         const SettingsLabel('Tooltips'),
         _TooltipDelayCard(delay: theme.tooltipDelay),
         const SizedBox(height: 24),
@@ -192,6 +195,73 @@ class _LegacyOverridesCard extends ConsumerWidget {
 /// How long the pointer has to rest on something before its tooltip appears.
 ///
 /// A live preview sits next to the slider, because the only way to judge a
+/// How large everything is drawn.
+///
+/// The preview is the pane itself: the slider changes the theme live, so every
+/// word on screen resizes under the pointer as it moves. That is deliberate,
+/// and it is the only honest way to choose a size — a percentage means nothing
+/// until you can see what it does to the thing you are reading.
+class _TextScaleCard extends ConsumerWidget {
+  const _TextScaleCard({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(themeControllerProvider.notifier);
+
+    return SettingsCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SettingsRow(
+            title: 'Text size',
+            subtitle: scale == kDefaultTextScale
+                ? 'The size everything was designed at.'
+                : '${(scale * 100).round()}% of the designed size.',
+            hint:
+                'Row heights, avatars and spacing follow the text, so lines '
+                'do not clip at larger sizes. The two sidebar columns keep '
+                'their width — that space belongs to the conversation.',
+          ),
+          Slider(
+            value: scale.clamp(kMinTextScale, kMaxTextScale),
+            min: kMinTextScale,
+            max: kMaxTextScale,
+            // 5% steps. Finer is false precision at these sizes, and it makes
+            // returning to exactly 100% a matter of luck.
+            divisions: ((kMaxTextScale - kMinTextScale) * 20).round(),
+            label: '${(scale * 100).round()}%',
+            // Same split as the hover delay below: dragging redraws, only the
+            // release is written to disk.
+            onChanged: (value) => controller.setTextScale(value, commit: false),
+            onChangeEnd: controller.setTextScale,
+          ),
+          Row(
+            children: [
+              Text(
+                '${(kMinTextScale * 100).round()}%',
+                style: context.text.timestamp,
+              ),
+              const Spacer(),
+              if (scale != kDefaultTextScale)
+                TextButton(
+                  onPressed: () => controller.setTextScale(kDefaultTextScale),
+                  child: const Text('Reset'),
+                ),
+              const Spacer(),
+              Text(
+                '${(kMaxTextScale * 100).round()}%',
+                style: context.text.timestamp,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// hover delay is to hover something and count — a number in milliseconds tells
 /// nobody anything.
 class _TooltipDelayCard extends ConsumerWidget {

@@ -23,6 +23,7 @@ class DocumentViewer extends StatelessWidget {
     required this.title,
     required this.assetPath,
     this.externalUrl,
+    this.stopAfter,
   });
 
   final String title;
@@ -33,11 +34,25 @@ class DocumentViewer extends StatelessWidget {
   /// Where the canonical copy lives, offered alongside the bundled one.
   final String? externalUrl;
 
+  /// Stop rendering after the line containing this marker.
+  ///
+  /// For the AGPL, whose file continues past `END OF TERMS AND CONDITIONS`
+  /// into an appendix explaining how to apply the licence to *your own*
+  /// program — instructions for a developer starting a project, not terms this
+  /// one is offered under, and so noise on a screen someone opened to read the
+  /// terms.
+  ///
+  /// This trims the **view**, never the file: `LICENSE` stays byte-identical
+  /// on disk, which is what `LicenseRegistry`, the installer and the licence's
+  /// own "changing it is not allowed" all require. See [_trimmed].
+  final String? stopAfter;
+
   static Future<void> open(
     BuildContext context, {
     required String title,
     required String assetPath,
     String? externalUrl,
+    String? stopAfter,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute(
@@ -45,9 +60,24 @@ class DocumentViewer extends StatelessWidget {
           title: title,
           assetPath: assetPath,
           externalUrl: externalUrl,
+          stopAfter: stopAfter,
         ),
       ),
     );
+  }
+
+  /// [text] up to and including the line holding [stopAfter].
+  ///
+  /// Returns the whole document when the marker is not there. A legal notice
+  /// silently rendering as far as a marker that has moved would be worse than
+  /// showing the extra paragraphs, and the same reasoning as the asset-missing
+  /// message below: fail visible, never short.
+  static String trimmed(String text, String? stopAfter) {
+    if (stopAfter == null) return text;
+    final at = text.indexOf(stopAfter);
+    if (at < 0) return text;
+    final lineEnd = text.indexOf(RegExp(r'\r?\n'), at);
+    return lineEnd < 0 ? text : text.substring(0, lineEnd);
   }
 
   @override
@@ -107,9 +137,9 @@ class DocumentViewer extends StatelessWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(28, 24, 28, 60),
               child: SelectableText(
-                snapshot.data!,
+                trimmed(snapshot.data!, stopAfter),
                 style: context.text.timestamp.copyWith(
-                  fontSize: 12,
+                  fontSize: context.text.sized(12),
                   height: 1.5,
                   color: colors.textPrimary,
                 ),

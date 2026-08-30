@@ -15,6 +15,7 @@ import 'panes/appearance_pane.dart';
 import 'panes/overlay_pane.dart';
 import 'panes/security_pane.dart';
 import 'panes/sessions_pane.dart';
+import 'panes/chat_pane.dart';
 import 'panes/voice_pane.dart';
 import 'settings_section.dart';
 
@@ -101,6 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _paneFor(SettingsSection section) => switch (section) {
     SettingsSection.account => const AccountPane(),
     SettingsSection.sessions => const SessionsPane(),
+    SettingsSection.chat => const ChatPane(),
     SettingsSection.voice => const VoicePane(),
     SettingsSection.overlay => const OverlayPane(),
     SettingsSection.activity => const ActivityPane(),

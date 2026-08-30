@@ -25,6 +25,7 @@ class RoomListItem {
     required this.name,
     required this.avatarMxc,
     required this.isDirect,
+    required this.directUserId,
     required this.isEncrypted,
     required this.notificationCount,
     required this.highlightCount,
@@ -39,6 +40,13 @@ class RoomListItem {
   final String? avatarMxc;
 
   final bool isDirect;
+
+  /// The other person, when this row is a direct chat.
+  ///
+  /// Null for a channel. Carried so the row can offer their profile on
+  /// right-click without the tile needing a `Room` — which it deliberately
+  /// does not hold, see the note at the top of this file.
+  final String? directUserId;
   final bool isEncrypted;
   final int notificationCount;
   final int highlightCount;
@@ -65,6 +73,7 @@ class RoomListItem {
     name: displaySafeName(room.getLocalizedDisplayname()),
     avatarMxc: room.avatar?.toString(),
     isDirect: room.isDirectChat,
+    directUserId: room.directChatMatrixID,
     isEncrypted: room.encrypted,
     notificationCount: room.notificationCount,
     highlightCount: room.highlightCount,
@@ -79,6 +88,7 @@ class RoomListItem {
           name == other.name &&
           avatarMxc == other.avatarMxc &&
           isDirect == other.isDirect &&
+          directUserId == other.directUserId &&
           isEncrypted == other.isEncrypted &&
           notificationCount == other.notificationCount &&
           highlightCount == other.highlightCount &&
@@ -90,6 +100,7 @@ class RoomListItem {
     name,
     avatarMxc,
     isDirect,
+    directUserId,
     isEncrypted,
     notificationCount,
     highlightCount,

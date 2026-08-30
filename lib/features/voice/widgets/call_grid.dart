@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
@@ -10,8 +12,10 @@ import '../../common/mx_avatar.dart';
 import '../call_controller_provider.dart';
 import '../call_grid_layout.dart';
 import '../live_participant.dart';
+import '../voice_participant.dart';
 import 'speaking_border.dart';
 import 'speaking_ring.dart';
+import 'user_audio_menu.dart';
 
 /// Gap between tiles, and the inset around the whole grid.
 const _gap = 8.0;
@@ -147,27 +151,56 @@ class _Rows extends StatelessWidget {
   }
 }
 
-class _Tile extends StatelessWidget {
+class _Tile extends ConsumerWidget {
   const _Tile({super.key, required this.tile, required this.roomId});
 
   final CallTile tile;
   final String roomId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final radius = context.metrics.rowRadius;
 
-    return SpeakingBorder(
-      userId: tile.person.userId,
-      // Scoped to this channel, for the reason the sidebar rows are: somebody
-      // in two calls at once is only lit under the one we can hear.
-      roomId: roomId,
-      radius: radius,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: tile.isVideo
-            ? _VideoBody(tile: tile)
-            : _AvatarBody(person: tile.person),
+    return GestureDetector(
+      // The same menu the sidebar row opens, from the tile. Volume is a
+      // property of your own playback and the grid is where you are actually
+      // listening from, so being sent back to the sidebar to turn somebody
+      // down was the wrong way round.
+      //
+      // Deliberately not `onTap` as well: a tile is a video surface, and
+      // pairing a tap with a double-tap or a menu would put a delay on every
+      // click into a call.
+      onSecondaryTap: () => _openAudioMenu(context, ref),
+      child: SpeakingBorder(
+        userId: tile.person.userId,
+        // Scoped to this channel, for the reason the sidebar rows are:
+        // somebody in two calls at once is only lit under the one we can hear.
+        roomId: roomId,
+        radius: radius,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: tile.isVideo
+              ? _VideoBody(tile: tile)
+              : _AvatarBody(person: tile.person),
+        ),
+      ),
+    );
+  }
+
+  void _openAudioMenu(BuildContext context, WidgetRef ref) {
+    // Every device this person is connected from, not just the one this tile
+    // draws: volume is stored per device, and somebody on a laptop and a
+    // phone needs both sliders whichever of their tiles was clicked.
+    final deviceIds =
+        [
+          for (final person in ref.read(callControllerProvider).participants)
+            if (person.userId == tile.person.userId) person.deviceId,
+        ]..sort();
+
+    unawaited(
+      UserAudioMenu.show(
+        context,
+        VoiceParticipant.fromLive(tile.person, deviceIds: deviceIds),
       ),
     );
   }
@@ -255,7 +288,19 @@ class _AvatarBody extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (person.micMuted) ...[
+                    // Deafened first, and it replaces the muted glyph rather
+                    // than sitting beside it: somebody deafened is always also
+                    // muted (see `setDeafened`), so drawing both would be two
+                    // icons for one fact, and the stronger one is the one that
+                    // says they cannot hear you either.
+                    if (person.deafened) ...[
+                      Icon(
+                        Icons.headset_off,
+                        size: 13,
+                        color: colors.voiceDeafenedIcon,
+                      ),
+                      const SizedBox(width: 4),
+                    ] else if (person.micMuted) ...[
                       Icon(
                         Icons.mic_off,
                         size: 13,
@@ -312,7 +357,14 @@ class _NameChip extends StatelessWidget {
               ),
               const SizedBox(width: 4),
             ],
-            if (person.micMuted) ...[
+            if (person.deafened) ...[
+              Icon(
+                Icons.headset_off,
+                size: 12,
+                color: colors.voiceDeafenedIcon,
+              ),
+              const SizedBox(width: 4),
+            ] else if (person.micMuted) ...[
               Icon(Icons.mic_off, size: 12, color: colors.voiceMutedIcon),
               const SizedBox(width: 4),
             ],

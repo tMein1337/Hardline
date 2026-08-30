@@ -90,14 +90,41 @@ class OverlayPalette {
   factory OverlayPalette.fromJson(Map<String, Object?> json) => OverlayPalette(
     speakingRing: json['ring'] is int ? json['ring']! as int : 0xFFFF7A18,
     text: json['text'] is int ? json['text']! as int : 0xFFFFFFFF,
-    plate: json['plate'] is int ? json['plate']! as int : 0xCC000000,
+    plate: json['plate'] is int ? json['plate']! as int : 0xFF08080A,
   );
+
+  /// The colour the runner turns into a hole through to whatever is behind.
+  ///
+  /// **Derived from [plate] rather than fixed**, and that is the whole point.
+  ///
+  /// The key used to be pure magenta, on the traditional reasoning that a
+  /// chroma key should be the colour least likely to appear in the content.
+  /// That is right for video and wrong here, because of antialiasing: a curved
+  /// or fractionally-positioned edge blends into the key, so every rounded
+  /// corner in the HUD wore a thin magenta line. Chasing pixel alignment does
+  /// not fix it either — text is fractionally wide, and on a display at 125%
+  /// a whole logical pixel is not a whole device pixel.
+  ///
+  /// So instead of making the fringe rare, make it invisible: key on a colour
+  /// one step from the plate. Edges then blend plate-to-almost-plate, which
+  /// cannot be seen, in a light palette as well as a dark one — the day
+  /// palette's plate is white, so any fixed key would have fringed *dark*
+  /// there.
+  ///
+  /// The cost is the opposite risk, and it is small: a pixel in somebody's
+  /// avatar exactly equal to this becomes a hole. One pixel, showing the game,
+  /// in a colour a shade from the surrounding plate.
+  int get chromaKey => plate ^ 0x00010101;
 
   /// ARGB, because that is what `Color` takes on the far side.
   final int speakingRing;
   final int text;
 
   /// What the name sits on, so it stays readable over a bright game.
+  ///
+  /// **Must be opaque**, like every other colour here. The overlay window is
+  /// colour-keyed, so a colour carrying alpha blends towards the key rather
+  /// than towards the game behind it. See [chromaKey].
   final int plate;
 
   Map<String, Object?> toJson() => {
@@ -152,7 +179,7 @@ class OverlaySnapshot {
           : const OverlayPalette(
               speakingRing: 0xFFFF7A18,
               text: 0xFFFFFFFF,
-              plate: 0xCC000000,
+              plate: 0xFF08080A,
             ),
       editing: json['editing'] is bool ? json['editing']! as bool : false,
     );

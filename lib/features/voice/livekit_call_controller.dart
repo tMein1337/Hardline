@@ -318,6 +318,10 @@ class LiveKitCallController extends ChangeNotifier {
         );
       }
 
+      // Whether this join is the one that starts the call. Read here, before
+      // our own membership is published, because afterwards it never is.
+      final wasEmpty = liveMembershipsOf(room).isEmpty;
+
       // Reuse the SFU everyone else is already on. Picking our own focus would
       // put us in a different LiveKit room with the same name on a different
       // server — we would connect successfully and hear nobody, which is far
@@ -327,11 +331,6 @@ class LiveKitCallController extends ChangeNotifier {
         throw _VoiceUserError('No call server is configured for this room.');
       }
 
-      final credentials = await tokenService.fetch(
-        serviceUrl: focus.serviceUrl,
-        roomId: matrixRoomId,
-      );
-
       // Media encryption mirrors the Matrix room: an encrypted room gets
       // encrypted frames, an unencrypted one does not. Turning it on
       // unilaterally would make us undecodable to everyone else in the call,
@@ -339,10 +338,21 @@ class LiveKitCallController extends ChangeNotifier {
       //
       // Parameters have to match Element Call's exactly — see
       // `createMatrixRtcKeyProvider` for why the defaults do not.
-      lk.BaseKeyProvider? keyProvider;
-      if (room.encrypted) {
-        keyProvider = await createMatrixRtcKeyProvider();
-      }
+      //
+      // Started alongside the token fetch rather than after it. The token is
+      // two network round trips and the key provider is local work; nothing
+      // links them, so waiting for one before beginning the other was simply
+      // adding the two together.
+      final credentialsFuture = tokenService.fetch(
+        serviceUrl: focus.serviceUrl,
+        roomId: matrixRoomId,
+      );
+      final keyProviderFuture = room.encrypted
+          ? createMatrixRtcKeyProvider()
+          : Future<lk.BaseKeyProvider?>.value();
+
+      final credentials = await credentialsFuture;
+      final keyProvider = await keyProviderFuture;
 
       final lkRoom = attempted = lk.Room(
         roomOptions: lk.RoomOptions(
@@ -381,6 +391,10 @@ class LiveKitCallController extends ChangeNotifier {
       );
       _room = lkRoom;
 
+      // Completes when it is safe to publish audio. Already complete in an
+      // unencrypted room, where there is no key to wait for.
+      var keyReady = Future<void>.value();
+
       if (keyProvider != null) {
         // Started before publishing anything: our first frames must already be
         // encrypted with a key the others have.
@@ -396,7 +410,23 @@ class LiveKitCallController extends ChangeNotifier {
               lkRoom.e2eeManager?.setKeyIndex(index),
         );
         _encryption = encryption;
-        await encryption.start(liveMembershipsOf(room));
+
+        // Started here, awaited further down, and the gap between the two is
+        // the whole of this optimisation.
+        //
+        // `start` publishes a key and then waits `_useKeyDelay` — five seconds
+        // — before adopting it, so that nobody is sent frames encrypted with a
+        // key still in flight. That wait is not negotiable, but it used to be
+        // spent doing nothing: it was awaited *before* the audio devices were
+        // resolved and the microphone published, so an encrypted join cost five
+        // seconds plus the device setup, one after the other. It is now spent
+        // on the device setup, which needs several platform round trips of its
+        // own.
+        //
+        // The ordering guarantee is unchanged: the microphone is still not
+        // published until this future completes, so nothing goes out before
+        // the key is live.
+        keyReady = encryption.start(liveMembershipsOf(room));
 
         // Key rotation is driven by Matrix room state, not by LiveKit: someone
         // is "gone" when they withdraw their membership, which can happen
@@ -417,13 +447,18 @@ class LiveKitCallController extends ChangeNotifier {
       // require restarting it and the first seconds would come from the wrong
       // microphone.
       await applyAudioDevices();
+      final captureOptions = await _micCaptureOptions();
+
+      // The key settle, if there is one. See where `keyReady` is assigned:
+      // everything above this line ran while it was waiting.
+      await keyReady;
 
       // Microphone only. Camera and screenshare are opt-in later; grabbing the
       // camera to join a voice channel would light the hardware indicator for
       // no reason.
       final publication = await lkRoom.localParticipant?.setMicrophoneEnabled(
         true,
-        audioCaptureOptions: await _micCaptureOptions(),
+        audioCaptureOptions: captureOptions,
       );
       if (publication == null) {
         // Not fatal — we may still want to listen — but it means nobody can
@@ -437,14 +472,20 @@ class LiveKitCallController extends ChangeNotifier {
       // stops any previous run first and that teardown clears the room.
       await _levels.start(lkRoom);
 
-      await logAudioDevices();
       logDiagnostics('after connect');
 
       // Media is up, so publish state last: a participant others can hear but
       // cannot see is a better failure than the reverse.
+      _activeFocus = focus;
       await _publishMembership(room, focus);
+
+      // Only when we are the ones starting it. A ring is a doorbell, and
+      // ringing it for a call already in progress would badge the room for
+      // everybody every time one more person walked in.
+      //
+      // `wasEmpty` was read before our own membership went up, above.
+      if (wasEmpty) unawaited(_sendRing(room));
       _scheduleMembershipRefresh(room, focus);
-      await _armDelayedLeave(room, focus);
 
       if (_disposed) {
         await leave();
@@ -466,6 +507,18 @@ class LiveKitCallController extends ChangeNotifier {
       await _reapplyAudioState();
 
       notifyListeners();
+
+      // Deliberately after the call is reported connected, and deliberately
+      // not awaited. Neither of these gates being in the call:
+      //
+      //  * `_armDelayedLeave` cancels orphaned scheduled events, which is a
+      //    paged loop of up to ten round trips against the homeserver. It
+      //    tidies up after *previous* calls; making this one wait for it was
+      //    the single largest avoidable delay after the key settle.
+      //  * `logAudioDevices` is diagnostics, and enumerates both device lists
+      //    again to produce them.
+      unawaited(_armDelayedLeave(room, focus));
+      unawaited(logAudioDevices());
     } catch (error, stack) {
       debugPrint('[voice] joining $matrixRoomId failed: $error\n$stack');
       // Unconditional, unlike the rest of the call logging. A failed join is
@@ -612,7 +665,36 @@ class LiveKitCallController extends ChangeNotifier {
     await _reapplyAudioState();
     onDeafenChanged?.call(deafened);
     notifyListeners();
+
+    // Republished so other people can see it. Deafening is otherwise a purely
+    // local matter — playback is ours — but "not listening" is exactly the
+    // thing the rest of the call wants to know, and there is no other channel
+    // for it: mute reaches the SFU as a publication flag, deafen reaches
+    // nothing at all. Best-effort: failing to say so must not undeafen you.
+    unawaited(_republishMembership());
   }
+
+  /// Rewrites our membership state event with the current flags.
+  ///
+  /// A no-op outside a call, or before [join] settled on a focus.
+  Future<void> _republishMembership() async {
+    final roomId = _roomId;
+    final focus = _activeFocus;
+    if (roomId == null || focus == null) return;
+
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+
+    try {
+      await _publishMembership(room, focus);
+    } catch (error, stack) {
+      debugPrint('[voice] republishing membership failed: $error\n$stack');
+    }
+  }
+
+  /// The SFU this call settled on, kept so the membership can be republished
+  /// when something on it changes — the deafened flag, today.
+  LiveKitFocus? _activeFocus;
 
   bool _cameraOn = false;
   final List<LocalShare> _shares = [];
@@ -665,6 +747,7 @@ class LiveKitCallController extends ChangeNotifier {
   Future<void> startScreenShare(
     String sourceId, {
     required bool withSystemAudio,
+    String name = '',
   }) async {
     final participant = _room?.localParticipant;
     if (participant == null) return;
@@ -683,14 +766,9 @@ class LiveKitCallController extends ChangeNotifier {
 
       lk.LocalTrackPublication<lk.LocalVideoTrack>? video;
       lk.LocalTrackPublication<lk.LocalAudioTrack>? audio;
-      var label = '';
 
       for (final track in tracks) {
         if (track is lk.LocalVideoTrack) {
-          // The capturer names the source — the window or monitor title — and
-          // that name is the only human-readable handle available. The picker
-          // returns an opaque id and nothing else.
-          label = track.mediaStreamTrack.label ?? '';
           video = await participant.publishVideoTrack(track);
         } else if (track is lk.LocalAudioTrack) {
           audio = await participant.publishAudioTrack(track);
@@ -705,10 +783,20 @@ class LiveKitCallController extends ChangeNotifier {
         throw StateError('screen share produced no video track');
       }
 
+      // [name] comes from the picker, which is the only place the window
+      // title is ever visible.
+      //
+      // It used to be read off `track.mediaStreamTrack.label` instead, on the
+      // belief that the capturer names its source. It does not on Windows —
+      // flutter_webrtc's backend returns a bare track GUID, which is exactly
+      // the string people were seeing in the sharing list. The note further
+      // down this file, on `_participantsFor`, said as much all along.
       _shares.add(
         LocalShare(
           sourceId: sourceId,
-          label: label.isNotEmpty ? label : 'Screen ${_shares.length + 1}',
+          label: name.trim().isNotEmpty
+              ? name.trim()
+              : 'Screen ${_shares.length + 1}',
           videoSid: video.sid,
           audioSid: audio?.sid,
         ),
@@ -772,6 +860,17 @@ class LiveKitCallController extends ChangeNotifier {
 
     final matrixRoom = _roomId == null ? null : client.getRoomById(_roomId!);
 
+    // Deafening never reaches LiveKit — it is a property of somebody's own
+    // playback — so it is read from the call-membership state events instead,
+    // which is where this client publishes it. Built once per read rather than
+    // per participant: `liveMembershipsOf` walks the room's whole state map.
+    final deafenedDevices = <String>{
+      for (final membership in matrixRoom == null
+          ? const <MatrixRtcMembership>[]
+          : liveMembershipsOf(matrixRoom))
+        if (membership.deafened) '${membership.userId}|${membership.deviceId}',
+    };
+
     LiveParticipant describe(
       lk.Participant participant, {
       required bool isLocal,
@@ -811,12 +910,26 @@ class LiveKitCallController extends ChangeNotifier {
         );
       }
 
-      // `participant.name` arrives inside the SFU token, which means it is
-      // supplied by the far end. Everything read out of the SDK goes through
-      // `displaySafeName` at the ingestion point; this is an ingestion point,
-      // and it was missing one — a name carrying a bidi override could
-      // otherwise redraw itself as somebody else's on a video tile.
-      final claimed = displaySafeName(participant.name, fallback: userId);
+      // The Matrix room member is the same source the sidebar reads, and using
+      // it here is what makes the two agree.
+      //
+      // The name used to come from `participant.name`, which arrives inside
+      // the SFU token — so the grid showed whatever the far end put in its JWT
+      // while the sidebar showed the room's display name. For one person that
+      // is "mein1337" against "Mein Dev", and since the fallback avatar is
+      // drawn from initials, the same person appeared as ME on one surface and
+      // MD on the other. The avatar below was already read from Matrix, so the
+      // member was in hand the whole time.
+      //
+      // LiveKit's name is kept as the fallback for somebody the room has never
+      // loaded, and still goes through `displaySafeName`: it is supplied by
+      // the far end, and a name carrying a bidi override could otherwise
+      // redraw itself as somebody else's on a video tile.
+      final member = matrixRoom?.unsafeGetUserFromMemoryOrFallback(userId);
+      final matrixName = member?.calcDisplayname() ?? '';
+      final claimed = matrixName.isNotEmpty
+          ? displaySafeName(matrixName, fallback: userId)
+          : displaySafeName(participant.name, fallback: userId);
 
       return LiveParticipant(
         userId: userId,
@@ -826,11 +939,11 @@ class LiveKitCallController extends ChangeNotifier {
         // From the Matrix room member, not from LiveKit, which has no notion
         // of an avatar. Absent for somebody the room has never loaded, which
         // the avatar widget renders as initials.
-        avatarMxc: matrixRoom
-            ?.unsafeGetUserFromMemoryOrFallback(userId)
-            .avatarUrl
-            ?.toString(),
+        avatarMxc: member?.avatarUrl?.toString(),
         isLocal: isLocal,
+        deafened: deafenedDevices.contains(
+          '$userId|${matrixDeviceIdOf(participant.identity)}',
+        ),
         micMuted: micMuted,
         feeds: feeds,
       );
@@ -1053,6 +1166,9 @@ class LiveKitCallController extends ChangeNotifier {
         'created_ts': DateTime.now().millisecondsSinceEpoch,
         'expires': kDefaultMembershipLifetime.inMilliseconds,
         'm.call.intent': 'audio',
+        // Not in the MSC; see `kDeafenedKey`. Always written, so clearing it
+        // is a republish rather than a delete.
+        kDeafenedKey: _deafened,
         'foci_preferred': [focus.toJson()],
         'focus_active': {
           'type': 'livekit',
@@ -1060,6 +1176,30 @@ class LiveKitCallController extends ChangeNotifier {
         },
       },
     );
+  }
+
+  /// Rings everyone else in the room.
+  ///
+  /// A timeline event, not state: it says "a call is starting, now", and it is
+  /// what produces the unread badge and the "X started a call" row. Element
+  /// sends one; this client did not, which is why a call started from Hardline
+  /// arrived on everybody else's screen as silence, and left a timeline that
+  /// said nothing had happened.
+  ///
+  /// Best effort. Failing to ring is not a reason to fail the join — the call
+  /// itself is up and the membership is published, so anybody looking at the
+  /// channel still sees it.
+  Future<void> _sendRing(Room room) async {
+    try {
+      await client.sendMessage(
+        room.id,
+        kRingEventType,
+        client.generateUniqueTransactionId(),
+        ringContent(),
+      );
+    } catch (error, stack) {
+      debugPrint('[voice] could not ring ${room.id}: $error\n$stack');
+    }
   }
 
   /// Withdraws our membership by writing empty content.

@@ -19,6 +19,23 @@ const kDefaultTooltipDelay = Duration(milliseconds: 400);
 /// than deliberate.
 const kMaxTooltipDelay = Duration(seconds: 3);
 
+/// How much larger or smaller than designed everything is drawn.
+///
+/// Multiplies both the type and the metrics — see `buildThemeData`. Scaling
+/// only the type would grow the text inside rows whose height is fixed, so the
+/// first thing a larger setting did would be to clip it.
+const kDefaultTextScale = 1.0;
+
+/// The range offered in settings.
+///
+/// The floor is set by the smallest tokens rather than by taste: `timestamp`
+/// and `badge` are 11px, and 0.8 puts them just under 9, which is the point
+/// where they stop being readable rather than merely small. The ceiling is
+/// where the sidebar's fixed widths start to crowd — the rail and the channel
+/// column do not scale, so past 1.5 a long channel name has nowhere to go.
+const kMinTextScale = 0.8;
+const kMaxTextScale = 1.5;
+
 /// Which theme is selected, and the handful of interface preferences that
 /// reach every widget through `ThemeData`.
 ///
@@ -31,6 +48,7 @@ class AppThemeState {
     this.presetId = AppPalettes.defaultId,
     this.overrides = const {},
     this.tooltipDelay = kDefaultTooltipDelay,
+    this.textScale = kDefaultTextScale,
   });
 
   /// The id of the active theme — a key into the library, which seeds itself
@@ -58,6 +76,9 @@ class AppThemeState {
   /// applied by `MaterialApp` rebuilding — no widget has to know about it.
   final Duration tooltipDelay;
 
+  /// See [kDefaultTextScale]. Travels the same road as [tooltipDelay].
+  final double textScale;
+
   /// The palette the app should actually render with.
   ///
   /// [base] is the active theme's colours, which only the library can supply —
@@ -71,16 +92,19 @@ class AppThemeState {
     String? presetId,
     Map<String, int>? overrides,
     Duration? tooltipDelay,
+    double? textScale,
   }) => AppThemeState(
     presetId: presetId ?? this.presetId,
     overrides: overrides ?? this.overrides,
     tooltipDelay: tooltipDelay ?? this.tooltipDelay,
+    textScale: textScale ?? this.textScale,
   );
 
   Map<String, dynamic> toJson() => {
     'presetId': presetId,
     'overrides': overrides,
     'tooltipDelayMs': tooltipDelay.inMilliseconds,
+    'textScale': textScale,
   };
 
   /// Tolerant of malformed input: anything unparseable falls back to the
@@ -89,6 +113,7 @@ class AppThemeState {
     final preset = json['presetId'];
     final raw = json['overrides'];
     final delay = json['tooltipDelayMs'];
+    final scale = json['textScale'];
 
     return AppThemeState(
       presetId: preset is String && preset.isNotEmpty
@@ -109,6 +134,12 @@ class AppThemeState {
               milliseconds: delay.clamp(0, kMaxTooltipDelay.inMilliseconds),
             )
           : kDefaultTooltipDelay,
+      // Clamped at parse time for the same reason as the delay above: a
+      // hand-edited 12 would render an app nobody could reach the settings of
+      // to put it back.
+      textScale: scale is num
+          ? scale.toDouble().clamp(kMinTextScale, kMaxTextScale)
+          : kDefaultTextScale,
     );
   }
 
@@ -118,12 +149,14 @@ class AppThemeState {
       other is AppThemeState &&
           presetId == other.presetId &&
           tooltipDelay == other.tooltipDelay &&
+          textScale == other.textScale &&
           mapEquals(overrides, other.overrides);
 
   @override
   int get hashCode => Object.hash(
     presetId,
     tooltipDelay,
+    textScale,
     Object.hashAllUnordered(
       overrides.entries.map((e) => Object.hash(e.key, e.value)),
     ),

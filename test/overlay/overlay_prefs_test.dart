@@ -4,6 +4,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hardline/features/hotkeys/hotkey.dart';
 import 'package:hardline/features/overlay/overlay_layout.dart';
 import 'package:hardline/features/overlay/overlay_prefs_state.dart';
 
@@ -25,8 +26,8 @@ void main() {
         ],
         assignments: {'javaw.exe': 'a', 'cs2.exe': 'a'},
         defaultLayoutId: 'b',
-        toggleHotkey: OverlayHotkey(modifiers: 2, key: 0x4F),
-        editHotkey: OverlayHotkey(modifiers: 6, key: 0x70),
+        toggleHotkey: Hotkey(modifiers: 2, key: 0x4F),
+        editHotkey: Hotkey(modifiers: 6, key: 0x70),
       );
 
       expect(roundTrip(state), state);
@@ -129,6 +130,58 @@ void main() {
       });
 
       expect(state.defaultLayoutId, 'plain');
+    });
+  });
+
+  // The fade moved from the individual entries to the window, and that changed
+  // what a stored `idleOpacity` of zero promises. It used to mean "show me
+  // only who is talking" — the quiet entries hidden, the speaker still coming
+  // up over them. It now means "show nothing at all", because a layered window
+  // dims as a whole. Keeping the number while changing what it does is how
+  // somebody ends up with a feature that is switched on and invisible.
+  group('the idle opacity migration', () {
+    test('lifts a zero written before the change', () {
+      final layout = OverlayLayout.fromJson({
+        'id': 'a',
+        'name': 'A',
+        'idleOpacity': 0.0,
+        // No `activeOpacity`: only a layout written before the change can
+        // lack it, which is what makes this safe to do exactly once.
+      });
+      expect(layout.idleOpacity, kDefaultIdleOpacity);
+    });
+
+    test('keeps a zero chosen since', () {
+      final layout = OverlayLayout.fromJson({
+        'id': 'a',
+        'name': 'A',
+        'idleOpacity': 0.0,
+        'activeOpacity': 1.0,
+      });
+      expect(layout.idleOpacity, 0);
+    });
+
+    test('leaves a non-zero old value alone', () {
+      final layout = OverlayLayout.fromJson({
+        'id': 'a',
+        'name': 'A',
+        'idleOpacity': 0.6,
+      });
+      expect(layout.idleOpacity, 0.6);
+    });
+
+    test('does not run twice', () {
+      final once = OverlayLayout.fromJson({
+        'id': 'a',
+        'name': 'A',
+        'idleOpacity': 0.0,
+      });
+      // Round-tripping writes `activeOpacity`, so the marker is now present
+      // and a later deliberate zero would survive.
+      final twice = OverlayLayout.fromJson(
+        once.copyWith(idleOpacity: 0).toJson(),
+      );
+      expect(twice.idleOpacity, 0);
     });
   });
 }

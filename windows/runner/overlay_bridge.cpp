@@ -178,6 +178,17 @@ bool OverlayBridge::EnsureOverlay() {
   if (!overlay->Create()) return false;
   overlay_ = std::move(overlay);
 
+  // The key Dart asked for before there was a window to ask about.
+  //
+  // `setChromaKey` arrives before the first `show` -- deliberately, so the
+  // window's very first frame is keyed correctly -- but at that point there is
+  // no window and the request had nowhere to go. It used to be dropped, so the
+  // first overlay of a session was created keying the compiled-in default
+  // while Dart painted the palette's colour. On any theme where those differ
+  // that is nothing keyed at all: an opaque sheet, on the first call after
+  // launch and no other.
+  overlay_->SetChromaKey(pending_chroma_key_);
+
   to_overlay_ = std::make_unique<flutter::MethodChannel<EncodableValue>>(
       overlay_->messenger(), kOverlayChannel,
       &flutter::StandardMethodCodec::GetInstance());
@@ -268,6 +279,25 @@ void OverlayBridge::HandleCall(const MethodCall& call,
 
   if (method == "setClickThrough") {
     if (overlay_) overlay_->SetClickThrough(BoolArg(map, "value", true));
+    result->Success();
+    return;
+  }
+
+  if (method == "setChromaKey") {
+    // ARGB from Dart; the alpha is ignored and COLORREF is 0x00BBGGRR.
+    const int argb = IntArg(map, "value", 0);
+    // Remembered whether or not there is a window yet. `EnsureOverlay` applies
+    // it on creation, which is the only way the first frame of the first
+    // overlay of a session can be keyed on the right colour.
+    pending_chroma_key_ =
+        RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
+    if (overlay_) overlay_->SetChromaKey(pending_chroma_key_);
+    result->Success();
+    return;
+  }
+
+  if (method == "setOpacity") {
+    if (overlay_) overlay_->SetOpacity(IntArg(map, "value", 255));
     result->Success();
     return;
   }

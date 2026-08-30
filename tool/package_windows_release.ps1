@@ -66,6 +66,15 @@ if ($pubspecMarketing -ne $Version) {
     Fail "pubspec.yaml says $pubspecMarketing but -Version is $Version. They must match."
 }
 
+# The installer stamps this into setup.exe's version resource via
+# VersionInfoVersion, which accepts only dotted numbers. Caught here rather
+# than by Inno, which fails after the whole build and stage have already run.
+if ($Version -notmatch '^\d+(\.\d+){1,3}$') {
+    Fail ("Version '$Version' is not purely numeric. VersionInfoVersion in the " +
+          'installer rejects a suffix such as -beta; give the build a numeric ' +
+          'version and mark the pre-release in the tag or the release notes.')
+}
+
 # ── Sanity: the tree the binary came from ────────────────────────────────
 if (-not $SkipBuildCheck) {
     # write_build_info.dart runs immediately before the build and rewrites
@@ -228,6 +237,19 @@ if (-not $SkipInstaller) {
     if (-not $iscc) {
         Fail ('Inno Setup 6 not found. Install it from https://jrsoftware.org/isdl.php, ' +
               'or pass -SkipInstaller to produce only the portable archive.')
+    }
+
+    # ArchitecturesAllowed=x64compatible in hardline.iss needs 6.3 or newer.
+    # An older ISCC fails with a message about an unrecognised value, which
+    # reads like a mistake in the script rather than an out-of-date toolchain.
+    $isccVersion = (Get-Item $iscc).VersionInfo.ProductVersion
+    if ($isccVersion -match '^(\d+)\.(\d+)') {
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        if ($major -lt 6 -or ($major -eq 6 -and $minor -lt 3)) {
+            Fail ("Inno Setup $isccVersion is too old. hardline.iss uses " +
+                  'ArchitecturesAllowed=x64compatible, which needs 6.3 or later.')
+        }
     }
 
     Write-Host 'Building the installer...'

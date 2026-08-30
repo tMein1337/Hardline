@@ -3,6 +3,8 @@
 
 import 'package:flutter/foundation.dart';
 
+import 'live_participant.dart';
+
 /// One person shown in a channel's voice participant list.
 ///
 /// Like `RoomListItem`, this holds no SDK object — no `CallMembership`, no
@@ -25,6 +27,7 @@ class VoiceParticipant {
     required this.displayName,
     required this.avatarMxc,
     required this.isSelf,
+    this.deafened = false,
   });
 
   final String userId;
@@ -44,10 +47,41 @@ class VoiceParticipant {
 
   final bool isSelf;
 
+  /// Whether any of their devices says it has playback silenced.
+  ///
+  /// The one thing about somebody's audio that room state *can* carry, because
+  /// this client puts it there — see `kDeafenedKey`. Mute still cannot be
+  /// shown here; it never reaches room state at all.
+  final bool deafened;
+
+  /// The same person, described from a call we are connected to.
+  ///
+  /// The two models meet here and nowhere else. [VoiceParticipant] is built
+  /// from Matrix room state and is one row per *person*; `LiveParticipant` is
+  /// built from LiveKit and is one tile per *device*. The per-user audio menu
+  /// is written against this one, so this is what lets a call tile open the
+  /// same menu the sidebar row does rather than growing a second copy of it.
+  ///
+  /// [deviceIds] is every device that person is connected from — pass all of
+  /// them, not just the tile's own, or right-clicking one of somebody's two
+  /// tiles would offer a slider for half of them.
+  factory VoiceParticipant.fromLive(
+    LiveParticipant live, {
+    required List<String> deviceIds,
+  }) => VoiceParticipant(
+    userId: live.userId,
+    deviceIds: deviceIds,
+    displayName: live.displayName,
+    avatarMxc: live.avatarMxc,
+    isSelf: live.isLocal,
+    deafened: live.deafened,
+  );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is VoiceParticipant &&
+          deafened == other.deafened &&
           userId == other.userId &&
           listEquals(deviceIds, other.deviceIds) &&
           displayName == other.displayName &&
@@ -61,5 +95,6 @@ class VoiceParticipant {
     displayName,
     avatarMxc,
     isSelf,
+    deafened,
   );
 }

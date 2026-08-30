@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/injected_providers.dart';
+import '../hotkeys/hotkey.dart';
 import 'overlay_layout.dart';
 import 'overlay_prefs_state.dart';
 
@@ -43,10 +44,23 @@ class OverlayPrefsController extends Notifier<OverlayPrefsState> {
   void setExcludeFromCapture(bool excluded) =>
       _write(state.copyWith(excludeFromCapture: excluded));
 
-  void setToggleHotkey(OverlayHotkey hotkey) =>
+  void setToggleHotkey(Hotkey hotkey) =>
       _write(state.copyWith(toggleHotkey: hotkey));
 
-  void setEditHotkey(OverlayHotkey hotkey) =>
+  /// [commit] false while a slider is being dragged; see `setTooltipDelay`.
+  void setLinger(Duration linger, {bool commit = true}) => _write(
+    state.copyWith(
+      linger: Duration(
+        milliseconds: linger.inMilliseconds.clamp(
+          kMinOverlayLinger.inMilliseconds,
+          kMaxOverlayLinger.inMilliseconds,
+        ),
+      ),
+    ),
+    write: commit,
+  );
+
+  void setEditHotkey(Hotkey hotkey) =>
       _write(state.copyWith(editHotkey: hotkey));
 
   /// Replaces one layout, matched by id.

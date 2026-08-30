@@ -36,7 +36,7 @@ class SettingsPane extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(title, style: context.text.title.copyWith(fontSize: 20)),
+              Text(title, style: context.text.title.copyWith(fontSize: context.text.sized(20))),
               if (description case final text?) ...[
                 const SizedBox(height: 6),
                 Text(text, style: context.text.subtitle),
@@ -146,6 +146,58 @@ class SettingsRow extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+/// A switch with a label, and the one place a settings toggle should be built.
+///
+/// Before this existed every toggle was a raw `SwitchListTile` written out at
+/// the call site, and they had drifted: some named an active colour, some let
+/// Material pick one, and the padding differed pane to pane. The switch colour
+/// now comes from `switchTheme` in `theme_builder.dart`, so nothing here names
+/// it either.
+///
+/// [subtitle] and [hint] are the same choice [SettingsRow] offers, and the rule
+/// is the one in [SettingsHint]: a warning about what the switch will do stays
+/// on the page as a [subtitle]; a description of what it is for goes behind a
+/// [hint]. Passing both is allowed but usually means the text wants splitting.
+class SettingsSwitchTile extends StatelessWidget {
+  const SettingsSwitchTile({
+    super.key,
+    required this.value,
+    required this.title,
+    required this.onChanged,
+    this.subtitle,
+    this.hint,
+    this.contentPadding = const EdgeInsets.symmetric(horizontal: 8),
+  });
+
+  final bool value;
+  final String title;
+
+  /// Shown under the title, on the page. For text that has to be read *before*
+  /// the switch is touched.
+  final String? subtitle;
+
+  /// Shown on hover. For text that explains rather than warns.
+  final String? hint;
+
+  final ValueChanged<bool>? onChanged;
+  final EdgeInsetsGeometry contentPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final tile = SwitchListTile(
+      contentPadding: contentPadding,
+      value: value,
+      title: Text(title, style: context.text.messageBody),
+      subtitle: subtitle == null
+          ? null
+          : Text(subtitle!, style: context.text.timestamp),
+      onChanged: onChanged,
+    );
+
+    return hint == null ? tile : SettingsHint(message: hint!, child: tile);
   }
 }
 

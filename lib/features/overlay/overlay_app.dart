@@ -22,6 +22,15 @@ const _channel = MethodChannel('hardline/overlay_state');
 /// rather than a limitation to work around — a second engine that opened the
 /// same database or registered flutter_webrtc a second time would break the
 /// app it is meant to be reporting on.
+/// What to key on before any palette has arrived.
+///
+/// Matches `kDefaultChromaKey` in `overlay_window.h`, so the very first frame
+/// of a freshly created window is keyed correctly. Once a snapshot lands, the
+/// key comes from the palette instead — see `OverlayPalette.chromaKey`, which
+/// derives it from the plate so the antialiased edges are invisible in any
+/// theme.
+const kDefaultChromaKey = Color(0xFF09090B);
+
 void runOverlayApp() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const _OverlayRoot());
@@ -92,19 +101,50 @@ class _OverlayRootState extends State<_OverlayRoot> {
     _channel.invokeMethod<void>('event', OverlayEdit(layout).encode());
   }
 
+  /// What the window is currently keying on.
+  ///
+  /// The palette's until one arrives, then the compiled-in default — which is
+  /// what the runner also starts with, so the two agree from the first frame.
+  Color get chromaKey => _snapshot == null
+      ? kDefaultChromaKey
+      : Color(_snapshot!.palette.chromaKey);
+
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      // Transparent from the root down. Anything that painted a background —
-      // a `Scaffold`, `MaterialApp`'s own colour — would fill the monitor with
-      // an opaque rectangle over the game, which is the one thing this window
-      // must never do.
-      color: const Color(0x00000000),
+      // Painted, not left transparent — which is the opposite of what this
+      // used to do, and the correction is the whole of the overlay bug.
+      //
+      // A Flutter view on Windows is a child HWND that the engine renders
+      // opaque. There is no clear colour, no background colour and no alpha
+      // mode in `flutter_windows.h`, so "paint nothing and let the window be
+      // transparent" cannot work: the engine still fills the surface, and the
+      // monitor ends up solid in the engine's default clear colour. Which is
+      // exactly what was reported — a screen of white.
+      //
+      // So the runner keys on a colour instead, and this is where that colour
+      // is put on screen. Every pixel of it becomes a hole through to the
+      // game; everything the HUD draws on top of it stays.
+      //
+      // The colour follows the palette — see `OverlayPalette.chromaKey` — so
+      // it must be whatever the runner was last told, and the controller
+      // sends that before pushing the palette that carries it. **A mismatch
+      // is an opaque rectangle over somebody's game**, so the order matters
+      // more than the value does.
+      color: chromaKey,
+      // A `Material`, and not merely a `Container` painting the key.
+      //
+      // Losing it was how the HUD ended up drawn in yellow with a double
+      // underline: that is Flutter's "no `DefaultTextStyle` here" marker, and
+      // every `Text` gets it when nothing above supplies a text style. The
+      // `Material` is what supplies one — this used to be a
+      // `MaterialType.transparency` and painted nothing, which was correct
+      // then and is exactly wrong now, since the key has to be painted.
       home: Material(
-        type: MaterialType.transparency,
+        color: chromaKey,
         child: snapshot == null
             ? const SizedBox.shrink()
             : OverlayHud(

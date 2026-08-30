@@ -31,6 +31,21 @@
 // overwrites, so registering it twice would leave the app's own calls talking
 // to the overlay's plugin instance. The overlay needs nothing but the message
 // channel the bridge gives it.
+// The colour the overlay treats as "show the game through here", until Dart
+// says otherwise.
+//
+// Only a starting value. The real key is derived from the HUD's plate colour
+// and pushed with `setChromaKey` -- see `OverlayPalette.chromaKey` in
+// `overlay_wire.dart`, which carries the reasoning. Keying one step from the
+// plate is what makes the antialiased edge of a rounded corner invisible
+// rather than a bright outline around everything.
+//
+// This default is the dark palette's derived key, so the window is already
+// right for the shipped theme before the first message arrives. A mismatch
+// between the two sides is not subtle: nothing is keyed at all, and the whole
+// plate sits opaque over the game.
+constexpr COLORREF kDefaultChromaKey = RGB(0x09, 0x09, 0x0B);
+
 class OverlayWindow {
  public:
   // One monitor, as reported to Dart so the settings pane can offer a choice.
@@ -81,6 +96,15 @@ class OverlayWindow {
   // a broken feature.
   void SetExcludedFromCapture(bool excluded);
 
+  // How opaque everything the HUD paints is, 0..255. The colour-keyed holes
+  // stay holes at any value. This is the overlay's fade: a layered window has
+  // no per-pixel alpha to give the widgets, so it is the window that dims.
+  void SetOpacity(int alpha);
+
+  // Which colour becomes a hole. Derived from the HUD's own plate colour and
+  // pushed from Dart, so it follows the theme -- see `OverlayPalette`.
+  void SetChromaKey(COLORREF key);
+
   static std::vector<Monitor> EnumerateMonitors();
 
  private:
@@ -89,8 +113,8 @@ class OverlayWindow {
   LRESULT MessageHandler(HWND window, UINT message, WPARAM wparam,
                          LPARAM lparam) noexcept;
 
-  // Asks DWM to treat the window's own alpha as real, so a Flutter scene
-  // painted on a transparent background shows what is behind it.
+  // Applies the colour key and the current opacity. Cheap, and safe to call
+  // again whenever something might have disturbed either.
   void ApplyTransparency();
 
   // Re-asserts HWND_TOPMOST. Other topmost windows -- a game's own overlay, a
@@ -104,6 +128,12 @@ class OverlayWindow {
   HWND window_ = nullptr;
   bool visible_ = false;
   bool click_through_ = true;
+
+  // Starts fully opaque so the first frame after `show` is visible whatever
+  // the Dart side has not told us yet.
+  int opacity_ = 255;
+
+  COLORREF chroma_key_ = kDefaultChromaKey;
   bool excluded_from_capture_ = true;
   std::string monitor_id_;
   UINT_PTR topmost_timer_ = 0;

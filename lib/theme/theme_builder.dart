@@ -19,10 +19,17 @@ import 'typography.dart';
 /// without a single one of them naming it.
 ThemeData buildThemeData(
   AppPalette colors,
-  AppMetrics metrics, {
+  AppMetrics baseMetrics, {
   Duration tooltipDelay = kDefaultTooltipDelay,
+  double textScale = kDefaultTextScale,
 }) {
-  final typography = AppTypography.from(colors);
+  // Both, together. Scaling the type alone would grow the text inside rows
+  // whose height is a fixed number of pixels — the channel row is 34, the
+  // participant row 26 — so the first thing a larger setting would do is clip
+  // the thing it was asked to enlarge. `AppMetrics`'s own doc comment says
+  // this was the intent.
+  final metrics = baseMetrics.scaled(textScale);
+  final typography = AppTypography.from(colors, textScale);
   final brightness = colors.isDark ? Brightness.dark : Brightness.light;
 
   final scheme =
@@ -158,5 +165,104 @@ ThemeData buildThemeData(
       color: colors.accent,
       linearTrackColor: colors.elevatedSurface,
     ),
+
+    // Everything below exists so that a surface nobody hand-styled still comes
+    // out of the palette. Material 3 derives its own colours from the seeded
+    // `ColorScheme`, and for a dark palette several of those land nowhere near
+    // it — `inverseSurface`, which a bare SnackBar uses, is near-white. Setting
+    // these once is what stops each new dialog needing to remember.
+    //
+    // `surfaceTintColor: Colors.transparent` recurs for the same reason: M3
+    // tints elevated surfaces with the primary colour, so a floating surface
+    // that was set to an exact slot value drifts orange without it.
+    dialogTheme: DialogThemeData(
+      backgroundColor: colors.floatingSurface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      titleTextStyle: typography.title,
+      contentTextStyle: typography.messageBody,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(metrics.rowRadius * 3),
+        side: BorderSide(color: colors.divider),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: colors.floatingSurface,
+      contentTextStyle: typography.messageBody.copyWith(
+        color: colors.textHeader,
+      ),
+      actionTextColor: colors.accent,
+      behavior: SnackBarBehavior.floating,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(metrics.rowRadius * 2),
+        side: BorderSide(color: colors.divider),
+      ),
+    ),
+    appBarTheme: AppBarThemeData(
+      backgroundColor: colors.roomSidebar,
+      foregroundColor: colors.textHeader,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      titleTextStyle: typography.title,
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: colors.floatingSurface,
+      surfaceTintColor: Colors.transparent,
+      textStyle: typography.messageBody,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(metrics.rowRadius * 2),
+        side: BorderSide(color: colors.divider),
+      ),
+    ),
+    menuTheme: MenuThemeData(style: _menuStyle(colors, metrics)),
+    dropdownMenuTheme: DropdownMenuThemeData(
+      textStyle: typography.messageBody,
+      menuStyle: _menuStyle(colors, metrics),
+    ),
+    listTileTheme: ListTileThemeData(
+      textColor: colors.textPrimary,
+      iconColor: colors.textMuted,
+      selectedColor: colors.accent,
+      titleTextStyle: typography.messageBody,
+      subtitleTextStyle: typography.subtitle,
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? colors.accent
+            : colors.textMuted,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? colors.accent.withValues(alpha: 0.35)
+            : colors.inputBackground,
+      ),
+      trackOutlineColor: WidgetStatePropertyAll(colors.inputBorder),
+    ),
+    sliderTheme: SliderThemeData(
+      activeTrackColor: colors.volumeSliderActive,
+      inactiveTrackColor: colors.volumeSliderTrack,
+      thumbColor: colors.accent,
+      overlayColor: colors.accent.withValues(alpha: 0.12),
+    ),
   );
 }
+
+/// The shared shape for anything that opens as a floating menu.
+///
+/// `MenuThemeData` and `DropdownMenuThemeData` both want a [MenuStyle] and
+/// neither inherits from the other, so it is built once here rather than
+/// written twice and allowed to drift.
+MenuStyle _menuStyle(AppPalette colors, AppMetrics metrics) => MenuStyle(
+  backgroundColor: WidgetStatePropertyAll(colors.floatingSurface),
+  surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+  elevation: const WidgetStatePropertyAll(8),
+  shape: WidgetStatePropertyAll(
+    RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(metrics.rowRadius * 2),
+      side: BorderSide(color: colors.divider),
+    ),
+  ),
+);

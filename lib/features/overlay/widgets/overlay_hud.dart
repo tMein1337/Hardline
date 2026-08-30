@@ -69,8 +69,12 @@ class OverlayHud extends StatelessWidget {
           children: [
             if (editing) _EditBackdrop(palette: snapshot.palette),
             Positioned(
-              left: layout.x * constraints.maxWidth,
-              top: layout.y * constraints.maxHeight,
+              // Rounded to whole pixels. A rectangle only escapes
+              // antialiasing when its edges land on pixel boundaries — at
+              // x = 137.4 the compositor blends the leftmost column, and that
+              // blend is with the colour key.
+              left: (layout.x * constraints.maxWidth).roundToDouble(),
+              top: (layout.y * constraints.maxHeight).roundToDouble(),
               child: editing
                   ? GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -79,8 +83,7 @@ class OverlayHud extends StatelessWidget {
                         // at one resolution has to land in the same place when
                         // a game changes it.
                         final x =
-                            (layout.x +
-                                    details.delta.dx / constraints.maxWidth)
+                            (layout.x + details.delta.dx / constraints.maxWidth)
                                 .clamp(0.0, 1.0);
                         final y =
                             (layout.y +
@@ -116,8 +119,13 @@ class _EditBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
+      // Opaque, where it used to be a 35% wash. Colour keying is a hard cut —
+      // a translucent layer over the key stops *being* the key and turns the
+      // whole monitor into a tinted sheet rather than a wash over the game.
+      // Edit mode has the foreground anyway, so a solid backdrop costs nothing
+      // and is what makes "you are arranging, not watching" obvious.
       child: ColoredBox(
-        color: Color(palette.plate).withValues(alpha: 0.35),
+        color: Color(palette.plate),
         child: Align(
           alignment: Alignment.topCenter,
           child: Padding(
@@ -215,64 +223,81 @@ class _Person extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.all(4),
-      child: AnimatedOpacity(
-        duration: _fade,
-        // The whole point of the overlay: a quiet call leaves nothing at all
-        // over the game, and somebody talking appears. `idleOpacity` is what
-        // anybody who would rather always see the roster raises.
-        opacity: speaking || forceVisible ? 1 : layout.idleOpacity,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: _fade,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radius + _ringWidth),
-                border: Border.all(
-                  // The ring appears by gaining a colour, never by gaining a
-                  // size. Reserving the width is what stops every name on the
-                  // HUD shifting sideways when somebody draws breath.
-                  color: speaking
-                      ? Color(palette.speakingRing)
-                      : Colors.transparent,
-                  width: _ringWidth,
-                ),
-              ),
-              child: _Avatar(
-                person: person,
-                size: size,
-                radius: radius,
-                palette: palette,
+      // Solid, always. The fade lives on the window now.
+      //
+      // This was an `AnimatedOpacity` down to `layout.idleOpacity`, and it
+      // cannot stay one: the window is colour-keyed (see `kChromaKey`), so a
+      // half-transparent avatar blends towards magenta rather than towards the
+      // game — a quiet roster would have appeared as pink ghosts on an opaque
+      // patch. `OverlayController` applies `idleOpacity` to the whole window
+      // instead, after nobody has spoken for `prefs.linger`.
+      //
+      // What that costs, and it is the only thing it costs: one person talking
+      // brings the whole roster to full rather than just them. The speaking
+      // ring below is what still says which of them it is.
+      // Rounded again, and the fringe is no longer a reason not to be.
+      //
+      // These were briefly squared into one solid rectangle, because a curved
+      // edge antialiases into the colour key and every corner wore a thin
+      // magenta line. Squaring was the wrong fix: it could not survive
+      // fractional text widths or a display at 125%, where a whole logical
+      // pixel is not a whole device pixel, and it made the HUD a slab.
+      //
+      // The key is derived from the plate now — see `OverlayPalette.chromaKey`
+      // — so an edge blends plate-to-almost-plate and cannot be seen. Shape is
+      // free again.
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: _fade,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius + _ringWidth),
+              border: Border.all(
+                // The ring appears by gaining a colour, never by gaining a
+                // size. Reserving the width is what stops every name on the
+                // HUD shifting sideways when somebody draws breath.
+                //
+                // The quiet colour is the plate, not `Colors.transparent`.
+                // Transparent means "show what is behind", and behind is the
+                // key — every silent person wore a ring of it.
+                color: speaking
+                    ? Color(palette.speakingRing)
+                    : Color(palette.plate),
+                width: _ringWidth,
               ),
             ),
-            if (layout.showNames) ...[
-              const SizedBox(width: 6),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  // A plate behind the name, because the background here is
-                  // whatever the game happens to be drawing and white text on
-                  // snow is not readable.
-                  color: Color(palette.plate),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 3,
-                  ),
-                  child: Text(
-                    person.name,
-                    style: TextStyle(
-                      color: Color(palette.text),
-                      fontSize: (size * 0.34).clamp(11.0, 20.0),
-                      fontFamily: 'Segoe UI',
-                    ),
+            child: _Avatar(
+              person: person,
+              size: size,
+              radius: radius,
+              palette: palette,
+            ),
+          ),
+          if (layout.showNames) ...[
+            const SizedBox(width: 6),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                // A plate behind the name, because the background here is
+                // whatever the game happens to be drawing and white text on
+                // snow is not readable.
+                color: Color(palette.plate),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                child: Text(
+                  person.name,
+                  style: TextStyle(
+                    color: Color(palette.text),
+                    fontSize: (size * 0.34).clamp(11.0, 20.0),
+                    fontFamily: 'Segoe UI',
                   ),
                 ),
               ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -300,17 +325,26 @@ class _Avatar extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: bytes == null
-            ? _Initials(person: person, size: size, palette: palette)
-            : Image.memory(
-                bytes,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                // Bytes the homeserver served and we could not decode. Initials
-                // are what `MxAvatar` falls back to for the same reason.
-                errorBuilder: (_, _, _) =>
-                    _Initials(person: person, size: size, palette: palette),
-              ),
+        // An opaque backing, because an avatar is an arbitrary image somebody
+        // chose and a PNG with an alpha channel is entirely ordinary. Without
+        // it the transparent parts show whatever is behind — the colour key,
+        // if the plate did not already cover it — and a cut-out avatar would
+        // arrive as a magenta silhouette.
+        child: ColoredBox(
+          color: Color(palette.plate),
+          child: bytes == null
+              ? _Initials(person: person, size: size, palette: palette)
+              : Image.memory(
+                  bytes,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  // Bytes the homeserver served and we could not decode.
+                  // Initials are what `MxAvatar` falls back to for the same
+                  // reason.
+                  errorBuilder: (_, _, _) =>
+                      _Initials(person: person, size: size, palette: palette),
+                ),
+        ),
       ),
     );
   }

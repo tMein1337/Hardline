@@ -16,6 +16,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // Held for the life of the process so the installer can tell that Hardline
+  // is running before it touches a single file.
+  //
+  // This is `AppMutex` in tool/hardline.iss. Without it, an upgrade relies
+  // entirely on Restart Manager identifying the running window from the files
+  // it is about to replace -- and when that fails the symptom is a locked DLL
+  // and a half-finished install, which is a far worse outcome than being asked
+  // to close the app first.
+  //
+  // Deliberately not used to enforce a single instance: two accounts in two
+  // windows is a thing people do, and `GetLastError() == ERROR_ALREADY_EXISTS`
+  // is ignored here for exactly that reason. The handle is never closed; the
+  // kernel drops it when the process ends, which is precisely the lifetime the
+  // installer is asking about.
+  ::CreateMutexW(nullptr, FALSE, L"HardlineRunningMutex");
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

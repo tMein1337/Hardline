@@ -10,6 +10,7 @@ import '../activity_entries.dart';
 import '../activity_prefs_controller.dart';
 import '../activity_providers.dart';
 import 'activity_section.dart';
+import 'user_context_menu.dart';
 
 /// Who you follow, with a way to change it.
 ///
@@ -79,6 +80,12 @@ class _FollowingRow extends ConsumerWidget {
     final colors = context.colors;
 
     return ActivityRow(
+      onSecondaryTap: () => UserContextMenu.show(
+        context,
+        userId: person.userId,
+        displayName: person.displayName,
+        avatarMxc: person.avatarMxc,
+      ),
       avatar: MxAvatar(
         name: person.displayName,
         seed: person.userId,

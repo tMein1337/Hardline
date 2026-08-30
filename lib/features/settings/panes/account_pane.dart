@@ -58,7 +58,7 @@ class AccountPane extends ConsumerWidget {
                       children: [
                         Text(
                           profile?.displayName ?? localpartOf(userId),
-                          style: context.text.title.copyWith(fontSize: 18),
+                          style: context.text.title.copyWith(fontSize: context.text.sized(18)),
                         ),
                         const SizedBox(height: 2),
                         SelectableText(userId, style: context.text.subtitle),

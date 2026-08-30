@@ -215,8 +215,15 @@ it:
   <Networking>Enable</Networking>
   <vGPU>Enable</vGPU>
   <MemoryInMB>4096</MemoryInMB>
+  <LogonCommand>
+    <Command>powershell -NoProfile -WindowStyle Hidden -Command "try { Invoke-WebRequest -UseBasicParsing https://example.com | Out-Null } catch {}"</Command>
+  </LogonCommand>
 </Configuration>
 ```
+
+The `LogonCommand` is the certificate-store warm-up described under the traps
+below. `dist/clean-test.wsb` and `dist/hardline-clean-test.wsb` in this repo
+are the same file with the host path already filled in.
 
 Test **both** downloads. They are built from the same staged directory, but
 they are two published artifacts and the installer exercises a different path
@@ -230,11 +237,18 @@ the test proves nothing.
 
 - **A cold certificate store.** Windows fetches trusted roots on demand, and a
   freshly booted sandbox has almost none. The first HTTPS request can therefore
-  fail TLS validation, which surfaces as *"Couldn't reach that homeserver"* even
-  though the network, DNS and the server are all fine. Making any other HTTPS
-  request first — `Invoke-WebRequest https://example.com` — populates the store,
-  after which sign-in works. No real machine hits this, because ordinary
-  browsing fills the store long before anyone installs a Matrix client.
+  fail TLS validation even though the network, DNS and the server are all fine.
+  Making any other HTTPS request first — `Invoke-WebRequest https://example.com`
+  — populates the store, after which sign-in works. No real machine hits this,
+  because ordinary browsing fills the store long before anyone installs a Matrix
+  client.
+
+  **The `LogonCommand` above now does this on boot**, so it should not be
+  reachable from a `.wsb` in this repo. It is described anyway because it is
+  what a hand-written sandbox config will still hit, and because the shape of
+  the failure is worth recognising: the app now says *"Reached that homeserver
+  but could not verify its certificate"* rather than folding it in with a
+  genuine network failure, so the two are told apart on sight.
 - **Rendering.** Flutter draws through the GPU, so leave `vGPU` enabled. A blank
   or broken window is far more likely to be a sandbox limitation than a bug in
   the application.

@@ -86,6 +86,10 @@ class OverlayBridge {
 
   std::unique_ptr<OverlayWindow> overlay_;
 
+  // What Dart last asked to key on, kept so a request that arrives before the
+  // window exists is not lost. See `EnsureOverlay`.
+  COLORREF pending_chroma_key_ = kDefaultChromaKey;
+
   HWND message_window_ = nullptr;
   HWINEVENTHOOK foreground_hook_ = nullptr;
 

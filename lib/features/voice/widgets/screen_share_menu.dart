@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme_context.dart';
 import '../call_controller_provider.dart';
 import '../livekit_call_controller.dart';
+import '../screen_sources.dart';
 
 /// What the screen-share button opens once something is already being shared.
 ///
@@ -21,8 +22,8 @@ class ScreenShareMenu extends ConsumerWidget {
   const ScreenShareMenu({super.key, required this.onAddShare});
 
   /// Opens the picker and starts another share. Passed in rather than done
-  /// here because the picker is `lk.ScreenSelectDialog`, which is contained to
-  /// exactly one call site on purpose — see `voice_status_footer.dart`.
+  /// here so this dialog owns no capture concerns — see
+  /// `voice_status_footer.dart`.
   final Future<void> Function() onAddShare;
 
   static Future<void> show(
@@ -43,6 +44,15 @@ class ScreenShareMenu extends ConsumerWidget {
       builder: (context, _) {
         final shares = controller.shares;
 
+        // Two windows of the same program share a title far more often than
+        // not, and three rows all reading "Untitled - Notepad" cannot be used
+        // to stop the right one. Recomputed from the whole list on every build
+        // rather than fixed at share time, so stopping share 1 renumbers the
+        // survivors instead of leaving a gap.
+        final labels = numberedLabels([
+          for (final share in shares) share.label,
+        ]);
+
         // The last share was stopped from in here, or from Windows' own
         // sharing banner. There is nothing left for this dialog to be about.
         if (shares.isEmpty) {
@@ -60,9 +70,10 @@ class ScreenShareMenu extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final share in shares)
+                for (final (index, share) in shares.indexed)
                   _ShareRow(
                     share: share,
+                    label: labels[index],
                     onStop: () => controller.stopScreenShare(share.videoSid),
                   ),
                 const SizedBox(height: 8),
@@ -107,9 +118,18 @@ class ScreenShareMenu extends ConsumerWidget {
 }
 
 class _ShareRow extends StatelessWidget {
-  const _ShareRow({required this.share, required this.onStop});
+  const _ShareRow({
+    required this.share,
+    required this.label,
+    required this.onStop,
+  });
 
   final LocalShare share;
+
+  /// [LocalShare.label], numbered against the other live shares if it needs to
+  /// be. See [numberedLabels].
+  final String label;
+
   final VoidCallback onStop;
 
   @override
@@ -128,7 +148,7 @@ class _ShareRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              share.label,
+              label,
               style: context.text.subtitle.copyWith(color: colors.textPrimary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

@@ -17,6 +17,26 @@ List<Room> joinedSpaces(Client client) => [
     if (room.isSpace && room.membership == Membership.join) room,
 ];
 
+/// Rooms this account has been invited to but has not answered.
+///
+/// **Nothing looked at these before.** Every bucket above filters on
+/// `Membership.join`, so an invitation existed in the SDK and was invisible in
+/// the app — there was no way to accept one, and no way to know one had
+/// arrived. Somebody inviting you to a room might as well have not.
+///
+/// Split by kind because they belong in different places: a space invitation
+/// is answered on the rail, where the space would appear, and a room
+/// invitation at the top of the list it would join.
+List<Room> invitedRooms(Client client) => [
+  for (final room in client.rooms)
+    if (!room.isSpace && room.membership == Membership.invite) room,
+];
+
+List<Room> invitedSpaces(Client client) => [
+  for (final room in client.rooms)
+    if (room.isSpace && room.membership == Membership.invite) room,
+];
+
 /// Rooms belonging to no space. These are what the home column lists.
 List<Room> homeRooms(Client client) {
   final claimed = allSpaceChildIds(client);

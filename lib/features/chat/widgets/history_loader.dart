@@ -57,7 +57,7 @@ class ChannelWelcome extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             'Welcome to #$roomName',
-            style: context.text.title.copyWith(fontSize: 28),
+            style: context.text.title.copyWith(fontSize: context.text.sized(28)),
           ),
           const SizedBox(height: 6),
           Text(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../activity/message_activity_log.dart';
+import '../../hotkeys/call_hotkey_provider.dart';
 import '../../overlay/overlay_provider.dart';
 import '../../voice/stale_membership_sweeper.dart';
 import '../../voice/stale_ring_sweeper.dart';
@@ -31,7 +32,8 @@ import '../../voice/stale_ring_sweeper.dart';
 /// The **overlay driver** is here for the same reason the sweeps are: its
 /// hotkeys have to be bound whether or not anybody has opened its settings, or
 /// the chord that switches the overlay on would only work after the pane that
-/// describes it had been visited once.
+/// describes it had been visited once. The **call hotkey driver** is here for
+/// exactly that reason too, for the chords that mute, deafen and stop a share.
 class BackgroundWorkers extends ConsumerWidget {
   const BackgroundWorkers({super.key});
 
@@ -41,6 +43,7 @@ class BackgroundWorkers extends ConsumerWidget {
     ref.watch(staleRingSweepProvider);
     ref.watch(staleMembershipSweepProvider);
     ref.watch(overlayDriverProvider);
+    ref.watch(callHotkeyDriverProvider);
     return const SizedBox.shrink();
   }
 }

@@ -32,26 +32,26 @@ class ActivityPane extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Column(
             children: [
-              _Toggle(
+              SettingsSwitchTile(
                 value: prefs.showVoice,
                 title: 'People in voice channels',
-                subtitle:
+                hint:
                     'Who is in a call right now, in any room — including rooms '
                     'you have never opened.',
                 onChanged: controller.setShowVoice,
               ),
-              _Toggle(
+              SettingsSwitchTile(
                 value: prefs.showActive,
                 title: 'People typing or recently active',
-                subtitle:
+                hint:
                     'Shows a live "typing…" badge, and otherwise how long ago '
                     'they last said something.',
                 onChanged: controller.setShowActive,
               ),
-              _Toggle(
+              SettingsSwitchTile(
                 value: prefs.showMessages,
                 title: 'Recent messages',
-                subtitle:
+                hint:
                     'The messages themselves, newest first. Clicking one opens '
                     'its channel and scrolls to it.',
                 onChanged: controller.setShowMessages,
@@ -206,34 +206,4 @@ class _StatusLine extends StatelessWidget {
 
     return Text(text, style: context.text.timestamp.copyWith(color: color));
   }
-}
-
-class _Toggle extends StatelessWidget {
-  const _Toggle({
-    required this.value,
-    required this.title,
-    required this.subtitle,
-    required this.onChanged,
-  });
-
-  final bool value;
-  final String title;
-
-  /// What the section shows, on hover. These describe rather than warn — none
-  /// of the three does anything that needs to be read first — so they sit
-  /// behind the row instead of turning three switches into three paragraphs.
-  final String subtitle;
-
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => SettingsHint(
-    message: subtitle,
-    child: SwitchListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      value: value,
-      title: Text(title, style: context.text.messageBody),
-      onChanged: onChanged,
-    ),
-  );
 }

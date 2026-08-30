@@ -51,7 +51,21 @@ String describeAuthError(Object error) {
   if (error is FormatException) {
     return error.message;
   }
-  if (error is SocketException || error is HandshakeException) {
+  // Split from the socket case below, because they call for opposite actions
+  // and reading one as the other wastes a lot of time. A handshake failure
+  // means the connection was made and the certificate was rejected — the
+  // network is fine. The usual cause on a machine with no browsing history is
+  // an empty trusted-root store: Windows fetches roots on demand, so a freshly
+  // imaged or sandboxed install can fail its very first HTTPS request and
+  // succeed on the second. See "The clean machine can be Windows Sandbox" in
+  // RELEASING.md.
+  if (error is HandshakeException) {
+    return 'Reached that homeserver but could not verify its certificate. On '
+        'a new or sandboxed Windows install this usually means the trusted '
+        'certificate store is still empty — open any website once, then try '
+        'again.';
+  }
+  if (error is SocketException) {
     return "Couldn't reach that homeserver. Check the address and your "
         'internet connection.';
   }

@@ -11,6 +11,9 @@ import '../../common/unread_badge.dart';
 import '../../voice/call_controller_provider.dart';
 import '../../voice/join_voice_action.dart';
 import '../../voice/voice_joinability.dart';
+import '../../activity/widgets/user_context_menu.dart';
+import 'room_manage_dialog.dart';
+import '../../voice/voice_participants_provider.dart';
 import '../room_list_item.dart';
 
 /// One row in the channel column.
@@ -23,11 +26,20 @@ class RoomListTile extends StatelessWidget {
     required this.room,
     required this.selected,
     required this.onTap,
+    this.onDoubleTap,
   });
 
   final RoomListItem room;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Joins the call, when the setting for it is on.
+  ///
+  /// Null otherwise, and that is load-bearing rather than tidy: a
+  /// `GestureDetector` holding both gestures delays every single tap by the
+  /// double-tap timeout, so passing a handler unconditionally would make
+  /// switching rooms feel slow for everybody who never asked for this.
+  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +48,23 @@ class RoomListTile extends StatelessWidget {
 
     return Hoverable(
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
+      // A channel manages itself; a direct chat is really a person, so it
+      // opens the person. Both are right-click, because both are "tell me
+      // about this row" — it is the row that differs, not the gesture.
+      //
+      // The room dialog is still reachable for a chat: `UserContextMenu` has
+      // a way through to it, so leaving one is not stranded behind knowing to
+      // right-click somewhere else.
+      onSecondaryTap: room.directUserId == null
+          ? () => RoomManageDialog.show(context, room.id)
+          : () => UserContextMenu.show(
+              context,
+              userId: room.directUserId!,
+              displayName: room.name,
+              avatarMxc: room.avatarMxc,
+              roomId: room.id,
+            ),
       builder: (context, hovered) {
         final background = selected
             ? colors.listItemSelected
@@ -89,10 +118,8 @@ class RoomListTile extends StatelessWidget {
                     child: Icon(Icons.lock, size: 12, color: colors.textFaint),
                   ),
                 ],
-                if (room.canStartVoice) ...[
-                  const SizedBox(width: 4),
-                  _JoinCallIcon(room: room, rowHovered: hovered),
-                ],
+                const SizedBox(width: 4),
+                _JoinCallIcon(room: room, rowHovered: hovered),
                 if (room.hasMention) ...[
                   const SizedBox(width: 6),
                   UnreadBadge(count: room.highlightCount),
@@ -111,6 +138,20 @@ class RoomListTile extends StatelessWidget {
 /// Sits beside the encryption padlock rather than in the chat header so the
 /// affordance is where the channel is — you can start a call without opening
 /// the room first, which is how a voice channel is supposed to behave.
+///
+/// **Shown for two different reasons**, and it used to be shown for only the
+/// first:
+///
+///  1. We may start a call here — `RoomListItem.canStartVoice`, which is a
+///     pure power-level question.
+///  2. A call is already running here, whatever our power levels say.
+///
+/// The second is why this changed. `joinabilityOf` answers `forbidden` for an
+/// ordinary member of a room with Synapse's default `state_default: 50`, which
+/// is the *normal* first answer rather than an edge case — so somebody else
+/// starting a call left the row looking exactly like a text channel, with no
+/// glyph and nothing to click. The participants did appear underneath the row,
+/// which made it worse: visibly a call, with no way in and no explanation.
 class _JoinCallIcon extends ConsumerWidget {
   const _JoinCallIcon({required this.room, required this.rowHovered});
 
@@ -124,6 +165,11 @@ class _JoinCallIcon extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final controller = ref.watch(callControllerProvider);
+
+    // Live from sync: this is the same provider the participant list under the
+    // row is built from, so the glyph and the faces cannot disagree.
+    final live = ref.watch(voiceParticipantsProvider(room.id)).isNotEmpty;
+    if (!room.canStartVoice && !live) return const SizedBox.shrink();
 
     return ListenableBuilder(
       listenable: controller,
@@ -140,15 +186,16 @@ class _JoinCallIcon extends ConsumerWidget {
             room.voiceJoinability,
           ),
           builder: (context, iconHovered) => Tooltip(
-            // The glyph is identical whether joining is one click or needs the
-            // room's power levels changed first. Saying which is the only way
-            // to know before pressing it.
+            // The glyph is identical whether joining is one click, needs the
+            // room's power levels changed first, or is not open to us at all.
+            // Saying which is the only way to know before pressing it.
             message: switch (room.voiceJoinability) {
-              VoiceJoinability.joinable => 'Join voice call',
+              VoiceJoinability.joinable =>
+                live ? 'Join the call in progress' : 'Join voice call',
               VoiceJoinability.needsEnabling =>
                 'Enable calls in this channel, then join',
               VoiceJoinability.forbidden =>
-                'Calls are not enabled here and you cannot enable them',
+                'A call is running, but only moderators can join it here',
               VoiceJoinability.notJoined => 'Join the room first',
             },
             child: Padding(
@@ -157,7 +204,9 @@ class _JoinCallIcon extends ConsumerWidget {
               child: Icon(
                 Icons.call,
                 size: 14,
-                color: iconHovered || rowHovered
+                // A call already in progress is worth seeing without hovering
+                // for it; an empty channel we merely *could* call in is not.
+                color: live || iconHovered || rowHovered
                     ? colors.voiceConnected
                     : colors.voiceConnected.withValues(alpha: 0.5),
               ),

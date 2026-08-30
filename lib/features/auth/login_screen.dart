@@ -9,6 +9,7 @@ import '../../theme/theme_context.dart';
 import '../accounts/account_actions.dart';
 import '../accounts/active_client.dart';
 import 'login_controller.dart';
+import 'register_screen.dart';
 import 'widgets/login_card.dart';
 import 'widgets/login_text_field.dart';
 
@@ -127,7 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Text(
               adding ? 'Add an account' : 'Welcome back!',
               textAlign: TextAlign.center,
-              style: context.text.title.copyWith(fontSize: 24),
+              style: context.text.title.copyWith(fontSize: context.text.sized(24)),
             ),
             const SizedBox(height: 8),
             Text(
@@ -183,6 +184,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     )
                   : const Text('Log In'),
             ),
+
+            // Not offered while adding an account to an app already signed
+            // in: that flow is "sign this second account in", and registering
+            // a brand new one from inside it is a different errand that would
+            // land somewhere the caller is not expecting.
+            if (!adding) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: state.busy
+                    ? null
+                    : () => RegisterScreen.open(context),
+                child: const Text('Create an account'),
+              ),
+            ],
 
             if (adding) ...[
               const SizedBox(height: 8),

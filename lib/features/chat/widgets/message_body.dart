@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:matrix/matrix.dart';
 
+import '../../../core/util/display_name.dart';
 import '../../../theme/theme_context.dart';
 import '../attachments/attachment_errors.dart';
 import '../attachments/attachment_kind.dart';
@@ -97,6 +98,7 @@ class _Text extends StatelessWidget {
 
     return LinkifiedText(
       text: body,
+      mentions: _mentionNames(event),
       style: context.text.messageBody.copyWith(
         color: isPending
             ? context.colors.textMuted
@@ -104,6 +106,30 @@ class _Text extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The people this message names, as user id to display name.
+///
+/// Read from `m.mentions.user_ids` — the list the homeserver's push rules act
+/// on — rather than from the text or from `formatted_body`. That keeps the
+/// body the literal characters the sender typed, which is the property the
+/// link handling above depends on, while still drawing a pill for each name.
+///
+/// Names come from the room's member state so the pill says what the reader's
+/// client calls that person, not what the sender's did. A user the room has
+/// never loaded resolves to their id, which is honest and still clickable.
+Map<String, String> _mentionNames(Event event) {
+  final ids = event.mentions.userIds;
+  if (ids.isEmpty) return const {};
+
+  final room = event.room;
+  return {
+    for (final id in ids)
+      id: displaySafeName(
+        room.unsafeGetUserFromMemoryOrFallback(id).calcDisplayname(),
+        fallback: id,
+      ),
+  };
 }
 
 /// What stage a still-uploading attachment is at.

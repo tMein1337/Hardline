@@ -8,6 +8,28 @@ import 'package:flutter/foundation.dart';
 /// The floor is where a face stops being recognisable at a glance across a
 /// room; the ceiling is where the HUD stops being a HUD and starts being a
 /// window over the game.
+/// How visible the HUD is once nobody has spoken for the linger.
+///
+/// **Not zero, which it used to be.** Zero is a real answer — "show me only
+/// who is talking" — but it is a poor default now that the fade is applied to
+/// the window rather than to the individual entries: at zero the entire
+/// overlay disappears, so switching the feature on and looking at the screen
+/// shows nothing at all, which is indistinguishable from it being broken.
+///
+/// Dim enough to sit over a game without competing with it, bright enough that
+/// the feature is visibly doing something.
+const kDefaultIdleOpacity = 0.35;
+
+/// How visible the HUD is while somebody is talking.
+///
+/// Full, because that is the moment the overlay exists for. It is a setting
+/// rather than a constant because the whole point of the thing is to sit over
+/// a game somebody is trying to see, and "loud enough to notice" is a
+/// judgement about that game, not about the HUD — a bright overlay over a dark
+/// map is a distraction where the same overlay over a bright one is barely
+/// there.
+const kDefaultActiveOpacity = 1.0;
+
 const kMinOverlayAvatar = 20.0;
 const kMaxOverlayAvatar = 96.0;
 
@@ -31,7 +53,8 @@ class OverlayLayout {
     this.horizontal = false,
     this.avatarSize = 40,
     this.showNames = true,
-    this.idleOpacity = 0,
+    this.idleOpacity = kDefaultIdleOpacity,
+    this.activeOpacity = kDefaultActiveOpacity,
   });
 
   factory OverlayLayout.fromJson(Map<String, Object?> json) {
@@ -52,7 +75,22 @@ class OverlayLayout {
         40,
       ),
       showNames: json['showNames'] is bool ? json['showNames']! as bool : true,
-      idleOpacity: _fraction(json['idleOpacity'], 0),
+      // `activeOpacity` is the marker for when this layout was written.
+      //
+      // A layout saved before the fade moved to the window has no such key,
+      // and its `idleOpacity` means something the current code cannot honour.
+      // It used to be the opacity of the *quiet entries*, with the speaker
+      // still coming up to full over them — so zero meant "show me only who
+      // is talking". The fade is now applied to the whole window, because a
+      // layered window has no per-pixel alpha to give the entries, and the
+      // same zero means "show nothing at all, ever, until somebody talks".
+      //
+      // Those are different promises, and silently keeping the number while
+      // changing what it does is how somebody ends up with a feature that is
+      // switched on and invisible. A zero written under the old meaning is
+      // migrated once; a zero written since is a real choice and is kept.
+      idleOpacity: _migratedIdleOpacity(json),
+      activeOpacity: _fraction(json['activeOpacity'], kDefaultActiveOpacity),
     );
   }
 
@@ -76,6 +114,14 @@ class OverlayLayout {
   /// would rather see who is in the channel at all times can raise it.
   final double idleOpacity;
 
+  /// See [kDefaultActiveOpacity].
+  ///
+  /// Deliberately not constrained to be above [idleOpacity]. Setting it lower
+  /// is strange but coherent — "get out of the way when the conversation picks
+  /// up" — and refusing it would be the app deciding it knows better about
+  /// somebody else's screen.
+  final double activeOpacity;
+
   OverlayLayout copyWith({
     String? name,
     double? x,
@@ -84,6 +130,7 @@ class OverlayLayout {
     double? avatarSize,
     bool? showNames,
     double? idleOpacity,
+    double? activeOpacity,
   }) => OverlayLayout(
     id: id,
     name: name ?? this.name,
@@ -93,6 +140,7 @@ class OverlayLayout {
     avatarSize: avatarSize ?? this.avatarSize,
     showNames: showNames ?? this.showNames,
     idleOpacity: idleOpacity ?? this.idleOpacity,
+    activeOpacity: activeOpacity ?? this.activeOpacity,
   );
 
   Map<String, Object?> toJson() => {
@@ -104,6 +152,7 @@ class OverlayLayout {
     'avatarSize': avatarSize,
     'showNames': showNames,
     'idleOpacity': idleOpacity,
+    'activeOpacity': activeOpacity,
   };
 
   @override
@@ -117,7 +166,8 @@ class OverlayLayout {
           horizontal == other.horizontal &&
           avatarSize == other.avatarSize &&
           showNames == other.showNames &&
-          idleOpacity == other.idleOpacity;
+          idleOpacity == other.idleOpacity &&
+          activeOpacity == other.activeOpacity;
 
   @override
   int get hashCode => Object.hash(
@@ -129,50 +179,20 @@ class OverlayLayout {
     avatarSize,
     showNames,
     idleOpacity,
+    activeOpacity,
   );
 }
 
-/// A global chord, in the Win32 terms the runner needs.
+/// [idleOpacity] from stored JSON, migrating a pre-window-alpha zero.
 ///
-/// Stored as `MOD_*` and virtual-key numbers rather than as anything friendlier
-/// because that is what `RegisterHotKey` takes, and translating twice is two
-/// places for a mapping to be wrong.
-@immutable
-class OverlayHotkey {
-  const OverlayHotkey({required this.modifiers, required this.key});
-
-  /// Nothing bound. Registering this is a no-op rather than an error.
-  const OverlayHotkey.none() : modifiers = 0, key = 0;
-
-  factory OverlayHotkey.fromJson(Map<String, Object?> json) => OverlayHotkey(
-    modifiers: json['modifiers'] is int ? json['modifiers']! as int : 0,
-    key: json['key'] is int ? json['key']! as int : 0,
-  );
-
-  /// A bitmask of `MOD_ALT` (1), `MOD_CONTROL` (2), `MOD_SHIFT` (4).
-  final int modifiers;
-
-  /// A Win32 virtual-key code. Zero means unbound.
-  final int key;
-
-  bool get isBound => key != 0;
-
-  Map<String, Object?> toJson() => {'modifiers': modifiers, 'key': key};
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is OverlayHotkey && modifiers == other.modifiers && key == other.key;
-
-  @override
-  int get hashCode => Object.hash(modifiers, key);
-}
-
-/// Win32 modifier bits, so nothing has to remember which number is which.
-abstract final class HotkeyModifier {
-  static const alt = 1;
-  static const control = 2;
-  static const shift = 4;
+/// See the note at the call site. The test is the *absence* of
+/// `activeOpacity`, which only layouts written before the change can have —
+/// so this runs at most once per layout and cannot touch a choice made since.
+double _migratedIdleOpacity(Map<String, Object?> json) {
+  final stored = _fraction(json['idleOpacity'], kDefaultIdleOpacity);
+  final writtenBeforeTheChange = json['activeOpacity'] is! num;
+  if (writtenBeforeTheChange && stored == 0) return kDefaultIdleOpacity;
+  return stored;
 }
 
 double _fraction(Object? raw, double fallback) =>

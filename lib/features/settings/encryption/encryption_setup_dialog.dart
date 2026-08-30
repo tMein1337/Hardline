@@ -173,7 +173,7 @@ class _EncryptionSetupDialogState extends ConsumerState<EncryptionSetupDialog> {
                 style: TextStyle(
                   fontFamily: 'Consolas',
                   fontFamilyFallback: const ['Courier New', 'monospace'],
-                  fontSize: 15,
+                  fontSize: context.text.sized(15),
                   height: 1.5,
                   color: colors.textHeader,
                 ),

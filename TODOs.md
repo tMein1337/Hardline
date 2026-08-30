@@ -5,321 +5,81 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1 to 6 and 10 to 11 are **verifications**, not features: the code is
+Items 1 to 4 and 8 to 9 are **verifications**, not features: the code is
 written and believed correct, but has never been observed working, usually
-because the test needs a second client or a second machine. Items 7 to 9 are the
-Nix packaging: one verification and two pieces of work.
+because the test needs a second client or a second machine. Items 5 to 7 are the
+Nix packaging: one verification and two pieces of work. Items 10 to 12 are work
+left deliberately unfinished while `issues.md` was being worked through, with
+the reason recorded in each case. Item 13 is an open bug.
 
-## 1. Verify screen-share system audio
-
-Everything for this is implemented but it has never been observed working,
-because no second client was available to listen. Until someone runs the test
-below, treat it as unproven.
-
-**How it is supposed to work.** `LiveKitCallController.startScreenShare` passes
-`captureScreenAudio: true`, which `livekit_client` turns into `audio: true` in
-the `getDisplayMedia` constraints (`track/local/local.dart`, `createStream`).
-flutter_webrtc **1.5.0 or newer** turns that into a WASAPI loopback capture on
-Windows and returns a second track, which LiveKit publishes as a separate
-`screenShareAudio` track.
-
-**The test.**
-
-1. Settings (gear in the user footer) → *Voice & Video* → enable *"Share system
-   audio when sharing a screen"*. It is off by default.
-2. **Wear headphones.** Loopback capture can otherwise re-record the other
-   participants and send them back to themselves.
-3. Join a call in an unencrypted room with a second client present.
-4. Share a window that is playing audio.
-5. The other participant should hear it, and their right-click menu on you
-   should show the *Screen Share Audio* slider **enabled** — it greys itself out
-   when no `screenShareAudio` track exists, so that is the tell.
-6. Move that slider and confirm it changes only the shared audio, not the voice.
-
-**If no audio arrives**, check in this order:
-
-- Does the sharer's log show a published `screenShareAudio` track? If not, the
-  capture never happened and the problem is flutter_webrtc / Windows, not us.
-- Is `shareSystemAudio` actually true in the stored prefs? It is read at share
-  time, not at join time.
-- Is the flutter_webrtc version still ≥ 1.5.0? Below that the feature does not
-  exist and `audio: true` is silently ignored.
-
-## 2. Verify settings, accounts and verification against Element
+## 1. Verify settings, accounts and verification against Element
 
 Everything in stage 4 is implemented but has only been exercised against
 itself. What needs a second client:
 
-1. **The shield is the acceptance test.** Send a message and look at it in
-   Element. Before setup it shows "encrypted by a device not verified by its
-   owner"; after Settings → Sessions → *Set up encryption* (or *Use
-   recovery key*) it must show nothing. That single check is what the whole
-   cross-signing path exists for — see "Why Element flags your messages" in
-   [notes.md](notes.md).
-2. **Fresh account, no other client.** Register an account, use only this app,
+1. **Fresh account, no other client.** Register an account, use only this app,
    run *Set up encryption*, save the recovery key. Then sign in to Element with
    that account and confirm it accepts the recovery key and sees this session
    as verified. This is the standalone case, and the one nothing else covers.
-3. **Sessions** — the list should match Element's own Sessions screen. Rename a
-   session here and see the new name in Element. Sign a *different* session out
-   (it asks for the password) and watch it disappear from both.
-4. **Verification, us → Element** — start it from Settings → Sessions &
-   Security. Element shows emoji and we default to numbers, so use the dialog's
-   *Switch* link; the emoji must then match glyph for glyph and name for name.
-   Both sides should end verified, and the dialog must say whether a signature
-   was actually published.
-5. **Verification, Element → us** — start it from Element with our settings
-   screen *closed*; the dialog has to appear anyway. Also try declining, and
-   cancelling from each side mid-flow.
-6. **Recovery key round trip** — enter a *wrong* recovery key and confirm the
+2. **Recovery key round trip** — enter a *wrong* recovery key and confirm the
    error is comprehensible rather than a stack trace.
-7. **Accounts** — add a second account, switch back and forth, and confirm no
-   room from one leaks into the other's list. Switch **while in a call** and
-   confirm the other participants see you leave. Sign out of one account and
-   confirm the app moves to the remaining one rather than to the login screen.
 
-## 3. Verify the activity summary
+## 2. Verify the activity summary
 
 Everything in stage 5 is implemented. What it needs is a second person, because
 almost nothing in it can be triggered by the account watching it — you cannot
 follow yourself, so every list is empty against a single account.
 
-1. **The four follow controls agree.** Follow somebody by right-clicking their
-   name in a chat, unfollow them from the voice participant menu, follow them
-   again from the Activity page, and remove them in Settings → Activity. The
-   four are one list; any of them disagreeing is the bug. Restart, and confirm
-   it survived. Switch accounts and back: the list is per account, and the other
-   account's must not appear.
-2. **Placement.** With Home selected and no channel open, the Activity page
-   fills the chat column. Clicking any channel replaces it. Inside a *space*
-   with no channel open, the old "No room selected" placeholder is still what
-   shows — the summary spans every room, so it belongs to Home alone.
-3. **Voice.** Have them join a call: they appear under *In voice* within a sync,
-   in a room you have never opened. The row's button says *Join* or *Enable &
-   join*, and the second one must still show the power-level consent dialog.
-   Join from there and the row switches to *You are here*.
-4. **Typing.** Have them start typing: the badge appears and clears on its own
+1. **Typing.** Have them start typing: the badge appears and clears on its own
    when they stop, without anything else arriving. Have them send: the row
    switches to a relative time and the message lands in the feed.
-5. **Jumping.** Click a message row. The channel opens — including switching the
-   rail to its space — scrolls to that message, and washes it in the accent
-   colour for a couple of seconds. Test three cases: a message in the room
-   already open, one in a room in another space, and one far enough back to need
-   a pagination step. A jump that cannot find the event must still mark it
-   rather than silently doing nothing.
-6. **The window really is a window.** Set it to 5 minutes and leave the app
-   alone. Rows must age out **without anything being clicked** — that is the
-   30 second sweep, and it is the only thing keeping "recently active" honest in
-   a room that has gone quiet.
-7. **Toggles.** Turn each of the three off and confirm the sections vanish
-   independently and stay off across a restart.
-8. **Backfill.** With it off, restart after they have said several things in
-   several rooms: only the newest message per room is there. Turn it on — the
-   catch-up runs at once, the progress line counts rooms, and the rest appears.
-   Restart again: complete from the first frame. Check an **encrypted** room
-   specifically — its history must arrive decrypted, and history no key is held
-   for must be absent rather than showing "unable to decrypt" rows. Press *Catch
-   up now* twice quickly and confirm the second press does nothing.
-9. **Nobody followed** is the explainer with an *Add people* button, not four
-   empty headings.
-10. **Read receipts.** Have them send a message that mentions you: a badge
-    appears. Open the room — it clears, and Element shows your read receipt
-    moving. Then scroll **up** into history, have them send another, and confirm
-    the badge does *not* clear until you scroll back down. Minimise the window,
-    have them send one more, and confirm it survives being minimised.
-11. **Dead call rings.** Have them start a call and leave without you joining.
-    The timeline shows *"<their name> started a call"* with a green handset — the
-    badge is now explicable rather than a red 1 over nothing — and within
-    20 seconds or so it clears itself, without the room being opened. Then the
-    safety case: have them send a real message **and** start a call, then leave
-    the call — the badge must **stay**, because a receipt would clear the
-    message too.
-12. **The timeline is not buried.** Join and leave a call a few times and sit in
-    one for several minutes. Exactly one line per call *start* appears; the
-    joins, leaves and two-minute heartbeats must not, or the conversation
-    disappears under call bookkeeping.
+2. **Read receipts.** Have them send a message that mentions you: a badge
+   appears. Open the room — it clears, and Element shows your read receipt
+   moving. Then scroll **up** into history, have them send another, and confirm
+   the badge does *not* clear until you scroll back down. Minimise the window,
+   have them send one more, and confirm it survives being minimised.
 
-## 4. Verify the microphone switch and the hard-kill withdrawal
+## 3. Verify on-device encryption against a real account
 
-Two of the "Smaller things" below are fixed but unobserved. Both are I/O against
-real hardware and a real homeserver, so nothing in the test suite covers them.
-
-**Preflight, once.** The hard-kill fix has two independent halves and the first
-only exists on a homeserver configured for it. Fetch
-`/_matrix/client/versions` and look for `org.matrix.msc4140` in
-`unstable_features`. Synapse advertises it **only** when
-`max_event_delay_duration` is set in `homeserver.yaml` (e.g. `24h`). If it is
-absent, steps 2 and 3 will not pass and are not supposed to — skip to step 4,
-which is the half that works everywhere. The log says which path was taken:
-*"delayed leave armed"* or *"homeserver does not support MSC4140"*.
-
-**The microphone.** Needs a second person listening, and two physically
-different microphones.
-
-1. **Output is silent.** Join a call, talk, and change the *output* device
-   mid-sentence. The other side must hear **no** interruption at all and see no
-   mute indicator flicker. This used to republish the microphone for a change
-   that has nothing to do with it.
-2. **Input actually moves.** Change the *microphone* mid-call. Two separate
-   things to confirm, and the second is the one that was broken: they keep
-   hearing you across the switch, **and** they are now hearing the new
-   microphone. Speak into only one of the two to tell. `logDiagnostics` prints
-   `settings:` from the local track's `getSettings()` — it must name the new
-   device. Before this fix the audio stayed on the old microphone while the
-   settings dialog showed the new one, silently.
-3. **Muted switching works.** Mute, change the microphone, unmute. The new
-   device must be live. This never worked before.
-
-**The hard kill.** Needs Element open on another account watching the channel.
-
-1. **The graceful case still works.** Join, leave normally, and confirm you
-   disappear at once — then that nothing is left scheduled behind you
-   (`GET /_matrix/client/unstable/org.matrix.msc4140/delayed_events` empty).
-   Regression check: the delayed leave must not outlive a clean leave.
-2. **Killed mid-call.** Join, then end the process from Task Manager — not a
-   window close, which runs the graceful path. Element must drop you from the
-   participant list within ~20 s, with the app not running.
-3. **Relaunch inside the window.** Join, kill, and relaunch and rejoin the *same
-   call within 20 seconds*. You must **stay** in the participant list. This is
-   the orphan-cancellation path, and if it is broken you will appear, sit there,
-   and then silently vanish a few seconds later while still in the call.
-4. **The sweep, on any homeserver.** Join, kill, relaunch and then leave the app
-   alone — do not rejoin. The stale membership must clear itself shortly after
-   the first sync, and Element must show you gone. This is what covers a
-   homeserver without MSC4140.
-5. **Another device is not collateral.** With a call joined on a *second* device
-   or in Element, hard-kill this one and relaunch. The sweep must clear only
-   this device's membership and leave the other call running.
-
-## 5. Verify on-device encryption against a real account
-
-`Settings → Security` → *"Encrypt the data stored on this device"* is
-implemented and covered by tests that run against real sqlite files on disk
-(`test/storage/`, `test/settings/device_encryption_test.dart`,
-`test/auth/unlock_screen_test.dart`, `test/auth/launch_sequence_test.dart`).
-What no test can cover is the app itself doing it to a live account, which is
-what the list below is for.
-
-**Steps 1 to 5 and 7 pass, observed on 2026-08-22** against a real account with
-a second one added alongside it. Both stores were confirmed to begin with
-ciphertext rather than `SQLite format 3`; the second account's store was born
-encrypted rather than written in the clear and tidied up afterwards; the old
-`matrix\files\` directory is gone; and `tool/inspect_store.dart` read
-**11 attachments, 1.90 MB** back out of the encrypted main store — the
-attachment cache is inside what the passphrase protects, which is the whole
-claim. Turning it off and on again worked, as did changing the passphrase with
-two accounts signed in, which was the step most likely to half-apply.
-
-One bug was found doing it, and fixed. The first restart came up on a red screen
-*after a correct passphrase*: a locked launch calls `runApp` twice, the second
-call reconciled the lock screen's `ProviderScope` with the app's instead of
-replacing it, and Riverpod refused the change in override count. Distinct scope
-keys in `app.dart` are the fix, and `test/auth/launch_sequence_test.dart` pumps
-the two real roots in order so it cannot come back silently.
-
-**Steps 6 and 8 are outstanding**: the forgotten-passphrase path, which wants a
-throwaway installation because it ends in deletion, and the Nix build, which
-wants the machine. Everything else below is now a re-verification procedure
-rather than an open question — worth re-running after anything touches
-`lib/core/storage/` or the launch sequence.
-
-**How it works, so a failure can be placed.** `pubspec.yaml` points
-`package:sqlite3` at the SQLite3MultipleCiphers build, and
-`lib/core/storage/store_cipher.dart` drives `PRAGMA key` / `PRAGMA rekey` on
-top of it. The attachment cache moved *inside* the database
-(`lib/core/storage/hardline_store.dart`) so that one key covers everything;
-nothing decides to encrypt from a preference, only from the file header.
-
-**The test.**
-
-1. **Turning it on.** With a real, synced account: Settings → Security → the
-   switch, a passphrase, *Encrypt*. The app must stay usable throughout — keep
-   scrolling a timeline while it runs. Afterwards, `matrix_client.sqlite` must
-   **not** start with the bytes `SQLite format 3`, and nothing may have been
-   signed out.
-2. **The lock screen.** Restart. It must ask, refuse a wrong passphrase with a
-   message rather than a crash, accept the right one **after** that wrong
-   attempt, and land in the shell with history intact and encrypted rooms still
-   decrypting.
-3. **A second account.** Add one while encryption is on and confirm its store is
-   born encrypted (same header check). Then switch between the two, which is the
-   path that opens a store the launch did not.
-4. **Changing the passphrase, with two accounts signed in.** Both files must
-   move. Restart and confirm the *old* one is refused and the new one works for
-   whichever account was not active when it changed — that is the half that a
-   half-applied change would break, and it would not show until then.
-5. **Turning it off.** The header goes back to `SQLite format 3`, the launch
-   stops asking, and everything still works.
-6. **The way out** *(outstanding)*. On a throwaway install: lock it, forget
+1. **The way out** *(outstanding)*. On a throwaway install: lock it, forget
    the passphrase, use *"I have lost the passphrase"*, and confirm the app
    comes up at the login screen with the stores gone.
-7. **Attachments.** Send and receive an image, restart, and confirm it is not
-   re-downloaded — the cache is in the database now, and a broken blob table
-   would look like nothing worse than a slow timeline. Check that
-   `%APPDATA%\Mein1337\Hardline\matrix\files\` no longer exists.
-8. **Nix** *(outstanding)*. On the Linux package the setting must refuse to
+2. **Nix** *(outstanding)*. On the Linux package the setting must refuse to
    switch on and say why. That is expected, not a bug — see "The store cipher
    is missing on Nix" in [NIX-PACKAGING.md](NIX-PACKAGING.md), which has the
    two routes to fixing it.
 
-## 6. Verify the speaking indicator and the noise gate with other people
-
-Both halves of the voice-level work have been exercised alone, which is exactly
-half of what they are for. The gate is fully testable solo — one person in a
-call is a microphone and a meter — and it passes. **The speaking ring is not.**
-Nobody has seen it light up for somebody else, because with one person in a
-call there is nobody else to light up for.
-
-**What is unproven, and only a second person can prove it.**
-
-1. **Somebody else's ring appears at all.** Have them talk in a channel you are
-   both in. Their avatar rings, in the sidebar participant list under the
-   channel. This is the whole feature and it has never been observed once.
-2. **Quietly counts.** The point of dropping LiveKit's `activeSpeakers` was
-   that the SFU only trips for somebody talking loudly. Have them speak *softly*
-   — the ring must still appear. If it needs a raised voice, the received-level
-   path is not doing what it replaced it for.
-3. **It goes out.** They stop, the ring goes out within a beat. A ring that
-   stays lit is worse than none, because it stops meaning anything.
-4. **The right person.** With two other people in the call, only the one
-   speaking rings. Getting this wrong is a mapping bug between LiveKit
-   identities and Matrix user ids, which one participant cannot expose.
-5. **Somebody on two devices.** If they can join from a phone as well, both
-   their identities collapse to one avatar, and it rings whichever device
-   carries the audio.
-6. **Leaving mid-sentence.** Have them talk and then close the app outright.
-   Their ring must go out with them rather than staying lit on a row that is
-   about to disappear.
+## 4. Verify the speaking indicator and the noise gate with other people
 
 **And the gate, from the other end** — everything below needs somebody
 listening, because the entire question is what *they* hear:
 
-7. **The gate actually gates.** Turn it on, set the breakpoint above your room
+1. **The gate actually gates.** Turn it on, set the breakpoint above your room
    noise, and stay quiet with a fan or a keyboard going. They should hear
    nothing. Then talk: they hear you, from the first syllable — a gate that
    clips word onsets is the usual failure and it is obvious to the listener
    long before it is obvious to you.
-8. **No chopping inside sentences.** Talk normally, with the pauses a sentence
+2. **No chopping inside sentences.** Talk normally, with the pauses a sentence
    has. They must hear continuous speech, not words with holes between them.
    That is the 400ms hold; if it is too short they will say you sound "cut up".
-9. **The breakpoint set too high.** Deliberately set it above your speaking
+3. **The breakpoint set too high.** Deliberately set it above your speaking
    level and confirm they hear *nothing at all* — and that the meter shows you
    why. This is the failure mode the settings pane warns about, and it should
    be diagnosable from your own screen rather than only from their complaint.
-10. **Encryption survives it.** The gate works by deactivating the RTP encoding
-    on the sender, in a call that is end-to-end encrypted with a frame cryptor
-    attached to that same sender. Toggling it repeatedly must not garble their
-    audio or break it permanently. Nothing suggests it will; nothing has tested
-    it either.
-11. **Turning it off restores you.** Switch it off mid-call and confirm they
-    hear you again immediately, without rejoining.
+4. **Encryption survives it.** The gate works by deactivating the RTP encoding
+   on the sender, in a call that is end-to-end encrypted with a frame cryptor
+   attached to that same sender. Toggling it repeatedly must not garble their
+   audio or break it permanently. Nothing suggests it will; nothing has tested
+   it either.
+5. **Turning it off restores you.** Switch it off mid-call and confirm they
+   hear you again immediately, without rejoining.
 
 **If the ring never appears for anybody**, check the log for
 `microphone tap is delivering`. Its absence means the local half never started
 and the remote half is measured separately — the two do not share a path, so
 one working is not evidence about the other.
 
-## 7. Verify the NixOS package end to end on a clean machine
+## 5. Verify the NixOS package end to end on a clean machine
 
 The Nix work builds and the process comes up, but "comes up" is all that has
 been checked. `nix develop` + `flutter run -d linux` shows a window and
@@ -389,9 +149,9 @@ It is fixed — `_LoginScreenState._submit` read `ref` after `signIn` returned, 
 which point the router had already swapped the login screen for the shell — and
 a first launch should now come up with nothing in the log at all.
 
-## 8. Publish a binary cache, and keep the nixpkgs pin fresh
+## 6. Publish a binary cache, and keep the nixpkgs pin fresh
 
-Two Nix-distribution chores, separate from proving the build works (TODO 7).
+Two Nix-distribution chores, separate from proving the build works (TODO 5).
 
 **A binary cache (Cachix).** The heavy part of this build is the *build-time*
 closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
@@ -419,15 +179,15 @@ setup.** `nix flake update` can move the very things the build is pinned
 against: the Flutter/Dart version (must satisfy `sdk: ^3.12.2`), nixpkgs'
 built-in pub source builders (the `super_native_extensions` 0.9.1 mapping in
 `flake.nix`), and the `cargoHash`es under `nix/`. Treat a bump as a change to
-verify, done *inside* a TODO-7 build-and-run pass — never a blind
+verify, done *inside* a TODO-5 build-and-run pass — never a blind
 `nix flake update` on faith.
 
-## 9. Make on-device encryption work on the Nix build
+## 7. Make on-device encryption work on the Nix build
 
 Today it does not, and the app says so rather than pretending — `Settings →
 Security` refuses to switch on, because `requireCipherSupport()` finds no
 cipher and will not key a store with a library that would ignore the key. TODO
-5 step 8 verifies that refusal is what happens. **This item is about removing
+3 step 2 verifies that refusal is what happens. **This item is about removing
 the need for it.**
 
 **Why it is missing.** `pubspec.yaml` asks `package:sqlite3` for the
@@ -468,98 +228,67 @@ overrides the request and links `pkgs.sqlite` — plain SQLite, which accepts
    would need to accept either, and a store written on one platform would not
    open on the other. Worth it only if route 1 proves impractical.
 
-**When it works, TODO 5 step 8 inverts** — the Linux package should then pass
-the whole of TODO 5 rather than correctly refusing its last step. Update that
+**When it works, TODO 3 step 2 inverts** — the Linux package should then pass
+the whole of TODO 3 rather than correctly refusing its last step. Update that
 step and the "The store cipher is missing on Nix" section of
 [NIX-PACKAGING.md](NIX-PACKAGING.md), which is where the detail lives, along
 with the `sqlite` comment in `flake.nix`'s `runtimeLibsFor`.
 
-## 10. Verify the call grid and multiple screen shares
+## 8. Verify the call grid and multiple screen shares
 
 The grid replaces `CallStage` and is covered by tests that drive it from
 hand-built values (`test/voice/call_grid_test.dart`,
 `call_grid_layout_test.dart`, `live_participant_test.dart`). What no test can
-cover is a real SFU with real video in it, and half the list below needs a
-second person because one participant cannot demonstrate a grid.
+cover is a real SFU with real video in it, and the list below needs a second
+person because one participant cannot demonstrate a grid.
 
-**Alone.**
+1. **Nine tiles.** Get to six or more streams between you and confirm the grid
+   stays regular and the video stays smooth. `adaptiveStream` and `dynacast`
+   are now on, so the SFU should be sending small layers for small tiles;
+   without them this is where it would fall over.
 
-1. **The shape.** Join a call. One tile with your face in it — *not* an empty
-   chat column, which is what the old stage gave a voice-only call. Turn the
-   camera on: the avatar tile becomes a video tile. Turn it off again: it goes
-   back, rather than vanishing.
-2. **One tile per stream.** Camera on, then share a screen, then share a second
-   screen. Three tiles, all the same size, shared screens first, each captioned
-   in its **bottom right** corner. This is the requirement in one step: three
-   streams take three people's worth of the grid.
-3. **The toggle.** *Chat* in the header brings the timeline back with its scroll
-   position intact; *Call* returns to the grid. Switch rooms while in a call and
-   confirm the other room shows its timeline, not the grid.
-4. **Resize.** Drag the window narrow and wide with four or more tiles up. The
-   arrangement should re-flow — a wide window puts tiles across, a narrow one
-   stacks them — and nothing should ever be clipped.
+## 9. Verify the call overlay, and prove the transparency first
 
-**Multiple shares, which is the risky half.**
+**Step 1 is a gate**, and it has already failed once: the first time the
+overlay was switched on it filled the monitor with solid white. That is
+diagnosed and rewritten — the Flutter view is a child `HWND` the engine renders
+opaque, so no amount of work on the *window's* composition could ever have
+shown anything through it. Transparency is now a colour key
+(`kChromaKey`, pure magenta) with `LWA_COLORKEY`, and the fade is a window-wide
+`LWA_ALPHA` driven by `OverlayController`. See "Transparency is a colour key"
+in [notes.md](notes.md).
 
-5. **Two shares at once really are two.** Share window A, then use *Share
-   another…* for window B. The other side must see **two distinct** tiles, not
-   the same window twice. This is the exact failure `setScreenShareEnabled`
-   produces silently, so seeing it twice is the tell that the direct-publish
-   path was bypassed somewhere.
-6. **Stopping one leaves the other.** Stop share A from the menu; B keeps
-   running on both sides. Then leave the call and confirm nothing is left
-   published (`getTrackPublicationBySource` empty, no orphaned
-   `screenShareAudio`).
-7. **In an encrypted room.** Repeat 5 with *"Share system audio"* on, in an
-   encrypted room. Both streams must be decodable and the audio audible — the
-   frame cryptor has to attach to each new sender independently, and this is the
-   only step that proves it. Garbled video on the *second* share only is the
-   signature of that going wrong.
-8. **Windows stops it from outside.** Start a share and stop it from Windows'
-   own sharing banner rather than from the app. The tile must disappear and the
-   footer must stop claiming to be sharing — that is what
-   `LocalTrackUnpublishedEvent` is now listened to for, and nothing else covers
-   it.
-
-**With a second person.** All of this is first-observation, not regression:
-
-9. **They appear as an avatar tile** the moment they join, before they send
-   anything.
-10. **Their tile's border lights while they speak** and nobody else's does. Note
-    this is the *first* observation of the received-level path in a grid; TODO 6
-    covers the same signal in the sidebar and the two share
-    `SpeakingWatch` now, so a failure here is a failure there.
-11. **Their mute icon appears when they mute themselves.** New, and only
-    possible inside a call — the sidebar cannot show it and never will.
-12. **Their screen-share badge in the sidebar lights**, which was dead code
-    before this. Then leave the call and confirm it goes out, because from
-    outside a call there is nothing to know.
-13. **Nine tiles.** Get to six or more streams between you and confirm the grid
-    stays regular and the video stays smooth. `adaptiveStream` and `dynacast`
-    are now on, so the SFU should be sending small layers for small tiles;
-    without them this is where it would fall over.
-
-## 11. Verify the call overlay, and prove the transparency first
-
-**Step 1 is a gate.** The overlay's per-pixel transparency rests on
-`SetWindowCompositionAttribute`, which is undocumented. It is resolved at
-runtime with a documented fallback behind it, and neither has been observed on
-this machine — the app builds and launches, and the overlay window has never
-been on screen, because it only appears during a call.
+**None of that has been seen working.** The rewrite is the second attempt at
+this and the first one looked correct too.
 
 Everything testable without a second person is testable alone here, which makes
 this the rare list that one person can finish.
 
 1. **Transparency, before anything else.** Settings → *Call overlay* → switch it
    on, join a call, and look. The HUD must appear over the desktop with the
-   background **fully transparent** — not black, not grey, not a rectangle. If
-   it is an opaque rectangle, `SetWindowCompositionAttribute` was not resolved
-   or was ignored, and `ApplyTransparency` in
-   `windows/runner/overlay_window.cpp` is where the two fallbacks are.
-2. **Silence is invisible.** With nobody speaking, nothing at all is drawn.
-   Speak: your own avatar and name appear at full opacity with the ring around
-   them, and fade out again a beat after you stop. Raise *Visible when silent*
-   and confirm the quiet entries come up to that opacity and no further.
+   background **fully transparent** — not white, not black, not a rectangle.
+   - A **solid magenta** screen means the key is being painted but not keyed:
+     the two `kChromaKey` values, one in `overlay_window.cpp` and one in
+     `overlay_app.dart`, have drifted apart.
+   - A **solid white** screen means the colour key is not being applied at all
+     — that is the original failure, and `ApplyTransparency` is where to look.
+   - **Magenta fringing** around the roster is expected in small amounts where
+     an antialiased edge meets the key; a magenta *halo* means something is
+     being drawn without its opaque plate behind it.
+2. **The fade, and the linger.** With nobody speaking the HUD drops to
+   *Visible when silent* — to nothing at all at the default of zero — but only
+   after *Stay up for* has elapsed. Talk, stop, and count: it should hold, then
+   fade. Then talk again before it fades and confirm it never dips.
+   - Set *Stay up for* to its minimum and confirm the HUD follows speech
+     closely; set it to an hour and confirm it simply stays up.
+   - Raise *Visible when silent* and confirm the whole roster settles at that
+     opacity rather than disappearing.
+   - **One person talking brings the whole roster up**, not just them. That is
+     the documented cost of a window-wide fade; the ring is what identifies the
+     speaker. If that turns out to be the wrong trade in practice, the way out
+     is per-pixel alpha, which needs the Flutter view composited through
+     DirectComposition instead of parented as an opaque child — a much larger
+     change than this one.
 3. **Clicks fall through.** Over a game, click where the HUD is. The game must
    receive the click. This is `WS_EX_TRANSPARENT`, and it is the difference
    between an overlay and an obstruction.
@@ -598,8 +327,8 @@ this the rare list that one person can finish.
     older the call fails and the overlay is simply visible, which is cosmetic.
 12. **The graceful exit still works.** Close the window mid-call with the
     overlay showing. You must still disappear from the participant list at once.
-    The overlay bridge sits in the same message pump as the exit request that
-    TODO 4 covers, and this is the regression it could cause.
+    The overlay bridge sits in the same message pump as the graceful exit
+    request, and this is the regression it could cause.
 13. **Two engines, one process.** After using the overlay, check the log for
     anything from flutter_webrtc about a plugin registering twice, and confirm
     audio still works after the overlay has been shown and hidden a few times.
@@ -611,6 +340,218 @@ this the rare list that one person can finish.
 is the architecture, not an omission — see "Which is also why the overlay cannot
 show video" in [notes.md](notes.md), which also records the one route to it
 (`DwmRegisterThumbnail`) if it is ever wanted.
+
+## 10. Finish what the issues pass left half-done
+
+Three things were stopped short on purpose rather than forgotten. Each says why,
+because in every case the reason is the thing to re-read before picking it up.
+
+1. **Move the overlay's own two chords onto the shared hotkey registry.**
+   `lib/features/hotkeys/` now owns the chord type, the key translation, the
+   capture row and the bindings for mute, deafen and stop-sharing. The
+   overlay's *toggle* and *edit* chords were left where they were — two named
+   fields on `OverlayPrefsState`, applied by `OverlayController._applyHotkeys`,
+   dispatched by a two-case switch in `_onHotkey`.
+
+   **Why it was left.** Moving them means rewriting that controller and
+   migrating persisted bindings out of the `overlay_prefs_v1` blob, in a
+   feature that has never once been on screen — see TODO 9, which is a gate for
+   exactly that reason. If the chords then failed, there would be no way to
+   tell a migration bug from whatever TODO 9 is going to find.
+
+   **So do this after TODO 9 passes, not before.** The move itself is
+   mechanical: `HotkeyAction` gains `overlayToggle` and `overlayEdit` at ids 1
+   and 2 (already reserved, see `kOverlayHotkeyIds`), `CallHotkeysState`
+   becomes the only binding store, and `OverlayPrefsState.fromJson` keeps
+   reading the two old keys once more to hand them over. `CallHotkeyBinder`
+   already dispatches by id and ignores anything it does not own, so the
+   dispatch half is a `switch` arm each.
+
+   The one behaviour that must survive: the overlay's chords are registered
+   **only while the overlay is enabled** (`overlay_controller.dart`, and the
+   comment there explains that holding a global chord for a disabled feature
+   took Alt+Shift+O away from the whole machine). Call chords deliberately do
+   not work that way. So the registry needs a per-action gate, not one switch
+   for everything.
+
+2. **Decide what "a call ended" is, if it should be an event at all.**
+   Starting a call now sends a ring (`kRingEventType`), which is what makes it
+   appear in everybody's timeline and badge the room — that half is done, and
+   it also fixed a Hardline-started call being silent on every other client.
+
+   There is **no ending event in MatrixRTC**, and this pass did not invent one.
+   A call ends when the last membership expires, which is a thing that stops
+   happening rather than a thing that happens: whoever noticed would have to
+   decide they were last out, several clients would race to say so, and Element
+   would draw the loser's attempt as an unknown event in the timeline.
+
+   What is there instead: `SystemEventTile` reads live membership state and
+   writes the row in the past tense once the call is over, so scrolling past no
+   longer reads as though one is in progress. That covers the complaint. A real
+   event is only worth it if a *duration* is wanted, and that needs a spelling
+   other clients agree on — check whether MSC4075 has grown one before writing
+   a `io.hardline.*` event nobody else reads.
+
+3. **Keep the unshareable-window denylist fed.**
+   `kUnshareableWindowTitles` in `lib/features/voice/screen_sources.dart` drops
+   shell windows that Windows reports as capturable and which produce a blank
+   or broken stream — the taskbar overflow window being the one that prompted
+   it. There is no API that says "this is a shell artefact", so the list is the
+   honest approach and it is **expected to grow**.
+
+   It is matched case-insensitively against the whole title and is therefore
+   **per display language**: the German and English names for the overflow
+   window are both in it, and any other locale's is not. The zero-area
+   thumbnail heuristic beside it catches some of what the list misses. Add a
+   name when one turns up rather than guessing at the set, and add every
+   language you can get for it.
+
+## 11. Finish the room and space administration
+
+Creating rooms and spaces works. A space lists what it contains and lets you
+join it, by address or from an invitation, and people can be invited to one.
+What is still missing is everything that comes *after* — and it is missing as a
+set, which is why it is one item.
+
+`lib/core/matrix/room_capabilities.dart` is where the "may I" questions go. It
+holds `canAddToSpace` and `canInvite`, each because something asks it. Its own
+note records that "can I administer this room" was written and removed rather
+than left as a guess.
+
+What does not exist:
+
+1. **Room settings.** Name, topic, avatar, visibility, and who may do what.
+   Every one of these is a state event this account may or may not be allowed
+   to send, so each control needs a capability check beside it rather than a
+   button that fails at the server.
+2. **Member management.** No member list exists anywhere in the app —
+   `getParticipants()` is called only to build the mention and follow
+   candidate lists. Kick, ban and power-level changes all hang off a list that
+   has to be built first.
+
+   Inviting does *not*, and is done: `InvitePeopleDialog` takes a user id,
+   because it needs no list. It cannot offer completion for the same reason —
+   the user directory is a per-homeserver feature many deployments disable, and
+   a search box that silently returns nothing on half of them is worse than a
+   field that says what it wants. A member list would fix that for people
+   already in a neighbouring room.
+3. **Leaving a room, and removing one from a space.** There is no `leaveRoom`
+   call anywhere except *declining an invitation*, which is the same API used
+   for the opposite purpose. So a room joined by mistake from the space
+   overview cannot be left from here, and neither can a space.
+
+   Note the asymmetry that leaves: an invitation can be declined, but the
+   moment it is accepted the decision is final as far as this client is
+   concerned.
+4. **Nested spaces are joinable but still not nested.** The space overview
+   joins a space inside a space and it arrives on the rail — as a *sibling* of
+   the space it came from, because the rail is flat. That is honest but loses
+   the shape of the place. Deciding whether the rail should nest is the real
+   work; the join button no longer waits on it.
+
+Two smaller things in the same area:
+
+- **The hierarchy is fetched once, capped at 100 rooms, and never paginated.**
+  `spaceHierarchyProvider` ignores `next_batch`. A space larger than that shows
+  its first hundred children and no indication there are more.
+- **`m.space.parent` is written by `setSpaceChild`** but nothing reads it, so a
+  room knows which space it is in only when that space has been synced.
+
+## 12. Registration stops where the browser has to start
+
+`m.login.dummy`, `m.login.password`, `m.login.terms` and
+`m.login.registration_token` are driven in-app. Anything else — a captcha, an
+email address, a phone number — ends with the homeserver's own registration
+page in a browser and an explanation naming the obstacle.
+
+**That was the decision, not an oversight**, and the reason is the dependency:
+`m.login.recaptcha` and `m.login.sso` both mean "render somebody else's web
+page and let the user interact with it", which needs a webview this app does
+not have and would carry for one screen. `m.login.email.identity` additionally
+needs the client to poll while the user reads their mail and to hold a
+registration open across a restart.
+
+Revisit only if a webview arrives for some other reason. If it does, the shape
+is already there: add the stage to `kSupportedRegistrationStages`, add a case
+to `RegistrationController._handleStages`, and the flow selection and the
+"blocked" wording follow on their own — `registrationBlockedReason` names each
+obstacle separately precisely so it can stop naming one.
+
+Also unverified, because it needs a homeserver that asks for each:
+
+1. **A terms stage** — that the policy link is the right one, and in English
+   where the server offers a choice. `_termsUrl` prefers `en` and falls back to
+   whatever is first.
+2. **A registration token stage.**
+3. **`registrationPageFor`** is a *guess* — Element hosted at the homeserver's
+   own domain, because there is no discovery for this. Wrong on a homeserver
+   that hosts no web client, where it costs a browser tab.
+
+## 13. The overlay does not appear on the first call after launch
+
+**Open, reproducible, and not diagnosed.** It appears on every later call in
+the same session. Restarting the client brings it back.
+
+Four separate causes were found and fixed while chasing this. Each was a real
+defect and each is worth keeping — **none of them was this one**, and the
+symptom survived all four. They are listed so the next attempt does not spend
+its time re-finding them:
+
+1. **The chroma key was dropped before the window existed.** `setChromaKey` is
+   sent immediately before the first `show`, but the bridge did `if (overlay_)`
+   and the window is created lazily *by* `show`. The key is now remembered in
+   `OverlayBridge::pending_chroma_key_` and applied in `EnsureOverlay`.
+   Ruled out as the cause: a key mismatch paints an opaque sheet over the
+   monitor, which is a loud symptom, not a missing overlay.
+2. **The first draw waited for every avatar.** `setParticipants` fetched all of
+   them before reconciling, and a roster change mid-fetch bumped the generation
+   and returned *without* drawing. A connecting call changes its roster several
+   times, so the draw was abandoned repeatedly; by the next call the avatars
+   were cached and it was instant. Now it draws first and fills faces in after,
+   and `fetchAvatarBytes` has a 5s timeout. This is the one that best fitted
+   the symptom and it still did not fix it.
+3. **Leaving edit mode never restored the opacity**, so the HUD stayed pinned
+   at full for the rest of the session once arranged. That is why the edit
+   chord looked like it "refreshed" the overlay.
+4. **A changed opacity setting was never pushed at the window** until something
+   else caused a reconcile — closing the settings screen, which changes the
+   foreground application.
+
+### Check this before anything else
+
+`Visible when silent` is very likely still **0** on the existing layout, and at
+zero the whole window goes invisible once `Stay up for` elapses. That alone
+produces exactly this report, and the migration in `OverlayLayout.fromJson`
+**cannot help here**: it only lifts a zero written *before* `activeOpacity`
+existed, and an intermediate build wrote `activeOpacity` into the stored layout
+without touching `idleOpacity`. So a layout saved during development carries
+`activeOpacity: 1.0` alongside `idleOpacity: 0.0` and is left alone, correctly
+by the rule and unhelpfully in fact.
+
+Settle that first — set it to something above zero, restart, join a call. If
+the overlay appears, this whole item is that and nothing more.
+
+### If it is not that
+
+Nothing below has been tested; they are what is left after the four above.
+
+- **`show()` may be failing the first time.** `OverlayChannel.show` turns a
+  `PlatformException` into `debugPrint` plus `false`, `_shown` stays false, and
+  nothing announces it. `EnsureOverlay` returns `overlay_unavailable` when
+  `OverlayWindow::Create` fails, which includes the second Flutter engine
+  failing to start — plausibly a startup race that a later attempt does not
+  hit. **Instrument this first**: log the return of `channel.show`, and make
+  `EnsureOverlay`'s failure say *which* step failed.
+- **The second engine's first frame may be very late.** The window would be up
+  and keyed correctly while the engine is still booting, so the HUD is blank
+  through the linger and the window is at its idle opacity by the time anything
+  paints. Time the gap between `show` returning and the first `overlayEvent`
+  or first push being rendered.
+- **`_prefs.enabled` or `_hidden` at the moment of the first join.** Both are
+  cheap to log and would be embarrassing to have missed.
+
+The instrumentation is the work here, not the fix. Four wrong guesses is enough
+evidence that this one will not be reasoned out from the source.
 
 ## second to last Plattform Support
 - Linux

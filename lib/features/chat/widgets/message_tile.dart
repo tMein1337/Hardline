@@ -105,7 +105,7 @@ class MessageTile extends StatelessWidget {
                         opacity: hovered ? 1 : 0,
                         child: Text(
                           formatClockTime(event.originServerTs.toLocal()),
-                          style: context.text.timestamp.copyWith(fontSize: 10),
+                          style: context.text.timestamp.copyWith(fontSize: context.text.sized(10)),
                           textAlign: TextAlign.center,
                         ),
                       ),

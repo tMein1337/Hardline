@@ -7,7 +7,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'overlay_layout.dart';
+import '../hotkeys/hotkey.dart';
 
 /// One monitor the overlay could be put on.
 @immutable
@@ -142,6 +142,22 @@ class OverlayChannel {
   Future<void> setClickThrough(bool value) =>
       _invoke<void>('setClickThrough', {'value': value});
 
+  /// Which colour the runner turns into a hole.
+  ///
+  /// Must be sent **before** the HUD paints with it. The two sides agreeing is
+  /// what makes the overlay transparent at all; while they disagree nothing is
+  /// keyed and the plate sits opaque over the game.
+  Future<void> setChromaKey(int argb) =>
+      _invoke<void>('setChromaKey', {'value': argb});
+
+  /// How opaque everything the HUD paints is, 0..255.
+  ///
+  /// The colour-keyed holes stay holes at any value — see `kChromaKey`. This
+  /// is the overlay's fade, moved from the widgets to the window because a
+  /// layered window has no per-pixel alpha to give them.
+  Future<void> setOpacity(int alpha) =>
+      _invoke<void>('setOpacity', {'value': alpha.clamp(0, 255)});
+
   Future<void> setMonitor(String id) =>
       _invoke<void>('setMonitor', {'id': id});
 
@@ -156,7 +172,7 @@ class OverlayChannel {
   /// Returns false when Windows refused it, which almost always means another
   /// program holds it — that is a fact worth telling the user rather than a
   /// failure to retry.
-  Future<bool> registerHotkey(int id, OverlayHotkey hotkey) async {
+  Future<bool> registerHotkey(int id, Hotkey hotkey) async {
     if (!isSupported || !hotkey.isBound) {
       await unregisterHotkey(id);
       return false;
@@ -223,7 +239,7 @@ class OverlayChannel {
 }
 
 /// Hotkey ids, shared between the registration and the stream that reports it.
-abstract final class OverlayHotkeyId {
+abstract final class HotkeyId {
   static const toggle = 1;
   static const edit = 2;
 }

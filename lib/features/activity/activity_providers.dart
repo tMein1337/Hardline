@@ -191,7 +191,17 @@ final followedMessagesProvider = Provider<ListSnapshot<MessageActivity>>((ref) {
   return ListSnapshot([
     for (final record in selected)
       if (client.getRoomById(record.roomId) case final room?)
-        MessageActivity(
+        // A message you have already read is not recent activity, it is
+        // history — and leaving it on the Home screen meant the summary only
+        // ever grew until entries aged out. The room being caught up is the
+        // homeserver's own answer to "has this been seen", the same one the
+        // unread badges use, so the two can never disagree.
+        //
+        // Whole-room rather than per-message: the read marker names an event,
+        // not a time, so deciding this record-by-record would mean walking the
+        // timeline for a position the server already summarises.
+        if (!_isRead(room))
+          MessageActivity(
           eventId: record.eventId,
           roomId: record.roomId,
           roomName: displaySafeName(room.getLocalizedDisplayname()),
@@ -210,6 +220,16 @@ final followedMessagesProvider = Provider<ListSnapshot<MessageActivity>>((ref) {
         ),
   ]);
 });
+
+/// Whether [room] has nothing left to catch up on.
+///
+/// All three are needed: `notificationCount` misses a room whose notifications
+/// are muted, `highlightCount` only counts mentions, and `hasNewMessages`
+/// covers the case where the marker has not moved but the timeline has.
+bool _isRead(Room room) =>
+    room.notificationCount == 0 &&
+    room.highlightCount == 0 &&
+    !room.hasNewMessages;
 
 /// Everyone in a joined room who could be followed but is not yet.
 ///
