@@ -38,10 +38,7 @@ void main() {
       await open();
 
       expect(read().entries.map((e) => e.id), AppPalettes.byIdMap.keys);
-      expect(
-        read().entries.map((e) => e.name),
-        AppPalettes.labels.values,
-      );
+      expect(read().entries.map((e) => e.name), AppPalettes.labels.values);
     });
 
     // The ids are the ones `presetId` already held, so an installation that
@@ -80,7 +77,9 @@ void main() {
     test('a stored library is used as-is', () async {
       await open();
       final id = notifier().duplicate('hardline_dark');
-      final stored = container.read(prefsProvider).getString('theme_library_v1');
+      final stored = container
+          .read(prefsProvider)
+          .getString('theme_library_v1');
 
       await open({'theme_library_v1': stored!});
 
@@ -184,7 +183,10 @@ void main() {
 
       final entry = read().byId('hardline_dark')!;
       expect(entry.toColors().accent, const Color(0xFF00FF00));
-      expect(entry.toColors().timelineBackground, AppPalettes.dark.timelineBackground);
+      expect(
+        entry.toColors().timelineBackground,
+        AppPalettes.dark.timelineBackground,
+      );
       expect(
         read().byId('hardline_day')!.toColors().accent,
         AppPalettes.day.accent,
@@ -261,12 +263,15 @@ void main() {
     // A theme does not clash with itself. Without this, confirming the rename
     // dialog without editing it — or the New theme dialog, which offers
     // "X (copy)" as its initial value — bumps the number every time.
-    test('renaming a theme to the name it already has changes nothing', () async {
-      await open();
-      await notifier().rename('hardline_dark', 'Flight Deck');
+    test(
+      'renaming a theme to the name it already has changes nothing',
+      () async {
+        await open();
+        await notifier().rename('hardline_dark', 'Flight Deck');
 
-      expect(read().byId('hardline_dark')!.name, 'Flight Deck');
-    });
+        expect(read().byId('hardline_dark')!.name, 'Flight Deck');
+      },
+    );
 
     test('creating a theme under the name duplicate already gave it', () async {
       await open();
@@ -347,20 +352,23 @@ void main() {
       expect(read().entries.last.id, id);
     });
 
-    test('importing the same theme twice gives two rows, named apart', () async {
-      await open();
-      ThemeEntry incoming() => ThemeEntry.fromColors(
-        id: generateThemeId(),
-        name: 'Midnight',
-        colors: AppPalettes.day,
-      );
+    test(
+      'importing the same theme twice gives two rows, named apart',
+      () async {
+        await open();
+        ThemeEntry incoming() => ThemeEntry.fromColors(
+          id: generateThemeId(),
+          name: 'Midnight',
+          colors: AppPalettes.day,
+        );
 
-      final first = notifier().add(incoming());
-      final second = notifier().add(incoming());
+        final first = notifier().add(incoming());
+        final second = notifier().add(incoming());
 
-      expect(read().byId(first)!.name, 'Midnight');
-      expect(read().byId(second)!.name, 'Midnight (2)');
-    });
+        expect(read().byId(first)!.name, 'Midnight');
+        expect(read().byId(second)!.name, 'Midnight (2)');
+      },
+    );
   });
 
   group('ThemeEntry', () {
@@ -385,14 +393,23 @@ void main() {
 
       expect(entry.colors.keys.toSet(), ColorSlot.all.toSet());
       expect(entry.toColors().accent, const Color(0xFF00FF00));
-      expect(entry.toColors().timelineBackground, AppPalettes.dark.timelineBackground);
+      expect(
+        entry.toColors().timelineBackground,
+        AppPalettes.dark.timelineBackground,
+      );
       expect(entry.avatarPalette, defaultAvatarPalette);
     });
 
     test('an unusable entry is null rather than fatal', () {
       expect(ThemeEntry.fromJson('not a map'), isNull);
-      expect(ThemeEntry.fromJson({'id': '', 'name': 'x', 'colors': {}}), isNull);
-      expect(ThemeEntry.fromJson({'id': 'x', 'name': '  ', 'colors': {}}), isNull);
+      expect(
+        ThemeEntry.fromJson({'id': '', 'name': 'x', 'colors': {}}),
+        isNull,
+      );
+      expect(
+        ThemeEntry.fromJson({'id': 'x', 'name': '  ', 'colors': {}}),
+        isNull,
+      );
       expect(ThemeEntry.fromJson({'id': 'x', 'name': 'y'}), isNull);
     });
 

@@ -89,7 +89,8 @@ class ThemeLibraryCard extends ConsumerWidget {
   /// theme starts life as a small change to one that already works.
   static Future<void> _create(BuildContext context, WidgetRef ref) async {
     final library = ref.read(themeLibraryProvider);
-    final source = library.byId(ref.read(themeControllerProvider).presetId) ??
+    final source =
+        library.byId(ref.read(themeControllerProvider).presetId) ??
         library.entries.firstOrNull;
     if (source == null) return;
 
@@ -171,8 +172,9 @@ class _ThemeRow extends ConsumerWidget {
         child: InkWell(
           onTap: active
               ? null
-              : () =>
-                    ref.read(themeControllerProvider.notifier).setPreset(entry.id),
+              : () => ref
+                    .read(themeControllerProvider.notifier)
+                    .setPreset(entry.id),
           borderRadius: radius,
           hoverColor: colors.listItemHover,
           child: Padding(

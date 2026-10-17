@@ -54,6 +54,4 @@ class HighlightedEvent extends Notifier<HighlightRequest?> {
 }
 
 final highlightedEventProvider =
-    NotifierProvider<HighlightedEvent, HighlightRequest?>(
-      HighlightedEvent.new,
-    );
+    NotifierProvider<HighlightedEvent, HighlightRequest?>(HighlightedEvent.new);

@@ -89,9 +89,13 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final saved = await saveAttachment(widget.event);
-      if (saved) messenger?.showSnackBar(const SnackBar(content: Text('Saved.')));
+      if (saved) {
+        messenger?.showSnackBar(const SnackBar(content: Text('Saved.')));
+      }
     } catch (error) {
-      messenger?.showSnackBar(SnackBar(content: Text('Could not save: $error')));
+      messenger?.showSnackBar(
+        SnackBar(content: Text('Could not save: $error')),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

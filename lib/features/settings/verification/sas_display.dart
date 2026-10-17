@@ -49,9 +49,7 @@ class SasDisplayController extends Notifier<SasDisplay> {
   @override
   SasDisplay build() {
     final raw = ref.watch(prefsProvider).getString(_prefsKey);
-    return SasDisplay.values
-            .where((value) => value.name == raw)
-            .firstOrNull ??
+    return SasDisplay.values.where((value) => value.name == raw).firstOrNull ??
         // Numbers by default: they are unambiguous to read aloud, where emoji
         // depend on both people naming the same picture the same way.
         SasDisplay.numbers;

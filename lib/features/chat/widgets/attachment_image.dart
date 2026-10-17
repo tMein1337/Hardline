@@ -134,9 +134,7 @@ class _AttachmentImageState extends ConsumerState<AttachmentImage> {
           ? () => unawaited(ImageViewer.open(context, widget.event))
           : null,
       child: MouseRegion(
-        cursor: openable
-            ? SystemMouseCursors.click
-            : MouseCursor.defer,
+        cursor: openable ? SystemMouseCursors.click : MouseCursor.defer,
         child: _body(context, colors, size),
       ),
     );

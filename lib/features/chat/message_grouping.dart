@@ -43,10 +43,7 @@ typedef GroupingFlags = ({bool startsGroup, bool crossesDay});
 List<GroupingFlags> computeGroupingFlags(List<GroupingEvent> events) {
   return [
     for (var i = 0; i < events.length; i++)
-      _flagsFor(
-        events[i],
-        older: i + 1 < events.length ? events[i + 1] : null,
-      ),
+      _flagsFor(events[i], older: i + 1 < events.length ? events[i + 1] : null),
   ];
 }
 

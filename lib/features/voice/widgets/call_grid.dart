@@ -191,11 +191,10 @@ class _Tile extends ConsumerWidget {
     // Every device this person is connected from, not just the one this tile
     // draws: volume is stored per device, and somebody on a laptop and a
     // phone needs both sliders whichever of their tiles was clicked.
-    final deviceIds =
-        [
-          for (final person in ref.read(callControllerProvider).participants)
-            if (person.userId == tile.person.userId) person.deviceId,
-        ]..sort();
+    final deviceIds = [
+      for (final person in ref.read(callControllerProvider).participants)
+        if (person.userId == tile.person.userId) person.deviceId,
+    ]..sort();
 
     unawaited(
       UserAudioMenu.show(

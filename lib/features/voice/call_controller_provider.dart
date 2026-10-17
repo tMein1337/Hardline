@@ -78,9 +78,10 @@ final callControllerProvider = Provider<LiveKitCallController>((ref) {
       // Bounded: a hung network must never leave someone unable to close their
       // own application. A few seconds is ample for one state event, and the
       // membership expires on its own if we lose the race.
-      await controller
-          .leave()
-          .timeout(const Duration(seconds: 3), onTimeout: () {});
+      await controller.leave().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {},
+      );
       return AppExitResponse.exit;
     },
   );

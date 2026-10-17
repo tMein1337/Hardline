@@ -238,9 +238,7 @@ Directory? _packageDir(Directory cache, _Package package) {
   if (!hosted.existsSync()) return null;
 
   for (final host in hosted.listSync().whereType<Directory>()) {
-    final dir = Directory(
-      '${host.path}$sep${package.name}-${package.version}',
-    );
+    final dir = Directory('${host.path}$sep${package.name}-${package.version}');
     if (dir.existsSync()) return dir;
   }
   return null;

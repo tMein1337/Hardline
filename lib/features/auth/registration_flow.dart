@@ -47,10 +47,7 @@ AuthenticationFlow? chooseRegistrationFlow(List<AuthenticationFlow> flows) {
 /// the client does not track its own progress, it asks each time. A stage the
 /// server considers done is skipped even if we never consciously did it —
 /// which is exactly what happens with `m.login.dummy` on some servers.
-String? nextRegistrationStage(
-  AuthenticationFlow flow,
-  List<String> completed,
-) {
+String? nextRegistrationStage(AuthenticationFlow flow, List<String> completed) {
   for (final stage in flow.stages) {
     if (!completed.contains(stage)) return stage;
   }

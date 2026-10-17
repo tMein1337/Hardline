@@ -63,7 +63,9 @@ class ChatPrefsController extends Notifier<ChatPrefsState> {
 
   Future<void> _persist(ChatPrefsState next) async {
     state = next;
-    await ref.read(prefsProvider).setString(_prefsKey, jsonEncode(next.toJson()));
+    await ref
+        .read(prefsProvider)
+        .setString(_prefsKey, jsonEncode(next.toJson()));
   }
 }
 

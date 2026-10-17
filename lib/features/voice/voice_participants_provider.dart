@@ -44,12 +44,10 @@ final voiceParticipantsProvider =
             userId: userId,
             // Sorted so the snapshot stays stable across heartbeats, for the
             // same reason the user list is sorted.
-            deviceIds:
-                byUser[userId]!.map((m) => m.deviceId).toSet().toList()..sort(),
+            deviceIds: byUser[userId]!.map((m) => m.deviceId).toSet().toList()
+              ..sort(),
             displayName: displaySafeName(
-              room
-                  .unsafeGetUserFromMemoryOrFallback(userId)
-                  .calcDisplayname(),
+              room.unsafeGetUserFromMemoryOrFallback(userId).calcDisplayname(),
             ),
             avatarMxc: room
                 .unsafeGetUserFromMemoryOrFallback(userId)

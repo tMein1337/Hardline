@@ -83,15 +83,18 @@ void main() {
       expect(state.isEmpty, isTrue);
     });
 
-    test('removing the active account is not representable as a dangling key', () {
-      const state = AccountsState(
-        entries: [alice, bob],
-        activeStorageKey: kDefaultStorageKey,
-      );
-      expect(state.active, alice);
-      expect(state.byUserId('@bob:example.org'), bob);
-      expect(state.byKey('nope'), isNull);
-    });
+    test(
+      'removing the active account is not representable as a dangling key',
+      () {
+        const state = AccountsState(
+          entries: [alice, bob],
+          activeStorageKey: kDefaultStorageKey,
+        );
+        expect(state.active, alice);
+        expect(state.byUserId('@bob:example.org'), bob);
+        expect(state.byKey('nope'), isNull);
+      },
+    );
   });
 
   group('generateStorageKey', () {

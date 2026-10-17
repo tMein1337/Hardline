@@ -119,10 +119,7 @@ void main() {
       host([person(alice, name: 'Alice'), person(bob, name: 'Bob')]),
     );
 
-    speaking.value = const SpeakingParticipants(
-      roomId: room,
-      userIds: {alice},
-    );
+    speaking.value = const SpeakingParticipants(roomId: room, userIds: {alice});
     await tester.pumpAndSettle();
 
     expect(borderAround(tester, 'Alice'), ringColour);

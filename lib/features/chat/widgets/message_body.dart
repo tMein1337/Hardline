@@ -26,11 +26,7 @@ const _localizations = MatrixDefaultLocalizations();
 /// The exhaustiveness guarantee is relocated, not abandoned: the switch below
 /// covers every [AttachmentKind], and `attachmentKindOf` is unit-tested.
 class MessageBody extends StatelessWidget {
-  const MessageBody({
-    super.key,
-    required this.event,
-    required this.isPending,
-  });
+  const MessageBody({super.key, required this.event, required this.isPending});
 
   final Event event;
   final bool isPending;
@@ -50,8 +46,7 @@ class MessageBody extends StatelessWidget {
           _FailedUpload(event: event)
         else
           switch (kind) {
-            AttachmentKind.image ||
-            AttachmentKind.video => AttachmentImage(
+            AttachmentKind.image || AttachmentKind.video => AttachmentImage(
               event: event,
               kind: kind,
               isPending: isPending,

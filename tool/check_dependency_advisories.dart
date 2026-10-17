@@ -46,9 +46,9 @@ Future<void> main(List<String> args) async {
     exit(2);
   }
 
-  final packages = _parseLock(lock.readAsStringSync())
-      .where((p) => p.source == 'hosted')
-      .toList();
+  final packages = _parseLock(
+    lock.readAsStringSync(),
+  ).where((p) => p.source == 'hosted').toList();
 
   if (packages.isEmpty) {
     stderr.writeln('No hosted packages found in pubspec.lock.');
@@ -106,7 +106,9 @@ Future<void> main(List<String> args) async {
   for (final finding in findings) {
     stderr
       ..writeln('  ${finding.package.name} ${finding.package.version}')
-      ..writeln('    ${finding.id}  https://osv.dev/vulnerability/${finding.id}')
+      ..writeln(
+        '    ${finding.id}  https://osv.dev/vulnerability/${finding.id}',
+      )
       ..writeln('    ${finding.summary}')
       ..writeln();
   }

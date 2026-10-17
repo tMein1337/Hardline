@@ -195,8 +195,7 @@ double _migratedIdleOpacity(Map<String, Object?> json) {
   return stored;
 }
 
-double _fraction(Object? raw, double fallback) =>
-    _clamped(raw, 0, 1, fallback);
+double _fraction(Object? raw, double fallback) => _clamped(raw, 0, 1, fallback);
 
 /// Reads a number that a corrupt or hand-edited blob may have made nonsense.
 ///

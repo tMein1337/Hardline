@@ -24,8 +24,9 @@ PendingAttachment _attachment(String id, {String? rejection}) =>
       rejection: rejection,
     );
 
-List<PendingAttachment> _many(int count) =>
-    [for (var i = 0; i < count; i++) _attachment('a$i')];
+List<PendingAttachment> _many(int count) => [
+  for (var i = 0; i < count; i++) _attachment('a$i'),
+];
 
 void main() {
   late ProviderContainer container;
@@ -47,10 +48,7 @@ void main() {
       drafts.addAll(_roomA, [_attachment('one')]);
       drafts.addAll(_roomA, [_attachment('two')]);
 
-      expect(
-        drafts.forRoom(_roomA).map((a) => a.id),
-        ['one', 'two'],
-      );
+      expect(drafts.forRoom(_roomA).map((a) => a.id), ['one', 'two']);
     });
 
     test('removing takes out only the named attachment', () {
@@ -200,7 +198,10 @@ void main() {
 
     test('falls back to .bin for an unrecognised type', () {
       expect(
-        clipboardImageName('image/nonsense', now: DateTime(2026, 1, 2, 3, 4, 5)),
+        clipboardImageName(
+          'image/nonsense',
+          now: DateTime(2026, 1, 2, 3, 4, 5),
+        ),
         'Screenshot 2026-01-02 03-04-05.bin',
       );
     });

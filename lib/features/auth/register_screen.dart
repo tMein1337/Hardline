@@ -23,9 +23,9 @@ import 'registration_flow.dart';
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
-  static Future<void> open(BuildContext context) => Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => const RegisterScreen()),
-  );
+  static Future<void> open(BuildContext context) => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const RegisterScreen()));
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();

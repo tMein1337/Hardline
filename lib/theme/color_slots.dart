@@ -281,10 +281,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   // ── ThemeExtension ─────────────────────────────────────────────────────
   @override
-  AppPalette copyWith({
-    Map<String, Color>? slots,
-    List<Color>? avatarPalette,
-  }) {
+  AppPalette copyWith({Map<String, Color>? slots, List<Color>? avatarPalette}) {
     return AppPalette(
       // Merged, not replaced: callers pass only the slots they are changing.
       slots: slots == null ? this.slots : {...this.slots, ...slots},

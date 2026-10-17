@@ -120,7 +120,9 @@ class RegistrationController extends Notifier<RegistrationState> {
   /// Answers the terms stage.
   Future<bool> acceptTerms() {
     state = state.copyWith(busy: true, clearError: true, clearTerms: true);
-    return _attempt(AuthenticationData(type: 'm.login.terms', session: _session));
+    return _attempt(
+      AuthenticationData(type: 'm.login.terms', session: _session),
+    );
   }
 
   /// Answers the registration-token stage.
@@ -174,22 +176,24 @@ class RegistrationController extends Notifier<RegistrationState> {
     if (blocked != null) {
       state = RegistrationState(
         error: blocked,
-        browserUrl: registrationPageFor(
-          normalizeHomeserver(_homeserver),
-        ),
+        browserUrl: registrationPageFor(normalizeHomeserver(_homeserver)),
       );
       return false;
     }
 
     final flow = chooseRegistrationFlow(flows)!;
-    final next = nextRegistrationStage(flow, error.completedAuthenticationFlows);
+    final next = nextRegistrationStage(
+      flow,
+      error.completedAuthenticationFlows,
+    );
 
     switch (next) {
       case null:
         // Every stage is done and the server still said 401. Retrying would
         // loop, so this stops and says so rather than spinning.
         state = const RegistrationState(
-          error: 'The homeserver did not accept the registration even though '
+          error:
+              'The homeserver did not accept the registration even though '
               'every step was completed. Try its own registration page.',
         );
         return false;
@@ -228,7 +232,8 @@ class RegistrationController extends Notifier<RegistrationState> {
 
       default:
         state = RegistrationState(
-          error: 'This homeserver asked for "$next", which this app cannot '
+          error:
+              'This homeserver asked for "$next", which this app cannot '
               'show.',
           browserUrl: registrationPageFor(normalizeHomeserver(_homeserver)),
         );
@@ -251,7 +256,10 @@ class RegistrationController extends Notifier<RegistrationState> {
       final languages = [
         for (final entry in policy.entries)
           if (entry.value is Map && (entry.value as Map)['url'] is String)
-            (code: entry.key.toString(), url: (entry.value as Map)['url'] as String),
+            (
+              code: entry.key.toString(),
+              url: (entry.value as Map)['url'] as String,
+            ),
       ];
       if (languages.isEmpty) continue;
 

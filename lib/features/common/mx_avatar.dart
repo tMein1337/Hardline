@@ -63,9 +63,7 @@ class MxAvatar extends ConsumerWidget {
     if (mxc == null || mxc.isEmpty) return fallback;
 
     final resolved = ref.watch(
-      avatarUriProvider(
-        AvatarRequest(mxcUri: mxc, size: _pixelSize(context)),
-      ),
+      avatarUriProvider(AvatarRequest(mxcUri: mxc, size: _pixelSize(context))),
     );
 
     return resolved.maybeWhen(

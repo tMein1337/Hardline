@@ -9,17 +9,11 @@ import 'package:hardline/features/voice/matrix_rtc_membership.dart';
 /// Base instant for readable relative timestamps.
 final _t0 = DateTime(2026, 8, 4, 12, 0);
 
-GroupingEvent _msg(String sender, Duration offset) => (
-  senderId: sender,
-  type: EventTypes.Message,
-  timestamp: _t0.add(offset),
-);
+GroupingEvent _msg(String sender, Duration offset) =>
+    (senderId: sender, type: EventTypes.Message, timestamp: _t0.add(offset));
 
-GroupingEvent _state(String sender, Duration offset) => (
-  senderId: sender,
-  type: EventTypes.RoomMember,
-  timestamp: _t0.add(offset),
-);
+GroupingEvent _state(String sender, Duration offset) =>
+    (senderId: sender, type: EventTypes.RoomMember, timestamp: _t0.add(offset));
 
 void main() {
   group('computeGroupingFlags', () {

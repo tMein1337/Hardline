@@ -265,11 +265,7 @@ class _RowState extends ConsumerState<_Row> {
                           ),
                           if (room.isEncrypted) ...[
                             const SizedBox(width: 6),
-                            Icon(
-                              Icons.lock,
-                              size: 12,
-                              color: colors.textFaint,
-                            ),
+                            Icon(Icons.lock, size: 12, color: colors.textFaint),
                           ],
                           if (room.isSpace) ...[
                             const SizedBox(width: 6),

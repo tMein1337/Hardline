@@ -29,10 +29,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
   /// Pushes the add-account flow, tearing the throwaway session down again if
   /// the user backs out.
-  static Future<void> addAccount(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  static Future<void> addAccount(BuildContext context, WidgetRef ref) async {
     final actions = ref.read(accountActionsProvider.notifier);
     final pending = await actions.beginAddAccount();
     if (!context.mounted) {
@@ -128,7 +125,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             Text(
               adding ? 'Add an account' : 'Welcome back!',
               textAlign: TextAlign.center,
-              style: context.text.title.copyWith(fontSize: context.text.sized(24)),
+              style: context.text.title.copyWith(
+                fontSize: context.text.sized(24),
+              ),
             ),
             const SizedBox(height: 8),
             Text(

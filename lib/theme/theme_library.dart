@@ -82,8 +82,7 @@ class ThemeLibrary extends Notifier<ThemeLibraryState> {
 
   Future<void> rename(String id, String name) => _update(
     id,
-    (entry) =>
-        entry.copyWith(name: state.uniqueName(name, exceptId: id)),
+    (entry) => entry.copyWith(name: state.uniqueName(name, exceptId: id)),
   );
 
   /// Sets one slot of one theme.
@@ -145,10 +144,7 @@ class ThemeLibrary extends Notifier<ThemeLibraryState> {
     final seeded = ThemeLibraryState.seeded();
     return _persist(
       state.copyWith(
-        entries: [
-          ...state.entries,
-          for (final id in missing) ?seeded.byId(id),
-        ],
+        entries: [...state.entries, for (final id in missing) ?seeded.byId(id)],
       ),
     );
   }
@@ -188,5 +184,6 @@ class ThemeLibrary extends Notifier<ThemeLibraryState> {
   }
 }
 
-final themeLibraryProvider =
-    NotifierProvider<ThemeLibrary, ThemeLibraryState>(ThemeLibrary.new);
+final themeLibraryProvider = NotifierProvider<ThemeLibrary, ThemeLibraryState>(
+  ThemeLibrary.new,
+);

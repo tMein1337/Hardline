@@ -210,7 +210,9 @@ class _UnlockScreenState extends ConsumerState<UnlockScreen> {
             Text(
               'Hardline is locked',
               textAlign: TextAlign.center,
-              style: context.text.title.copyWith(fontSize: context.text.sized(24)),
+              style: context.text.title.copyWith(
+                fontSize: context.text.sized(24),
+              ),
             ),
             const SizedBox(height: 8),
             Text(

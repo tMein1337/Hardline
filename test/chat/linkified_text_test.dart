@@ -18,12 +18,16 @@ void main() {
   Widget host(String text) => ProviderScope(
     child: MaterialApp(
       theme: theme,
-      home: Scaffold(body: LinkifiedText(text: text, style: style)),
+      home: Scaffold(
+        body: LinkifiedText(text: text, style: style),
+      ),
     ),
   );
 
-  List<InlineSpan> spansOf(WidgetTester tester) =>
-      tester.widget<SelectableText>(find.byType(SelectableText)).textSpan!.children!;
+  List<InlineSpan> spansOf(WidgetTester tester) => tester
+      .widget<SelectableText>(find.byType(SelectableText))
+      .textSpan!
+      .children!;
 
   // Selecting and copying a message predates this feature and is the more
   // common thing to want, so a click must not have cost it.

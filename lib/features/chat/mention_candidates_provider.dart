@@ -19,22 +19,23 @@ import 'mentions.dart';
 ///
 /// Yourself is excluded: mentioning yourself pings yourself, which no client
 /// should help anybody do by accident.
-final mentionCandidatesProvider = Provider.family<List<MentionCandidate>, String>((
-  ref,
-  roomId,
-) {
-  ref.watch(matrixTickProvider);
-  final client = ref.watch(clientProvider);
-  final room = client.getRoomById(roomId);
-  if (room == null) return const [];
+final mentionCandidatesProvider =
+    Provider.family<List<MentionCandidate>, String>((ref, roomId) {
+      ref.watch(matrixTickProvider);
+      final client = ref.watch(clientProvider);
+      final room = client.getRoomById(roomId);
+      if (room == null) return const [];
 
-  return [
-    for (final user in room.getParticipants(const [Membership.join]))
-      if (user.id != client.userID)
-        MentionCandidate(
-          userId: user.id,
-          displayName: displaySafeName(user.calcDisplayname(), fallback: user.id),
-          avatarMxc: user.avatarUrl?.toString(),
-        ),
-  ];
-});
+      return [
+        for (final user in room.getParticipants(const [Membership.join]))
+          if (user.id != client.userID)
+            MentionCandidate(
+              userId: user.id,
+              displayName: displaySafeName(
+                user.calcDisplayname(),
+                fallback: user.id,
+              ),
+              avatarMxc: user.avatarUrl?.toString(),
+            ),
+      ];
+    });

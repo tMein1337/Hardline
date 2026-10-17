@@ -18,11 +18,14 @@ class LoginFormState {
   /// User-facing failure message, already translated from the SDK's exception.
   final String? error;
 
-  LoginFormState copyWith({bool? busy, String? error, bool clearError = false}) =>
-      LoginFormState(
-        busy: busy ?? this.busy,
-        error: clearError ? null : (error ?? this.error),
-      );
+  LoginFormState copyWith({
+    bool? busy,
+    String? error,
+    bool clearError = false,
+  }) => LoginFormState(
+    busy: busy ?? this.busy,
+    error: clearError ? null : (error ?? this.error),
+  );
 
   @override
   bool operator ==(Object other) =>

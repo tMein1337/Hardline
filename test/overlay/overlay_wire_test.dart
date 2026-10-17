@@ -89,14 +89,17 @@ void main() {
       expect(decodeOverlayMessage('{"kind":"from the future"}'), isNull);
     });
 
-    test('a snapshot missing everything still decodes to something drawable', () {
-      final decoded =
-          decodeOverlayMessage('{"kind":"snapshot"}')! as OverlaySnapshot;
+    test(
+      'a snapshot missing everything still decodes to something drawable',
+      () {
+        final decoded =
+            decodeOverlayMessage('{"kind":"snapshot"}')! as OverlaySnapshot;
 
-      expect(decoded.people, isEmpty);
-      expect(decoded.editing, isFalse);
-      expect(decoded.layout.avatarSize, greaterThan(0));
-    });
+        expect(decoded.people, isEmpty);
+        expect(decoded.editing, isFalse);
+        expect(decoded.layout.avatarSize, greaterThan(0));
+      },
+    );
 
     test('an avatar that is not base64 falls back to no avatar', () {
       final decoded =
@@ -131,9 +134,7 @@ void main() {
     int alphaOf(int argb) => (argb >> 24) & 0xFF;
 
     test('in the defaults a missing palette falls back to', () {
-      final palette = decodeOverlayMessage(
-        jsonEncode({'kind': 'snapshot'}),
-      );
+      final palette = decodeOverlayMessage(jsonEncode({'kind': 'snapshot'}));
       expect(palette, isA<OverlaySnapshot>());
 
       final colors = (palette! as OverlaySnapshot).palette;

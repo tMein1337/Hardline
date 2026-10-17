@@ -217,7 +217,9 @@ class AccountActions extends Notifier<AccountActionState> {
         // call fails, so the session is gone either way.
         debugPrint('Logout request failed, session cleared locally: $error');
       }
-      await ref.read(accountRegistryProvider.notifier).remove(active.storageKey);
+      await ref
+          .read(accountRegistryProvider.notifier)
+          .remove(active.storageKey);
 
       if (remaining.isEmpty) {
         // Keep the client: `logout()` clears it but does not dispose it, and

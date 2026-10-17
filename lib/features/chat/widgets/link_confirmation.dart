@@ -87,8 +87,7 @@ class _LinkConfirmationState extends State<_LinkConfirmation> {
             // The host on its own line, because it is the part worth reading:
             // it is what decides who is on the other end, and it is the part a
             // long address hides in the middle of itself.
-            if (host.isNotEmpty)
-              Text(host, style: context.text.username),
+            if (host.isNotEmpty) Text(host, style: context.text.username),
 
             const SizedBox(height: 6),
 
@@ -96,10 +95,7 @@ class _LinkConfirmationState extends State<_LinkConfirmation> {
             // examined rather than having to be trusted or abandoned.
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: colors.inputBackground,
                 borderRadius: BorderRadius.circular(context.metrics.rowRadius),
@@ -122,10 +118,7 @@ class _LinkConfirmationState extends State<_LinkConfirmation> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               dense: true,
-              title: Text(
-                "Don't ask again",
-                style: context.text.messageBody,
-              ),
+              title: Text("Don't ask again", style: context.text.messageBody),
               subtitle: Text(
                 'Links will open straight away. Settings → Security turns this '
                 'back on.',

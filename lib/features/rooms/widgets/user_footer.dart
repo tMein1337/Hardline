@@ -64,7 +64,9 @@ class UserFooter extends ConsumerWidget {
               children: [
                 Text(
                   displayName,
-                  style: context.text.username.copyWith(fontSize: context.text.sized(14)),
+                  style: context.text.username.copyWith(
+                    fontSize: context.text.sized(14),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

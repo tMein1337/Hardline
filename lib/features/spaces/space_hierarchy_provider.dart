@@ -51,29 +51,31 @@ class SpaceChild {
 /// this is a network call, and re-running it on every sync would be a request
 /// per sync burst for a list that changes about once a month. It is refreshed
 /// by hand after a join instead.
-final spaceHierarchyProvider =
-    FutureProvider.family<List<SpaceChild>, String>((ref, spaceId) async {
-      final client = ref.watch(clientProvider);
+final spaceHierarchyProvider = FutureProvider.family<List<SpaceChild>, String>((
+  ref,
+  spaceId,
+) async {
+  final client = ref.watch(clientProvider);
 
-      final response = await client.getSpaceHierarchy(spaceId, limit: 100);
+  final response = await client.getSpaceHierarchy(spaceId, limit: 100);
 
-      return [
-        for (final room in response.rooms)
-          // The space itself comes back in its own hierarchy, and listing it
-          // inside itself would offer to join the thing you are looking at.
-          if (room.roomId != spaceId)
-            SpaceChild(
-              roomId: room.roomId,
-              name: displaySafeName(
-                room.name ?? room.canonicalAlias ?? room.roomId,
-              ),
-              topic: room.topic == null ? null : displaySafeName(room.topic!),
-              memberCount: room.numJoinedMembers,
-              avatarMxc: room.avatarUrl?.toString(),
-              isSpace: room.roomType == 'm.space',
-              isEncrypted: room.encryption != null,
-              joined: client.getRoomById(room.roomId)?.membership ==
-                  Membership.join,
-            ),
-      ];
-    });
+  return [
+    for (final room in response.rooms)
+      // The space itself comes back in its own hierarchy, and listing it
+      // inside itself would offer to join the thing you are looking at.
+      if (room.roomId != spaceId)
+        SpaceChild(
+          roomId: room.roomId,
+          name: displaySafeName(
+            room.name ?? room.canonicalAlias ?? room.roomId,
+          ),
+          topic: room.topic == null ? null : displaySafeName(room.topic!),
+          memberCount: room.numJoinedMembers,
+          avatarMxc: room.avatarUrl?.toString(),
+          isSpace: room.roomType == 'm.space',
+          isEncrypted: room.encryption != null,
+          joined:
+              client.getRoomById(room.roomId)?.membership == Membership.join,
+        ),
+  ];
+});

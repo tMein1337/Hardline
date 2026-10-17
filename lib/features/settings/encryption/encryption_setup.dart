@@ -110,8 +110,7 @@ class EncryptionSetup {
           run(() async {
             final key = await askRecoveryKey();
             if (key == null) throw const EncryptionSetupCancelled();
-            final oldKeys =
-                bootstrap.oldSsssKeys?.values ?? const <OpenSSSS>[];
+            final oldKeys = bootstrap.oldSsssKeys?.values ?? const <OpenSSSS>[];
             for (final old in oldKeys) {
               await old.unlock(keyOrPassphrase: key.trim());
             }

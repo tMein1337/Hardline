@@ -92,10 +92,8 @@ class _Header extends ConsumerWidget {
             iconSize: 18,
             visualDensity: VisualDensity.compact,
             color: colors.textMuted,
-            onPressed: () => SettingsScreen.open(
-              context,
-              section: SettingsSection.activity,
-            ),
+            onPressed: () =>
+                SettingsScreen.open(context, section: SettingsSection.activity),
             icon: const Icon(Icons.tune),
           ),
         ],

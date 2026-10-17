@@ -75,9 +75,9 @@ Future<void> main(List<String> args) async {
   }
 
   File('${out.path}/MANIFEST.txt').writeAsStringSync(manifest.toString());
-  File('${out.path}/pubspec.lock').writeAsStringSync(
-    File('pubspec.lock').readAsStringSync(),
-  );
+  File(
+    '${out.path}/pubspec.lock',
+  ).writeAsStringSync(File('pubspec.lock').readAsStringSync());
 
   stdout.writeln('Copied $copied packages into $_outputDir');
 
@@ -191,9 +191,7 @@ Directory? _packageDir(Directory cache, _Package package) {
   if (!hosted.existsSync()) return null;
 
   for (final host in hosted.listSync().whereType<Directory>()) {
-    final dir = Directory(
-      '${host.path}$sep${package.name}-${package.version}',
-    );
+    final dir = Directory('${host.path}$sep${package.name}-${package.version}');
     if (dir.existsSync()) return dir;
   }
   return null;
@@ -204,8 +202,9 @@ void _copyTree(Directory from, Directory to) {
   for (final entity in from.listSync(recursive: true)) {
     final relative = entity.path.substring(from.path.length + 1);
     if (entity is Directory) {
-      Directory('${to.path}${Platform.pathSeparator}$relative')
-          .createSync(recursive: true);
+      Directory(
+        '${to.path}${Platform.pathSeparator}$relative',
+      ).createSync(recursive: true);
     } else if (entity is File) {
       final target = File('${to.path}${Platform.pathSeparator}$relative');
       target.parent.createSync(recursive: true);

@@ -108,9 +108,6 @@ class _Tag extends StatelessWidget {
       color: color.withValues(alpha: 0.16),
       borderRadius: BorderRadius.circular(context.metrics.rowRadius),
     ),
-    child: Text(
-      label,
-      style: context.text.timestamp.copyWith(color: color),
-    ),
+    child: Text(label, style: context.text.timestamp.copyWith(color: color)),
   );
 }

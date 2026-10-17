@@ -36,7 +36,12 @@ class SettingsPane extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(title, style: context.text.title.copyWith(fontSize: context.text.sized(20))),
+              Text(
+                title,
+                style: context.text.title.copyWith(
+                  fontSize: context.text.sized(20),
+                ),
+              ),
               if (description case final text?) ...[
                 const SizedBox(height: 6),
                 Text(text, style: context.text.subtitle),
@@ -140,10 +145,7 @@ class SettingsRow extends StatelessWidget {
             ],
           ),
         ),
-        if (trailing case final widget?) ...[
-          const SizedBox(width: 16),
-          widget,
-        ],
+        if (trailing case final widget?) ...[const SizedBox(width: 16), widget],
       ],
     );
   }
@@ -230,9 +232,7 @@ class SettingsChoice<T> extends StatelessWidget {
       children: [
         for (final value in values)
           Material(
-            color: value == selected
-                ? colors.accent
-                : colors.floatingSurface,
+            color: value == selected ? colors.accent : colors.floatingSurface,
             borderRadius: radius,
             child: InkWell(
               onTap: () => onChanged(value),

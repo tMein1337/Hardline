@@ -186,7 +186,10 @@ class InviteDialog extends StatelessWidget {
   final RoomInvite invite;
 
   static Future<void> show(BuildContext context, RoomInvite invite) =>
-      showDialog(context: context, builder: (_) => InviteDialog(invite: invite));
+      showDialog(
+        context: context,
+        builder: (_) => InviteDialog(invite: invite),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -195,10 +198,7 @@ class InviteDialog extends StatelessWidget {
       title: Text('Invitation', style: context.text.title),
       // The card closes itself by disappearing when the membership changes,
       // and the dialog has to follow it out.
-      content: SizedBox(
-        width: 360,
-        child: _DismissOnAnswer(invite: invite),
-      ),
+      content: SizedBox(width: 360, child: _DismissOnAnswer(invite: invite)),
     );
   }
 }

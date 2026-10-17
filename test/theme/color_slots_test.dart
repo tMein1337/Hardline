@@ -24,17 +24,11 @@ void main() {
     }
 
     test('every preset id has a display label', () {
-      expect(
-        AppPalettes.labels.keys.toSet(),
-        AppPalettes.byIdMap.keys.toSet(),
-      );
+      expect(AppPalettes.labels.keys.toSet(), AppPalettes.byIdMap.keys.toSet());
     });
 
     test('default id resolves to a real palette', () {
-      expect(
-        AppPalettes.byIdMap.containsKey(AppPalettes.defaultId),
-        isTrue,
-      );
+      expect(AppPalettes.byIdMap.containsKey(AppPalettes.defaultId), isTrue);
     });
 
     test('unknown id falls back to dark rather than throwing', () {
@@ -51,9 +45,7 @@ void main() {
   group('AppPalette', () {
     test('copyWith merges slots rather than replacing them', () {
       const red = Color(0xFFFF0000);
-      final patched = AppPalettes.dark.copyWith(
-        slots: {ColorSlot.accent: red},
-      );
+      final patched = AppPalettes.dark.copyWith(slots: {ColorSlot.accent: red});
 
       expect(patched.accent, red);
       // Every other slot must survive the merge.
@@ -195,9 +187,7 @@ void main() {
     });
 
     test('overrides survive a preset change', () {
-      const state = AppThemeState(
-        overrides: {ColorSlot.accent: 0xFF00FF00},
-      );
+      const state = AppThemeState(overrides: {ColorSlot.accent: 0xFF00FF00});
       final switched = state.copyWith(presetId: 'hardline_day');
 
       expect(switched.resolve().accent, const Color(0xFF00FF00));

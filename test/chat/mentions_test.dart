@@ -13,10 +13,7 @@ const _aliceSmith = MentionCandidate(
   userId: '@asmith:example.org',
   displayName: 'Alice Smith',
 );
-const _bob = MentionCandidate(
-  userId: '@bob:example.org',
-  displayName: 'Bob',
-);
+const _bob = MentionCandidate(userId: '@bob:example.org', displayName: 'Bob');
 
 void main() {
   group('mentionQuery', () {
@@ -123,10 +120,10 @@ void main() {
     // "Alice" is a prefix of "Alice Smith", and matching the short one first
     // would leave "Smith" outside the pill and ping the wrong person.
     test('prefers the longer name when one contains the other', () {
-      final found = mentionedUserIds(
-        'hi @Alice Smith',
-        const [_alice, _aliceSmith],
-      );
+      final found = mentionedUserIds('hi @Alice Smith', const [
+        _alice,
+        _aliceSmith,
+      ]);
       expect(found, contains(_aliceSmith.userId));
     });
 

@@ -41,10 +41,7 @@ void main() {
     });
 
     test('counts towards equality', () {
-      expect(
-        const AppThemeState(textScale: 1.2),
-        isNot(const AppThemeState()),
-      );
+      expect(const AppThemeState(textScale: 1.2), isNot(const AppThemeState()));
     });
   });
 

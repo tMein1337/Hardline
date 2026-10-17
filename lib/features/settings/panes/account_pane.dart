@@ -58,7 +58,9 @@ class AccountPane extends ConsumerWidget {
                       children: [
                         Text(
                           profile?.displayName ?? localpartOf(userId),
-                          style: context.text.title.copyWith(fontSize: context.text.sized(18)),
+                          style: context.text.title.copyWith(
+                            fontSize: context.text.sized(18),
+                          ),
                         ),
                         const SizedBox(height: 2),
                         SelectableText(userId, style: context.text.subtitle),
@@ -73,9 +75,7 @@ class AccountPane extends ConsumerWidget {
               Row(
                 children: [
                   OutlinedButton.icon(
-                    onPressed: busy
-                        ? null
-                        : () => _pickAvatar(context, ref),
+                    onPressed: busy ? null : () => _pickAvatar(context, ref),
                     icon: const Icon(Icons.image_outlined, size: 18),
                     label: const Text('Change avatar'),
                   ),

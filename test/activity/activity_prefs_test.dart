@@ -49,9 +49,7 @@ void main() {
       });
       expect(tooLong.recentWindow, kMaxRecentWindow);
 
-      final tooShort = ActivityPrefsState.fromJson(const {
-        'recentWindowMs': 1,
-      });
+      final tooShort = ActivityPrefsState.fromJson(const {'recentWindowMs': 1});
       expect(tooShort.recentWindow, kMinRecentWindow);
     });
 
@@ -89,8 +87,12 @@ void main() {
     });
 
     test('equality ignores the order of the follow set', () {
-      const a = ActivityPrefsState(following: {'@alice:example.org', '@bob:example.org'});
-      const b = ActivityPrefsState(following: {'@bob:example.org', '@alice:example.org'});
+      const a = ActivityPrefsState(
+        following: {'@alice:example.org', '@bob:example.org'},
+      );
+      const b = ActivityPrefsState(
+        following: {'@bob:example.org', '@alice:example.org'},
+      );
 
       expect(a, b);
       expect(a.hashCode, b.hashCode);

@@ -68,7 +68,10 @@ void main() {
       final shape = chooseGrid(5, const Size(1200, 700));
 
       expect(shape.columns * shape.rows, greaterThanOrEqualTo(5));
-      expect(shape.tile.width, greaterThan(chooseGrid(9, const Size(1200, 700)).tile.width));
+      expect(
+        shape.tile.width,
+        greaterThan(chooseGrid(9, const Size(1200, 700)).tile.width),
+      );
     });
 
     test('every tile fits inside the box it was given', () {

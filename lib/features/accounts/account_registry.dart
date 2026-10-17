@@ -90,10 +90,7 @@ class AccountRegistry extends Notifier<AccountsState> {
     final entry = state.byKey(storageKey);
     if (entry == null) return Future.value();
 
-    final next = entry.copyWith(
-      displayName: displayName,
-      avatarUrl: avatarUrl,
-    );
+    final next = entry.copyWith(displayName: displayName, avatarUrl: avatarUrl);
     if (next == entry) return Future.value();
 
     return _persist(
@@ -116,9 +113,7 @@ class AccountRegistry extends Notifier<AccountsState> {
         ? entries.firstOrNull?.storageKey
         : state.activeStorageKey;
 
-    return _persist(
-      AccountsState(entries: entries, activeStorageKey: active),
-    );
+    return _persist(AccountsState(entries: entries, activeStorageKey: active));
   }
 
   Future<void> setActive(String storageKey) =>
@@ -126,7 +121,9 @@ class AccountRegistry extends Notifier<AccountsState> {
 
   Future<void> _persist(AccountsState next) async {
     state = next;
-    await ref.read(prefsProvider).setString(_prefsKey, jsonEncode(next.toJson()));
+    await ref
+        .read(prefsProvider)
+        .setString(_prefsKey, jsonEncode(next.toJson()));
   }
 }
 

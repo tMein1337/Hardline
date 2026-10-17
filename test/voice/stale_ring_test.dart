@@ -64,10 +64,7 @@ void main() {
     // optional — a sender that omits it must not produce a ring that never
     // expires.
     test('falls back to origin_server_ts when sender_ts is missing', () {
-      final entry = ring(
-        ago: const Duration(minutes: 5),
-        withSenderTs: false,
-      );
+      final entry = ring(ago: const Duration(minutes: 5), withSenderTs: false);
       expect(
         isRingExpired(
           entry.content,

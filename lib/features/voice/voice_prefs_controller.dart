@@ -37,9 +37,7 @@ class VoicePrefsController extends Notifier<VoicePrefsState> {
     if (raw == null) return const VoicePrefsState.empty();
 
     try {
-      return VoicePrefsState.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
-      );
+      return VoicePrefsState.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (error, stack) {
       debugPrint('Ignoring unreadable voice prefs: $error\n$stack');
       return const VoicePrefsState.empty();
@@ -131,20 +129,16 @@ class VoicePrefsController extends Notifier<VoicePrefsState> {
     String deviceId,
     VoiceDeviceAudio Function(VoiceDeviceAudio) update, {
     bool commit = true,
-  }) => _updateUser(
-    userId,
-    (prefs) {
-      final devices = {...prefs.devices};
-      final next = update(prefs.forDevice(deviceId));
-      if (next.isDefault) {
-        devices.remove(deviceId);
-      } else {
-        devices[deviceId] = next;
-      }
-      return prefs.copyWith(devices: devices);
-    },
-    commit: commit,
-  );
+  }) => _updateUser(userId, (prefs) {
+    final devices = {...prefs.devices};
+    final next = update(prefs.forDevice(deviceId));
+    if (next.isDefault) {
+      devices.remove(deviceId);
+    } else {
+      devices[deviceId] = next;
+    }
+    return prefs.copyWith(devices: devices);
+  }, commit: commit);
 
   Future<void> _updateUser(
     String userId,

@@ -11,8 +11,10 @@ import 'package:hardline/theme/theme_builder.dart';
 void main() {
   final theme = buildThemeData(AppPalettes.dark, AppMetrics.standard);
 
-  Widget host(Widget child) =>
-      MaterialApp(theme: theme, home: Scaffold(body: child));
+  Widget host(Widget child) => MaterialApp(
+    theme: theme,
+    home: Scaffold(body: child),
+  );
 
   group('SettingsCard', () {
     // The voice pane puts a SwitchListTile in a card. While the card was a

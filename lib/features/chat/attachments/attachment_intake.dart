@@ -76,7 +76,9 @@ class AttachmentIntake {
     String? mimeType,
   }) {
     final resolved =
-        mimeType ?? lookupMimeType(name, headerBytes: bytes) ?? _fallbackMimeType;
+        mimeType ??
+        lookupMimeType(name, headerBytes: bytes) ??
+        _fallbackMimeType;
 
     return _stage(
       name: name,
@@ -131,5 +133,7 @@ String _nextId() => 'attachment-${_idCounter++}';
 
 /// [AttachmentIntake] wired to the server's current upload limit.
 final attachmentIntakeProvider = FutureProvider<AttachmentIntake>((ref) async {
-  return AttachmentIntake(maxUploadSize: await ref.watch(maxUploadSizeProvider.future));
+  return AttachmentIntake(
+    maxUploadSize: await ref.watch(maxUploadSizeProvider.future),
+  );
 });

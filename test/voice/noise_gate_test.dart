@@ -139,11 +139,7 @@ void main() {
       gate.update(-40, at(0));
       expect(gate.update(MicTap.silenceDb, at(500)), isFalse);
       for (var t = 1000; t < 60000; t += 1000) {
-        expect(
-          gate.update(MicTap.silenceDb, at(t)),
-          isFalse,
-          reason: 'at $t',
-        );
+        expect(gate.update(MicTap.silenceDb, at(t)), isFalse, reason: 'at $t');
       }
     });
 

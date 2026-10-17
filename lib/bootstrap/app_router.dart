@@ -37,8 +37,7 @@ class AppRouter extends ConsumerWidget {
       return AppErrorView(
         title: 'Could not switch account',
         error: error,
-        onRetry: () =>
-            ref.read(accountActionsProvider.notifier).dismissError(),
+        onRetry: () => ref.read(accountActionsProvider.notifier).dismissError(),
       );
     }
 

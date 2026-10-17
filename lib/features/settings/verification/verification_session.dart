@@ -45,8 +45,7 @@ class VerificationSession extends ChangeNotifier {
   bool get isDone => request.isDone;
 
   /// True when this is one of our own sessions rather than another person's.
-  bool get isSelfVerification =>
-      request.userId == request.client.userID;
+  bool get isSelfVerification => request.userId == request.client.userID;
 
   /// The other side's device, when known. Null for an in-room request that has
   /// not picked one yet.
@@ -143,7 +142,6 @@ class VerificationSession extends ChangeNotifier {
     return crossSigning.isCached();
   }
 
-
   /// Ends an unfinished verification. Safe to call on a finished one.
   Future<void> cancel() async {
     if (request.isDone) return;
@@ -196,9 +194,7 @@ class VerificationSession extends ChangeNotifier {
         if (!request.startedVerification) break;
 
         if (request.possibleMethods.contains(EventTypes.Sas)) {
-          unawaited(
-            _guard(() => request.continueVerification(EventTypes.Sas)),
-          );
+          unawaited(_guard(() => request.continueVerification(EventTypes.Sas)));
         } else {
           unawaited(_guard(() => request.cancel('m.unknown_method')));
         }

@@ -139,7 +139,8 @@ class _MessageListState extends ConsumerState<MessageList> {
     if (!_scroll.hasClients) return;
     // reverse: true means scrolling up towards older messages *increases*
     // pixels, so maxScrollExtent is the top of history.
-    final distanceToTop = _scroll.position.maxScrollExtent - _scroll.position.pixels;
+    final distanceToTop =
+        _scroll.position.maxScrollExtent - _scroll.position.pixels;
     if (distanceToTop > _paginationThreshold) return;
 
     unawaited(_controller.loadMore());
@@ -224,10 +225,7 @@ class _MessageListState extends ConsumerState<MessageList> {
 
     controller.addListener(check);
     try {
-      await ready.future.timeout(
-        const Duration(seconds: 8),
-        onTimeout: () {},
-      );
+      await ready.future.timeout(const Duration(seconds: 8), onTimeout: () {});
     } finally {
       // Safe even if the controller was disposed while we waited — which is
       // what a second room switch does. Only addListener asserts.

@@ -110,7 +110,9 @@ Future<Uint8List?> _readFile(ClipboardDataReader item, FileFormat format) {
 String? _toFilePath(Uri? uri) {
   if (uri == null || !uri.isScheme('file')) return null;
   try {
-    return uri.toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows);
+    return uri.toFilePath(
+      windows: defaultTargetPlatform == TargetPlatform.windows,
+    );
   } catch (error) {
     debugPrint('Ignoring a clipboard entry that is not a usable path: $error');
     return null;

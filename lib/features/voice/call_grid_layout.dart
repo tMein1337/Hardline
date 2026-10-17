@@ -105,11 +105,7 @@ GridShape chooseGrid(
     final height = width / aspect;
 
     candidates.add((
-      shape: GridShape(
-        columns: columns,
-        rows: rows,
-        tile: Size(width, height),
-      ),
+      shape: GridShape(columns: columns, rows: rows, tile: Size(width, height)),
       area: width * height,
       empty: columns * rows - tileCount,
     ));

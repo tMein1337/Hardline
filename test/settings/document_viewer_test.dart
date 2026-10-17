@@ -32,7 +32,10 @@ void main() {
 
     test('handles CRLF, since the bundled asset may carry it', () {
       const text = 'terms\r\nEND OF TERMS\r\nappendix\r\n';
-      expect(DocumentViewer.trimmed(text, 'END OF TERMS'), 'terms\r\nEND OF TERMS');
+      expect(
+        DocumentViewer.trimmed(text, 'END OF TERMS'),
+        'terms\r\nEND OF TERMS',
+      );
     });
 
     test('keeps a document whose marker is the last line', () {

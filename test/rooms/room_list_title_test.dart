@@ -44,9 +44,7 @@ void main() {
   }
 
   ProviderContainer containerOf(WidgetTester tester) =>
-      ProviderScope.containerOf(
-        tester.element(find.byType(RoomListTitle)),
-      );
+      ProviderScope.containerOf(tester.element(find.byType(RoomListTitle)));
 
   testWidgets('shows the name', (tester) async {
     await tester.pumpWidget(host(spaceId: _space, title: 'Friends'));
@@ -86,7 +84,10 @@ void main() {
     final container = containerOf(tester);
     container
         .read(selectedRoomIdsProvider.notifier)
-        .select(spaceId: '!other:example.org', roomId: '!elsewhere:example.org');
+        .select(
+          spaceId: '!other:example.org',
+          roomId: '!elsewhere:example.org',
+        );
 
     await tester.tap(find.text('Friends'));
     await tester.pumpAndSettle();

@@ -179,12 +179,8 @@ class _JoinCallIcon extends ConsumerWidget {
         if (controller.isInCallFor(room.id)) return const SizedBox.shrink();
 
         return Hoverable(
-          onTap: () => joinVoiceCall(
-            context,
-            ref,
-            room.id,
-            room.voiceJoinability,
-          ),
+          onTap: () =>
+              joinVoiceCall(context, ref, room.id, room.voiceJoinability),
           builder: (context, iconHovered) => Tooltip(
             // The glyph is identical whether joining is one click, needs the
             // room's power levels changed first, or is not open to us at all.

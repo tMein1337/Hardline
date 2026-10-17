@@ -39,10 +39,7 @@ class SystemEventTile extends ConsumerWidget {
     // history whatever is happening now.
     final live =
         _isRing &&
-        !isRingExpired(
-          event.content,
-          originServerTs: event.originServerTs,
-        ) &&
+        !isRingExpired(event.content, originServerTs: event.originServerTs) &&
         ref.watch(voiceParticipantsProvider(event.roomId ?? '')).isNotEmpty;
 
     final text = _isRing
@@ -100,7 +97,9 @@ class SystemEventTile extends ConsumerWidget {
                   const TextSpan(text: '  '),
                   TextSpan(
                     text: formatClockTime(event.originServerTs.toLocal()),
-                    style: context.text.timestamp.copyWith(fontSize: context.text.sized(11)),
+                    style: context.text.timestamp.copyWith(
+                      fontSize: context.text.sized(11),
+                    ),
                   ),
                 ],
               ),

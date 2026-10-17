@@ -865,9 +865,10 @@ class LiveKitCallController extends ChangeNotifier {
     // which is where this client publishes it. Built once per read rather than
     // per participant: `liveMembershipsOf` walks the room's whole state map.
     final deafenedDevices = <String>{
-      for (final membership in matrixRoom == null
-          ? const <MatrixRtcMembership>[]
-          : liveMembershipsOf(matrixRoom))
+      for (final membership
+          in matrixRoom == null
+              ? const <MatrixRtcMembership>[]
+              : liveMembershipsOf(matrixRoom))
         if (membership.deafened) '${membership.userId}|${membership.deviceId}',
     };
 

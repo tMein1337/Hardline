@@ -48,10 +48,7 @@ class MessageActivityRow extends ConsumerWidget {
       ),
       // The preview is already one truncated line — see `previewOf` — so this
       // cannot grow the row however long the message was.
-      subtitle: Text(
-        activity.preview,
-        style: context.text.subtitle,
-      ),
+      subtitle: Text(activity.preview, style: context.text.subtitle),
       trailing: Text(
         formatRelativeTime(activity.timestamp.toLocal()),
         style: context.text.timestamp,

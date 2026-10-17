@@ -52,10 +52,7 @@ void main() {
       final completed = completeColors({'serverRail': 0xFF111111});
 
       expect(completed[ColorSlot.spaceRail], 0xFF111111);
-      expect(
-        completed[ColorSlot.accent],
-        AppPalettes.dark.accent.toARGB32(),
-      );
+      expect(completed[ColorSlot.accent], AppPalettes.dark.accent.toARGB32());
       expect(completed.keys.toSet(), ColorSlot.all.toSet());
     });
   });
@@ -95,8 +92,10 @@ void main() {
 
     test('the legacy override patch is migrated with the selection', () {
       final state = AppThemeState.fromJson(
-        jsonDecode('{"presetId":"discord_dark","overrides":{'
-                '"serverRail":4278190080}}')
+        jsonDecode(
+              '{"presetId":"discord_dark","overrides":{'
+              '"serverRail":4278190080}}',
+            )
             as Map<String, dynamic>,
       );
 
@@ -121,15 +120,17 @@ void main() {
     });
 
     test('a file this build writes carries the current marker', () {
-      final encoded = jsonDecode(
-        encodeThemeFile(
-          ThemeEntry.fromColors(
-            id: 'hardline_dark',
-            name: 'Flight Deck',
-            colors: AppPalettes.dark,
-          ),
-        ),
-      ) as Map<String, Object?>;
+      final encoded =
+          jsonDecode(
+                encodeThemeFile(
+                  ThemeEntry.fromColors(
+                    id: 'hardline_dark',
+                    name: 'Flight Deck',
+                    colors: AppPalettes.dark,
+                  ),
+                ),
+              )
+              as Map<String, Object?>;
 
       expect(encoded['format'], 'hardline.theme');
       expect(encoded['format'], isNot('matrix_client.theme'));

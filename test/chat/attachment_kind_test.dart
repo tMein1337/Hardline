@@ -60,7 +60,10 @@ void main() {
     // thumbnail a second later.
     test('classifies by msgtype alone, not by whether bytes have landed', () {
       expect(
-        attachmentKindFor(type: EventTypes.Message, msgtype: MessageTypes.Image),
+        attachmentKindFor(
+          type: EventTypes.Message,
+          msgtype: MessageTypes.Image,
+        ),
         AttachmentKind.image,
         reason: 'a pending upload is still an image',
       );
@@ -107,10 +110,7 @@ void main() {
     });
 
     test('a blank body is not a caption', () {
-      expect(
-        attachmentCaption({'filename': 'cat.png', 'body': '   '}),
-        isNull,
-      );
+      expect(attachmentCaption({'filename': 'cat.png', 'body': '   '}), isNull);
     });
 
     test('malformed content does not throw', () {

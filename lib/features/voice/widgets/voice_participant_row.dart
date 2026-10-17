@@ -56,9 +56,9 @@ class VoiceParticipantRow extends ConsumerWidget {
           // Right-click opens per-user volume. Left-click is
           // deliberately left free — the row is not a navigation target.
           // Audio on right-click, because that is what somebody in a call reaches
-      // for: the slider that turns this person down. Their profile is one
-      // click further in, from the menu itself — see `UserAudioMenu`.
-      onSecondaryTap: () => UserAudioMenu.show(context, participant),
+          // for: the slider that turns this person down. Their profile is one
+          // click further in, from the menu itself — see `UserAudioMenu`.
+          onSecondaryTap: () => UserAudioMenu.show(context, participant),
           child: Padding(
             // Extra left inset over RoomListTile's 8, so the row sits under the
             // channel name rather than under its icon.
@@ -161,10 +161,7 @@ class VoiceParticipantRow extends ConsumerWidget {
                       style: context.text.timestamp,
                     ),
                   ],
-                  _ScreenShareBadge(
-                    roomId: roomId,
-                    userId: participant.userId,
-                  ),
+                  _ScreenShareBadge(roomId: roomId, userId: participant.userId),
                 ],
               ),
             ),

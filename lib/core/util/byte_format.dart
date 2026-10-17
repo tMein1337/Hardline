@@ -26,6 +26,8 @@ String formatBytes(int bytes) {
     unit++;
   }
 
-  final rounded = value < 10 ? value.toStringAsFixed(1) : value.round().toString();
+  final rounded = value < 10
+      ? value.toStringAsFixed(1)
+      : value.round().toString();
   return '$rounded ${_units[unit]}';
 }

@@ -150,10 +150,7 @@ class ActivityRow extends StatelessWidget {
     if (tooltip case final message?) {
       row = Tooltip(message: message, child: row);
     }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: row,
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 2), child: row);
   }
 }
 

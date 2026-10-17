@@ -135,10 +135,7 @@ class StaleMembershipSweeper {
           await _client.setRoomStateWithKey(
             room.id,
             kCallMemberEventType,
-            MatrixRtcMembership.stateKeyFor(
-              userId: userId,
-              deviceId: deviceId,
-            ),
+            MatrixRtcMembership.stateKeyFor(userId: userId, deviceId: deviceId),
             const {},
           );
           debugPrint('[voice] withdrew a stale membership in ${room.id}');

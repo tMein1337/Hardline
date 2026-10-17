@@ -66,7 +66,9 @@ class AboutPane extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: colors.inputBackgroundAlt,
-                  borderRadius: BorderRadius.circular(context.metrics.rowRadius),
+                  borderRadius: BorderRadius.circular(
+                    context.metrics.rowRadius,
+                  ),
                   border: Border(
                     left: BorderSide(color: colors.warning, width: 3),
                   ),
@@ -281,9 +283,7 @@ class _BuildFact extends StatelessWidget {
             width: 92,
             child: Text(label.toUpperCase(), style: context.text.fieldLabel),
           ),
-          Expanded(
-            child: SelectableText(value, style: context.text.timestamp),
-          ),
+          Expanded(child: SelectableText(value, style: context.text.timestamp)),
         ],
       ),
     );

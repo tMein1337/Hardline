@@ -9,19 +9,13 @@ void main() {
   group('joining a space by address', () {
     group('validateAddress', () {
       test('accepts an alias', () {
-        expect(
-          JoinSpaceDialog.validateAddress('#gaming:example.org'),
-          isNull,
-        );
+        expect(JoinSpaceDialog.validateAddress('#gaming:example.org'), isNull);
       });
 
       // Rarer, but it is what a permalink carries and what somebody pasting
       // from `matrix.to` will have.
       test('accepts a room id', () {
-        expect(
-          JoinSpaceDialog.validateAddress('!abc123:example.org'),
-          isNull,
-        );
+        expect(JoinSpaceDialog.validateAddress('!abc123:example.org'), isNull);
       });
 
       test('ignores surrounding space', () {
@@ -42,10 +36,7 @@ void main() {
           JoinSpaceDialog.validateAddress('gaming:example.org'),
           contains('#'),
         );
-        expect(
-          JoinSpaceDialog.validateAddress('#gaming'),
-          contains('server'),
-        );
+        expect(JoinSpaceDialog.validateAddress('#gaming'), contains('server'));
       });
     });
 
@@ -54,9 +45,7 @@ void main() {
       // unreachable: the local server cannot resolve an alias it has never
       // seen unless it is told where to look.
       test('takes the server from the address', () {
-        expect(JoinSpaceDialog.viaFor('#gaming:example.org'), [
-          'example.org',
-        ]);
+        expect(JoinSpaceDialog.viaFor('#gaming:example.org'), ['example.org']);
       });
 
       test('keeps a port', () {
@@ -73,10 +62,7 @@ void main() {
 
   group('inviting people', () {
     test('accepts a user id', () {
-      expect(
-        InvitePeopleDialog.validateUserId('@alice:example.org'),
-        isNull,
-      );
+      expect(InvitePeopleDialog.validateUserId('@alice:example.org'), isNull);
     });
 
     test('ignores surrounding space', () {
@@ -97,10 +83,7 @@ void main() {
         InvitePeopleDialog.validateUserId('alice:example.org'),
         contains('@'),
       );
-      expect(
-        InvitePeopleDialog.validateUserId('@alice'),
-        contains('server'),
-      );
+      expect(InvitePeopleDialog.validateUserId('@alice'), contains('server'));
     });
 
     // A room alias is not a user id, and the shapes are close enough that

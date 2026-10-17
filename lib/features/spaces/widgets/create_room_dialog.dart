@@ -42,11 +42,7 @@ enum CreateKind {
 /// — the control that opens this lives in that space's room list. Null creates
 /// a room that belongs to no space, which is where the Home list draws from.
 class CreateRoomDialog extends ConsumerStatefulWidget {
-  const CreateRoomDialog({
-    super.key,
-    required this.kind,
-    this.parentSpaceId,
-  });
+  const CreateRoomDialog({super.key, required this.kind, this.parentSpaceId});
 
   final CreateKind kind;
 
@@ -226,9 +222,7 @@ class _CreateRoomDialogState extends ConsumerState<CreateRoomDialog> {
               enabled: !_busy,
               style: context.text.inputText,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Topic (optional)',
-              ),
+              decoration: const InputDecoration(labelText: 'Topic (optional)'),
             ),
             const SizedBox(height: 8),
             SettingsSwitchTile(

@@ -62,7 +62,9 @@ class MessageTile extends StatelessWidget {
         final background = highlighted
             ? colors.accent.withValues(alpha: hovered ? 0.22 : 0.16)
             : isMention
-            ? (hovered ? colors.mentionHoverBackground : colors.mentionBackground)
+            ? (hovered
+                  ? colors.mentionHoverBackground
+                  : colors.mentionBackground)
             : (hovered ? colors.messageHover : Colors.transparent);
 
         return AnimatedContainer(
@@ -73,7 +75,9 @@ class MessageTile extends StatelessWidget {
           padding: EdgeInsets.only(
             left: metrics.contentPadding,
             right: metrics.contentPadding,
-            top: showHeader ? metrics.messageBlockSpacing : metrics.messageGroupSpacing,
+            top: showHeader
+                ? metrics.messageBlockSpacing
+                : metrics.messageGroupSpacing,
             bottom: 2,
           ),
           child: Row(
@@ -105,7 +109,9 @@ class MessageTile extends StatelessWidget {
                         opacity: hovered ? 1 : 0,
                         child: Text(
                           formatClockTime(event.originServerTs.toLocal()),
-                          style: context.text.timestamp.copyWith(fontSize: context.text.sized(10)),
+                          style: context.text.timestamp.copyWith(
+                            fontSize: context.text.sized(10),
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),

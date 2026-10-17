@@ -20,8 +20,10 @@ import 'package:hardline/theme/theme_builder.dart';
 void main() {
   final theme = buildThemeData(AppPalettes.dark, AppMetrics.standard);
 
-  Widget host(Widget child) =>
-      MaterialApp(theme: theme, home: Scaffold(body: child));
+  Widget host(Widget child) => MaterialApp(
+    theme: theme,
+    home: Scaffold(body: child),
+  );
 
   group('buttons in unbounded-width slots', () {
     testWidgets('a FilledButton lays out inside a Row', (tester) async {
@@ -124,11 +126,10 @@ void main() {
       expect(TooltipTheme.of(context).waitDuration, delay);
     });
 
-    testWidgets('defaults to the app default, not Flutter zero', (tester) async {
-      final themed = buildThemeData(
-        AppPalettes.dark,
-        AppMetrics.standard,
-      );
+    testWidgets('defaults to the app default, not Flutter zero', (
+      tester,
+    ) async {
+      final themed = buildThemeData(AppPalettes.dark, AppMetrics.standard);
 
       await tester.pumpWidget(
         MaterialApp(

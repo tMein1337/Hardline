@@ -60,9 +60,7 @@ class ThemeEntry {
   bool get isSeeded => AppPalettes.byIdMap.containsKey(id);
 
   AppPalette toColors() => AppPalette(
-    slots: {
-      for (final entry in colors.entries) entry.key: Color(entry.value),
-    },
+    slots: {for (final entry in colors.entries) entry.key: Color(entry.value)},
     avatarPalette: [for (final value in avatarPalette) Color(value)],
   );
 
@@ -74,9 +72,7 @@ class ThemeEntry {
     id: id,
     name: name,
     colors: colors.toJson(),
-    avatarPalette: [
-      for (final color in colors.avatarPalette) color.toARGB32(),
-    ],
+    avatarPalette: [for (final color in colors.avatarPalette) color.toARGB32()],
   );
 
   /// An independent copy under a new [id] and [name].

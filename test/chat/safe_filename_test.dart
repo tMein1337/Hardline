@@ -28,10 +28,7 @@ void main() {
 
   group('directory components are stripped', () {
     test('traversal cannot pre-navigate the dialog', () {
-      expect(
-        safeFilename(r'..\..\..\Windows\System32\evil.dll'),
-        'evil.dll',
-      );
+      expect(safeFilename(r'..\..\..\Windows\System32\evil.dll'), 'evil.dll');
       expect(safeFilename('../../etc/passwd'), 'passwd');
     });
 
@@ -156,9 +153,22 @@ void main() {
 
     test('output is never empty, and never contains a separator', () {
       final inputs = [
-        '', '.', '..', '/', r'\', '   ', '...', r'\\server\share',
-        '${_c(0x202E)}${_c(0x200B)}', '<<<>>>', 'CON', 'a' * 1000,
-        '${_c(0x00)}${_c(0x1F)}', 'a/b/c/', r'C:\\', '?*|',
+        '',
+        '.',
+        '..',
+        '/',
+        r'\',
+        '   ',
+        '...',
+        r'\\server\share',
+        '${_c(0x202E)}${_c(0x200B)}',
+        '<<<>>>',
+        'CON',
+        'a' * 1000,
+        '${_c(0x00)}${_c(0x1F)}',
+        'a/b/c/',
+        r'C:\\',
+        '?*|',
       ];
 
       for (final input in inputs) {

@@ -114,7 +114,9 @@ class _ScreenSourcePickerState extends State<ScreenSourcePicker> {
       setState(() {
         _sources
           ..clear()
-          ..addEntries([for (final source in sources) MapEntry(source.id, source)]);
+          ..addEntries([
+            for (final source in sources) MapEntry(source.id, source),
+          ]);
         _loading = false;
       });
     } catch (error) {

@@ -74,7 +74,9 @@ List<MentionCandidate> rankMentions(
     final name = candidate.displayName.toLowerCase();
     final localpart = _localpart(candidate.userId).toLowerCase();
 
-    if (needle.isEmpty || name.startsWith(needle) || localpart.startsWith(needle)) {
+    if (needle.isEmpty ||
+        name.startsWith(needle) ||
+        localpart.startsWith(needle)) {
       prefix.add(candidate);
     } else if (name.contains(needle) || localpart.contains(needle)) {
       contains.add(candidate);

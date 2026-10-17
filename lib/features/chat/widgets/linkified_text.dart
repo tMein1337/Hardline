@@ -201,7 +201,6 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
   }
 }
 
-
 /// A mention, drawn as a pill.
 ///
 /// A `WidgetSpan` rather than a styled `TextSpan` because a background with

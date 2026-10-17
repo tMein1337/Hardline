@@ -71,10 +71,9 @@ void main() {
 
     test('is null once every stage is done', () {
       expect(
-        nextRegistrationStage(
-          _flow(['m.login.terms']),
-          const ['m.login.terms'],
-        ),
+        nextRegistrationStage(_flow(['m.login.terms']), const [
+          'm.login.terms',
+        ]),
         isNull,
       );
     });
@@ -83,7 +82,9 @@ void main() {
   group('registrationBlockedReason', () {
     test('is null when a flow can be completed', () {
       expect(
-        registrationBlockedReason([_flow([AuthenticationTypes.dummy])]),
+        registrationBlockedReason([
+          _flow([AuthenticationTypes.dummy]),
+        ]),
         isNull,
       );
     });

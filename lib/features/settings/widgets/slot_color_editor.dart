@@ -42,11 +42,8 @@ class SlotColorEditor extends StatefulWidget {
     required bool canRevert,
   }) => showDialog<SlotColorResult>(
     context: context,
-    builder: (_) => SlotColorEditor(
-      slot: slot,
-      initial: initial,
-      canRevert: canRevert,
-    ),
+    builder: (_) =>
+        SlotColorEditor(slot: slot, initial: initial, canRevert: canRevert),
   );
 
   @override
@@ -200,15 +197,15 @@ class _Slider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(
-          width: 84,
-          child: Text(label, style: context.text.subtitle),
-        ),
+        SizedBox(width: 84, child: Text(label, style: context.text.subtitle)),
         Expanded(
-          child: Slider(value: value.clamp(0, max), max: max, onChanged: onChanged),
+          child: Slider(
+            value: value.clamp(0, max),
+            max: max,
+            onChanged: onChanged,
+          ),
         ),
       ],
     );
   }
 }
-

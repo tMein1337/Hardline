@@ -251,7 +251,6 @@ class RoomAdminInfo {
   final bool canDismantle;
 }
 
-
 /// What the manage dialog shows for one space.
 ///
 /// Recomputed on the sync tick, so renaming it from another client — or from

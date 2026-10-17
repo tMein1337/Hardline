@@ -77,9 +77,8 @@ const kSecurityUrl = '$kRepositoryUrl/blob/main/SECURITY.md';
 /// source for the binary they actually have, and `main` is not that. Falls back
 /// to the repository root only for a build with no stamped commit, which is
 /// never a released one.
-String get kSourceUrlForThisBuild => kHasExactSource
-    ? '$kRepositoryUrl/tree/$kBuildCommit'
-    : kRepositoryUrl;
+String get kSourceUrlForThisBuild =>
+    kHasExactSource ? '$kRepositoryUrl/tree/$kBuildCommit' : kRepositoryUrl;
 
 /// The release page for this version, where the binary and its source archive
 /// sit beside each other.

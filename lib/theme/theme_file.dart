@@ -65,9 +65,7 @@ String encodeThemeFile(ThemeEntry entry) {
     'colors': {
       for (final slot in ColorSlot.all) slot: hexOf(colors.slot(slot)),
     },
-    'avatarPalette': [
-      for (final color in colors.avatarPalette) hexOf(color),
-    ],
+    'avatarPalette': [for (final color in colors.avatarPalette) hexOf(color)],
   });
 }
 
@@ -97,9 +95,7 @@ ThemeEntry decodeThemeFile(String contents, {String? fallbackName}) {
   }
 
   if (decoded is! Map) {
-    throw const ThemeFileException(
-      'That file does not contain a theme.',
-    );
+    throw const ThemeFileException('That file does not contain a theme.');
   }
 
   final format = decoded['format'];
@@ -125,9 +121,7 @@ ThemeEntry decodeThemeFile(String contents, {String? fallbackName}) {
 
   final rawColors = decoded['colors'];
   if (rawColors is! Map) {
-    throw const ThemeFileException(
-      'That theme file has no colours in it.',
-    );
+    throw const ThemeFileException('That theme file has no colours in it.');
   }
 
   // Unparseable entries are skipped rather than fatal, and then filled in by

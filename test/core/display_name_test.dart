@@ -44,8 +44,15 @@ void main() {
 
     test('every override, embedding and isolate control is removed', () {
       for (final code in [
-        0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
-        0x2066, 0x2067, 0x2068, 0x2069,
+        0x202A,
+        0x202B,
+        0x202C,
+        0x202D,
+        0x202E,
+        0x2066,
+        0x2067,
+        0x2068,
+        0x2069,
       ]) {
         expect(
           displaySafeName('a${_c(code)}b'),
@@ -107,8 +114,15 @@ void main() {
 
     test('output is single-line, bounded and non-empty for hostile input', () {
       final inputs = [
-        '', '   ', '\n\n\n', _c(0x202E), '${_c(0x202E)}x' * 200,
-        'A' * 10000, 'a\nb\tc', '${_c(0x00)}${_c(0x1F)}', '🚀' * 400,
+        '',
+        '   ',
+        '\n\n\n',
+        _c(0x202E),
+        '${_c(0x202E)}x' * 200,
+        'A' * 10000,
+        'a\nb\tc',
+        '${_c(0x00)}${_c(0x1F)}',
+        '🚀' * 400,
       ];
 
       for (final input in inputs) {

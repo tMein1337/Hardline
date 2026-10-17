@@ -111,8 +111,14 @@ class VoiceActivity {
           joinability == other.joinability;
 
   @override
-  int get hashCode =>
-      Object.hash(userId, displayName, avatarMxc, roomId, roomName, joinability);
+  int get hashCode => Object.hash(
+    userId,
+    displayName,
+    avatarMxc,
+    roomId,
+    roomName,
+    joinability,
+  );
 }
 
 /// A followed person who is typing, or who typed recently.

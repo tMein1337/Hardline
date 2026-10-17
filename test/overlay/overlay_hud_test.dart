@@ -79,9 +79,7 @@ void main() {
 
   // The roster is always drawn. Whether any of it is *seen* is the window's
   // opacity, which the controller owns — see overlay_linger_test.dart.
-  testWidgets('everybody in the call is drawn, talking or not', (
-    tester,
-  ) async {
+  testWidgets('everybody in the call is drawn, talking or not', (tester) async {
     await tester.pumpWidget(host(snapshot(), const {}));
     await tester.pumpAndSettle();
 

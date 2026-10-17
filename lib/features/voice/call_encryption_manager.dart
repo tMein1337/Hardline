@@ -142,7 +142,6 @@ class CallEncryptionManager {
   /// re-sending theirs on every membership heartbeat.
   final Set<String> _sentTo = {};
 
-
   /// Starts listening for other people's keys and publishes our first one.
   Future<void> start(List<MatrixRtcMembership> memberships) async {
     _subscription = client.onToDeviceEvent.stream.listen(_onToDeviceEvent);
@@ -240,9 +239,9 @@ class CallEncryptionManager {
       if (memberId == _membershipId) continue;
       if (only != null && !only.contains(memberId)) continue;
 
-      final device =
-          client.userDeviceKeys[membership.userId]?.deviceKeys[membership
-              .deviceId];
+      final device = client
+          .userDeviceKeys[membership.userId]
+          ?.deviceKeys[membership.deviceId];
       if (device == null) {
         debugPrint('[voice] no device keys for $memberId, skipping key send');
         continue;
@@ -256,10 +255,7 @@ class CallEncryptionManager {
     final content = {
       'keys': {'index': _keyIndex, 'key': base64Encode(key)},
       'room_id': roomId,
-      'member': {
-        'id': _membershipId,
-        'claimed_device_id': client.deviceID,
-      },
+      'member': {'id': _membershipId, 'claimed_device_id': client.deviceID},
       'session': {
         'call_id': '',
         'application': kCallApplication,

@@ -151,9 +151,13 @@ class _LegacyOverridesCard extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
-                onPressed: () =>
-                    ref.read(themeControllerProvider.notifier).clearAllOverrides(),
-                child: Text('Discard', style: TextStyle(color: colors.textMuted)),
+                onPressed: () => ref
+                    .read(themeControllerProvider.notifier)
+                    .clearAllOverrides(),
+                child: Text(
+                  'Discard',
+                  style: TextStyle(color: colors.textMuted),
+                ),
               ),
               const SizedBox(width: 8),
               FilledButton(

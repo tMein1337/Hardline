@@ -54,9 +54,7 @@ class ActivityPrefsController extends Notifier<ActivityPrefsState> {
     if (userId.isEmpty) return Future.value();
     if (userId == ref.read(clientProvider).userID) return Future.value();
     if (state.following.contains(userId)) return Future.value();
-    return _persist(
-      state.copyWith(following: {...state.following, userId}),
-    );
+    return _persist(state.copyWith(following: {...state.following, userId}));
   }
 
   Future<void> unfollow(String userId) {

@@ -389,9 +389,7 @@ class _RoomManageDialogState extends ConsumerState<RoomManageDialog> {
                 const SizedBox(height: 10),
                 Text(
                   message,
-                  style: context.text.timestamp.copyWith(
-                    color: colors.success,
-                  ),
+                  style: context.text.timestamp.copyWith(color: colors.success),
                 ),
               ],
               if (_error case final message?) ...[
@@ -476,9 +474,9 @@ class _Address extends StatelessWidget {
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: alias));
             if (!context.mounted) return;
-            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-              const SnackBar(content: Text('Address copied.')),
-            );
+            ScaffoldMessenger.maybeOf(
+              context,
+            )?.showSnackBar(const SnackBar(content: Text('Address copied.')));
           },
         ),
       ],
@@ -564,10 +562,7 @@ class _DeleteConfirmationState extends State<_DeleteConfirmation> {
               style: context.text.timestamp.copyWith(color: colors.warning),
             ),
             const SizedBox(height: 16),
-            Text(
-              'Type the name to confirm.',
-              style: context.text.subtitle,
-            ),
+            Text('Type the name to confirm.', style: context.text.subtitle),
             const SizedBox(height: 6),
             TextField(
               controller: _typed,

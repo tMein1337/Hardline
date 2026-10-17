@@ -107,10 +107,7 @@ ThemeData buildThemeData(
       filled: true,
       fillColor: colors.inputBackgroundAlt,
       hintStyle: typography.inputText.copyWith(color: colors.textFaint),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(metrics.rowRadius),
         borderSide: BorderSide(color: colors.inputBorder),

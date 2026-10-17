@@ -32,10 +32,9 @@ Future<void> main(List<String> args) async {
   // fields are cleared by --reset.
   final version = _versionFromPubspec();
   final commit = reset ? 'unknown' : _git(['rev-parse', 'HEAD']) ?? 'unknown';
-  final tag =
-      reset
-          ? 'unknown'
-          : _git(['describe', '--tags', '--exact-match', 'HEAD']) ?? 'unknown';
+  final tag = reset
+      ? 'unknown'
+      : _git(['describe', '--tags', '--exact-match', 'HEAD']) ?? 'unknown';
   final timestamp = reset
       ? 'unknown'
       : DateTime.now().toUtc().toIso8601String();
@@ -61,12 +60,9 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  File(_outputPath).writeAsStringSync(_render(
-    version: version,
-    commit: commit,
-    tag: tag,
-    timestamp: timestamp,
-  ));
+  File(_outputPath).writeAsStringSync(
+    _render(version: version, commit: commit, tag: tag, timestamp: timestamp),
+  );
 
   stdout.writeln(
     reset

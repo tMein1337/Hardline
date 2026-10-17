@@ -211,11 +211,7 @@ class _SharedRooms extends ConsumerWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-        if (extra > 0)
-          Text(
-            'and $extra more',
-            style: context.text.timestamp,
-          ),
+        if (extra > 0) Text('and $extra more', style: context.text.timestamp),
       ],
     );
   }

@@ -31,9 +31,7 @@ class SelectedRoomIds extends Notifier<Map<String, String>> {
 }
 
 final selectedRoomIdsProvider =
-    NotifierProvider<SelectedRoomIds, Map<String, String>>(
-      SelectedRoomIds.new,
-    );
+    NotifierProvider<SelectedRoomIds, Map<String, String>>(SelectedRoomIds.new);
 
 /// The room currently open, or null if none is selected in this space.
 final selectedRoomIdProvider = Provider<String?>((ref) {

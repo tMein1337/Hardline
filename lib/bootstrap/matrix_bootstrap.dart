@@ -126,10 +126,7 @@ Future<Client> buildMatrixClient({
     //
     // The SDK adds its own defaults to whatever set we pass, so this extends
     // rather than replaces them.
-    importantStateEvents: {
-      kCallMemberEventType,
-      EventTypes.RoomPowerLevels,
-    },
+    importantStateEvents: {kCallMemberEventType, EventTypes.RoomPowerLevels},
     // Not optional, and silent when missing: `KeyVerificationManager` returns
     // early on every `m.key.verification.*` to-device event while this set is
     // empty (`key_verification_manager.dart`), so an unset value means incoming

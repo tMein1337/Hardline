@@ -57,9 +57,6 @@ List<XTypeGroup> _typeGroupFor(String name) {
   if (extension.isEmpty) return const [];
 
   return [
-    XTypeGroup(
-      label: extension.toUpperCase(),
-      extensions: [extension],
-    ),
+    XTypeGroup(label: extension.toUpperCase(), extensions: [extension]),
   ];
 }

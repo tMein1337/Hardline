@@ -43,8 +43,7 @@ class VerificationDialog extends ConsumerStatefulWidget {
   }
 
   @override
-  ConsumerState<VerificationDialog> createState() =>
-      _VerificationDialogState();
+  ConsumerState<VerificationDialog> createState() => _VerificationDialogState();
 }
 
 class _VerificationDialogState extends ConsumerState<VerificationDialog> {
@@ -185,21 +184,18 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                switch (signed) {
-                  false =>
-                    'Message keys can now be shared, but nothing was signed '
-                        'with your account — so Element and every other client '
-                        'still show this session as unverified. Fixing that '
-                        'takes one step, below.',
-                  _ =>
-                    _session.isSelfVerification
-                        ? 'That session is now verified and signed with your '
-                              'account. Every client will see it.'
-                        : 'Verified.',
-                },
-                style: context.text.messageBody,
-              ),
+              child: Text(switch (signed) {
+                false =>
+                  'Message keys can now be shared, but nothing was signed '
+                      'with your account — so Element and every other client '
+                      'still show this session as unverified. Fixing that '
+                      'takes one step, below.',
+                _ =>
+                  _session.isSelfVerification
+                      ? 'That session is now verified and signed with your '
+                            'account. Every client will see it.'
+                      : 'Verified.',
+              }, style: context.text.messageBody),
             ),
           ],
         );

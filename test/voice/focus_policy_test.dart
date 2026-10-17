@@ -64,7 +64,14 @@ void main() {
     });
 
     test('relative, empty and nonsense values are refused', () {
-      for (final url in ['', '   ', '/sfu', 'example.org', 'https://', '::::']) {
+      for (final url in [
+        '',
+        '   ',
+        '/sfu',
+        'example.org',
+        'https://',
+        '::::',
+      ]) {
         expect(isAcceptableFocusUrl(url), isFalse, reason: '"$url"');
       }
     });

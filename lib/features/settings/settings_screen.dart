@@ -30,10 +30,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
   final SettingsSection? initialSection;
 
-  static Future<void> open(
-    BuildContext context, {
-    SettingsSection? section,
-  }) {
+  static Future<void> open(BuildContext context, {SettingsSection? section}) {
     return Navigator.of(context).push(
       PageRouteBuilder(
         // Opaque: nothing of the shell should show through, and an opaque route
@@ -60,7 +57,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  late SettingsSection _section = widget.initialSection ?? SettingsSection.account;
+  late SettingsSection _section =
+      widget.initialSection ?? SettingsSection.account;
 
   @override
   Widget build(BuildContext context) {

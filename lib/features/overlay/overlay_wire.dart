@@ -20,7 +20,6 @@ import 'package:flutter/foundation.dart';
 
 import 'overlay_layout.dart';
 
-
 /// One person as the overlay knows them.
 ///
 /// No `mxc://` and no access token: the overlay isolate has no Matrix client

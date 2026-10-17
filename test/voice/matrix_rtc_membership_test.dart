@@ -25,7 +25,8 @@ Map<String, Object?> contentFixture({
         {
           'type': 'livekit',
           'livekit_alias': '!room:example.org',
-          'livekit_service_url': 'https://matrix.example.org/livekit-jwt-service',
+          'livekit_service_url':
+              'https://matrix.example.org/livekit-jwt-service',
         },
       ],
   'focus_active': {'type': 'livekit', 'focus_selection': 'oldest_membership'},
@@ -45,8 +46,10 @@ void main() {
       expect(membership.isCall, isTrue);
       expect(membership.intent, 'audio');
       expect(membership.isExpired, isFalse);
-      expect(membership.focusPreferred.single.serviceUrl,
-          'https://matrix.example.org/livekit-jwt-service');
+      expect(
+        membership.focusPreferred.single.serviceUrl,
+        'https://matrix.example.org/livekit-jwt-service',
+      );
     });
 
     // Leaving a call is an empty state event, not a redaction. Getting this
@@ -156,7 +159,10 @@ void main() {
 
     test('rejects keys that are not per-device user keys', () {
       expect(MatrixRtcMembership.userIdFromStateKey(''), isNull);
-      expect(MatrixRtcMembership.userIdFromStateKey('@alice:example.org'), isNull);
+      expect(
+        MatrixRtcMembership.userIdFromStateKey('@alice:example.org'),
+        isNull,
+      );
       expect(MatrixRtcMembership.userIdFromStateKey('_nonsense'), isNull);
     });
   });

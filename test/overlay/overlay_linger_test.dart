@@ -309,10 +309,7 @@ void main() {
   // toggling the edit chord looked like it "refreshed" the overlay.
   group('refreshOpacity', () {
     test('hands the window back to the settings after edit mode', () async {
-      await arrange(
-        linger: const Duration(milliseconds: 50),
-        idleOpacity: 0.4,
-      );
+      await arrange(linger: const Duration(milliseconds: 50), idleOpacity: 0.4);
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(channel.opacities.last, 102);
 
@@ -336,10 +333,7 @@ void main() {
     // happens to reconcile. That was an opacity which only took effect on
     // closing the settings screen.
     test('applyLayoutNow takes effect immediately', () async {
-      await arrange(
-        linger: const Duration(milliseconds: 50),
-        idleOpacity: 0.4,
-      );
+      await arrange(linger: const Duration(milliseconds: 50), idleOpacity: 0.4);
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(channel.opacities.last, 102);
 
@@ -356,10 +350,7 @@ void main() {
     }, skip: !onWindows);
 
     test('pushes a changed setting at the window', () async {
-      await arrange(
-        linger: const Duration(milliseconds: 50),
-        idleOpacity: 0.4,
-      );
+      await arrange(linger: const Duration(milliseconds: 50), idleOpacity: 0.4);
       await Future<void>.delayed(const Duration(milliseconds: 150));
       expect(channel.opacities.last, 102);
 

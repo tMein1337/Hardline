@@ -202,22 +202,22 @@ final followedMessagesProvider = Provider<ListSnapshot<MessageActivity>>((ref) {
         // timeline for a position the server already summarises.
         if (!_isRead(room))
           MessageActivity(
-          eventId: record.eventId,
-          roomId: record.roomId,
-          roomName: displaySafeName(room.getLocalizedDisplayname()),
-          userId: record.userId,
-          displayName: displaySafeName(
-            room
+            eventId: record.eventId,
+            roomId: record.roomId,
+            roomName: displaySafeName(room.getLocalizedDisplayname()),
+            userId: record.userId,
+            displayName: displaySafeName(
+              room
+                  .unsafeGetUserFromMemoryOrFallback(record.userId)
+                  .calcDisplayname(),
+            ),
+            avatarMxc: room
                 .unsafeGetUserFromMemoryOrFallback(record.userId)
-                .calcDisplayname(),
+                .avatarUrl
+                ?.toString(),
+            preview: record.preview,
+            timestamp: record.timestamp,
           ),
-          avatarMxc: room
-              .unsafeGetUserFromMemoryOrFallback(record.userId)
-              .avatarUrl
-              ?.toString(),
-          preview: record.preview,
-          timestamp: record.timestamp,
-        ),
   ]);
 });
 
@@ -275,17 +275,18 @@ final followingProvider = Provider<ListSnapshot<FollowCandidate>>((ref) {
   final client = ref.watch(clientProvider);
   final prefs = ref.watch(activityPrefsProvider);
 
-  final entries = [
-    for (final userId in prefs.following)
-      FollowCandidate(
-        userId: userId,
-        displayName: _displayNameOf(client, userId),
-        avatarMxc: _avatarOf(client, userId),
-      ),
-  ]..sort(
-    (a, b) =>
-        a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
-  );
+  final entries =
+      [
+        for (final userId in prefs.following)
+          FollowCandidate(
+            userId: userId,
+            displayName: _displayNameOf(client, userId),
+            avatarMxc: _avatarOf(client, userId),
+          ),
+      ]..sort(
+        (a, b) =>
+            a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+      );
 
   return ListSnapshot(entries);
 });
@@ -296,7 +297,10 @@ final followingProvider = Provider<ListSnapshot<FollowCandidate>>((ref) {
 /// in which case the id is the only honest thing to show.
 String _displayNameOf(Client client, String userId) {
   for (final room in _activeRooms(client)) {
-    final user = room.getParticipants().where((u) => u.id == userId).firstOrNull;
+    final user = room
+        .getParticipants()
+        .where((u) => u.id == userId)
+        .firstOrNull;
     if (user != null) return displaySafeName(user.calcDisplayname());
   }
   return userId;
@@ -304,7 +308,10 @@ String _displayNameOf(Client client, String userId) {
 
 String? _avatarOf(Client client, String userId) {
   for (final room in _activeRooms(client)) {
-    final user = room.getParticipants().where((u) => u.id == userId).firstOrNull;
+    final user = room
+        .getParticipants()
+        .where((u) => u.id == userId)
+        .firstOrNull;
     if (user?.avatarUrl != null) return user!.avatarUrl.toString();
   }
   return null;

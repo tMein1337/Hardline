@@ -42,9 +42,21 @@ void main() {
     test('orders newest first', () {
       final result = pruneActivities(
         [
-          record('old', userId: '@alice:example.org', ago: const Duration(hours: 2)),
-          record('new', userId: '@alice:example.org', ago: const Duration(minutes: 1)),
-          record('mid', userId: '@alice:example.org', ago: const Duration(minutes: 30)),
+          record(
+            'old',
+            userId: '@alice:example.org',
+            ago: const Duration(hours: 2),
+          ),
+          record(
+            'new',
+            userId: '@alice:example.org',
+            ago: const Duration(minutes: 1),
+          ),
+          record(
+            'mid',
+            userId: '@alice:example.org',
+            ago: const Duration(minutes: 30),
+          ),
         ],
         now: now,
         horizon: const Duration(hours: 24),
@@ -57,8 +69,16 @@ void main() {
     test('drops anything past the horizon', () {
       final result = pruneActivities(
         [
-          record('kept', userId: '@alice:example.org', ago: const Duration(hours: 23)),
-          record('gone', userId: '@alice:example.org', ago: const Duration(hours: 25)),
+          record(
+            'kept',
+            userId: '@alice:example.org',
+            ago: const Duration(hours: 23),
+          ),
+          record(
+            'gone',
+            userId: '@alice:example.org',
+            ago: const Duration(hours: 25),
+          ),
         ],
         now: now,
         horizon: const Duration(hours: 24),
@@ -72,7 +92,11 @@ void main() {
       final result = pruneActivities(
         [
           for (var i = 0; i < 10; i++)
-            record('e$i', userId: '@alice:example.org', ago: Duration(minutes: i)),
+            record(
+              'e$i',
+              userId: '@alice:example.org',
+              ago: Duration(minutes: i),
+            ),
         ],
         now: now,
         horizon: const Duration(hours: 24),
@@ -113,10 +137,26 @@ void main() {
   group('newestPerUser', () {
     final entries = pruneActivities(
       [
-        record('a-old', userId: '@alice:example.org', ago: const Duration(minutes: 20)),
-        record('a-new', userId: '@alice:example.org', ago: const Duration(minutes: 2)),
-        record('b-new', userId: '@bob:example.org', ago: const Duration(minutes: 5)),
-        record('c-new', userId: '@carol:example.org', ago: const Duration(minutes: 1)),
+        record(
+          'a-old',
+          userId: '@alice:example.org',
+          ago: const Duration(minutes: 20),
+        ),
+        record(
+          'a-new',
+          userId: '@alice:example.org',
+          ago: const Duration(minutes: 2),
+        ),
+        record(
+          'b-new',
+          userId: '@bob:example.org',
+          ago: const Duration(minutes: 5),
+        ),
+        record(
+          'c-new',
+          userId: '@carol:example.org',
+          ago: const Duration(minutes: 1),
+        ),
       ],
       now: now,
       horizon: const Duration(hours: 24),
@@ -173,10 +213,26 @@ void main() {
   group('messagesOf', () {
     final entries = pruneActivities(
       [
-        record('a1', userId: '@alice:example.org', ago: const Duration(minutes: 1)),
-        record('a2', userId: '@alice:example.org', ago: const Duration(minutes: 2)),
-        record('b1', userId: '@bob:example.org', ago: const Duration(minutes: 3)),
-        record('old', userId: '@alice:example.org', ago: const Duration(hours: 5)),
+        record(
+          'a1',
+          userId: '@alice:example.org',
+          ago: const Duration(minutes: 1),
+        ),
+        record(
+          'a2',
+          userId: '@alice:example.org',
+          ago: const Duration(minutes: 2),
+        ),
+        record(
+          'b1',
+          userId: '@bob:example.org',
+          ago: const Duration(minutes: 3),
+        ),
+        record(
+          'old',
+          userId: '@alice:example.org',
+          ago: const Duration(hours: 5),
+        ),
       ],
       now: now,
       horizon: const Duration(hours: 24),
