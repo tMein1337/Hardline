@@ -3,6 +3,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hardline/features/hotkeys/hotkey.dart';
+import 'package:hardline/features/hotkeys/hotkey_action.dart';
+import 'package:hardline/features/hotkeys/hotkey_binder.dart';
+import 'package:hardline/features/hotkeys/hotkeys_state.dart';
 import 'package:hardline/features/overlay/overlay_app.dart';
 import 'package:hardline/features/overlay/overlay_channel.dart';
 import 'package:hardline/features/overlay/overlay_controller.dart';
@@ -59,6 +63,9 @@ void main() {
   late OverlayChannel channel;
   late OverlayController controller;
 
+  /// Layouts the controller asked to have written back, newest last.
+  late List<OverlayLayout> persisted;
+
   /// The part of the monitor the default layout puts the roster in.
   ScreenRect rosterArea() {
     final monitor = primaryMonitor;
@@ -105,12 +112,16 @@ void main() {
   Future<void> launch({
     double idleOpacity = 1,
     Duration linger = const Duration(seconds: 2),
+    bool excludeFromCapture = false,
+    String monitorId = '',
   }) async {
     await controller.setPrefs(
       OverlayPrefsState(
         enabled: true,
-        // Off, or the overlay is absent from every capture this file takes.
-        excludeFromCapture: false,
+        // Off by default, or the overlay is absent from every capture this
+        // file takes — which is the setting working, and one test's subject.
+        excludeFromCapture: excludeFromCapture,
+        monitorId: monitorId,
         linger: linger,
         layouts: [
           OverlayLayout(
@@ -141,9 +152,10 @@ void main() {
 
   setUp(() {
     channel = OverlayChannel();
+    persisted = [];
     controller = OverlayController(
       channel: channel,
-      persistLayout: (_) {},
+      persistLayout: persisted.add,
       fetchAvatar: (_, _) async => null,
     );
   });
@@ -266,6 +278,330 @@ void main() {
       reason:
           'At some point more of the plate was on screen than one person '
           'accounts for: the previous call was shown first.',
+    );
+
+    await hangUp(tester);
+  });
+
+  // ---------------------------------------------------------------------------
+  // TODOs.md 9 — the parts of it one person and no game can check.
+  // ---------------------------------------------------------------------------
+
+  /// Joins a two-person call and waits until the roster is on screen.
+  Future<void> showRoster(WidgetTester tester) async {
+    await join([person(_alice, name: 'Alice'), person(_bob, name: 'Bob')]);
+    await pumpUntil(
+      tester,
+      () => platePixels() > 1000,
+      reason: 'the roster to be drawn',
+    );
+  }
+
+  /// A point inside the first avatar, where the plate is solid.
+  ({int x, int y}) insideRoster() {
+    final area = rosterArea();
+    return (x: area.left + 12, y: area.top + 26);
+  }
+
+  // 9.1. The gate the whole list hangs off: the HUD over the desktop with the
+  // background fully transparent — not white, not black, not a rectangle.
+  testWidgets('everything but the roster is the desktop', (tester) async {
+    await prepare(tester);
+    await launch();
+    final before = ScreenShot.of(primaryMonitor);
+    await showRoster(tester);
+    final after = ScreenShot.of(primaryMonitor);
+    // Counted, never saved: this one is somebody's whole desktop.
+
+    // The colour key itself must never reach the screen: keyed, it is a
+    // hole; unkeyed, it is a sheet.
+    expect(after.count(_palette.chromaKey), 0);
+
+    // And the monitor is what it was, apart from a roster's worth of pixels.
+    // Generous, because a desktop has a clock on it; a sheet over a
+    // 3440x1440 monitor is five million pixels, not twenty thousand.
+    final changed = after.differenceFrom(before);
+    expect(changed, greaterThan(3000), reason: 'the roster is there');
+    expect(changed, lessThan(60000), reason: 'and little else moved');
+
+    await hangUp(tester);
+  });
+
+  // 9.2. The fade is the window's, and the linger is what stops it
+  // flickering between two sentences.
+  testWidgets('it holds while people talk, then fades to the idle opacity', (
+    tester,
+  ) async {
+    await prepare(tester);
+    await launch(idleOpacity: 0.4, linger: const Duration(milliseconds: 600));
+    await showRoster(tester);
+    final window = overlayWindow!;
+    expect(window.layered.alpha, 255);
+
+    // Talking, stopping, and talking again inside the linger: it never dips.
+    controller.setSpeaking(
+      const SpeakingParticipants(roomId: '!r:x', userIds: {_alice}),
+    );
+    var lowest = 255;
+    final clock = Stopwatch()..start();
+    while (clock.elapsed < const Duration(milliseconds: 1500)) {
+      if (clock.elapsedMilliseconds % 500 > 250) {
+        controller.setSpeaking(const SpeakingParticipants.silent());
+      } else {
+        controller.setSpeaking(
+          const SpeakingParticipants(roomId: '!r:x', userIds: {_bob}),
+        );
+      }
+      final alpha = window.layered.alpha;
+      if (alpha < lowest) lowest = alpha;
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(lowest, 255, reason: 'a pause shorter than the linger is no pause');
+
+    // Silence for longer than the linger: down to 40%, and that is what is
+    // on the screen — the plate blended into the desktop behind it.
+    controller.setSpeaking(const SpeakingParticipants.silent());
+    await pumpUntil(
+      tester,
+      () => window.layered.alpha == 102,
+      reason: 'the window to settle at 0.4 * 255 once the linger ran out',
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    final point = insideRoster();
+    final pixel = ScreenShot.of(rosterArea()).at(point.x, point.y);
+    int blend(int shift) =>
+        (((_plate >> shift) & 0xFF) * 102 +
+            ((_backdrop >> shift) & 0xFF) * 153) ~/
+        255;
+    for (final shift in [16, 8, 0]) {
+      expect(
+        ((pixel >> shift) & 0xFF) - blend(shift),
+        inInclusiveRange(-3, 3),
+        reason: 'channel at bit $shift of ${pixel.toRadixString(16)}',
+      );
+    }
+
+    // And one person talking brings the whole of it back.
+    controller.setSpeaking(
+      const SpeakingParticipants(roomId: '!r:x', userIds: {_alice}),
+    );
+    await pumpUntil(
+      tester,
+      () => window.layered.alpha == 255,
+      reason: 'speech to bring the window back to full',
+    );
+
+    await hangUp(tester);
+  });
+
+  // 9.2, the other end: "nothing at all" means the window is still there and
+  // nothing of it is.
+  testWidgets('an idle opacity of zero leaves nothing on screen', (
+    tester,
+  ) async {
+    await prepare(tester);
+    await launch(idleOpacity: 0, linger: const Duration(milliseconds: 300));
+    final before = ScreenShot.of(rosterArea());
+    await showRoster(tester);
+
+    await pumpUntil(
+      tester,
+      () => overlayWindow!.layered.alpha == 0,
+      reason: 'the window to fade out entirely',
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(overlayWindow!.isVisible, isTrue);
+    expect(ScreenShot.of(rosterArea()).differenceFrom(before), 0);
+
+    await hangUp(tester);
+  });
+
+  // 9.3 and 9.5. Clicks fall through, and the overlay stays above a window
+  // that has just been given the foreground.
+  testWidgets('clicks fall through it, and it stays on top', (tester) async {
+    await prepare(tester);
+    await launch();
+    await showRoster(tester);
+    final window = overlayWindow!;
+    final point = insideRoster();
+
+    expect(window.isClickThrough, isTrue);
+    expect(window.isTopmost, isTrue);
+    // Asked of Windows' own hit-testing, at a pixel the HUD has painted: a
+    // click there goes to the application underneath.
+    expect(windowUnder(point.x, point.y), appWindow.handle);
+    expect(window.isForeground, isFalse, reason: 'showing must not take focus');
+
+    appWindow.bringToFront();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(platePixels(), greaterThan(1000), reason: 'still drawn over it');
+
+    await hangUp(tester);
+  });
+
+  // 9.6 and 9.7. The edit chord makes the HUD something that can be dragged,
+  // and where it is dropped is what gets stored — as a fraction of the
+  // monitor, not as pixels.
+  testWidgets('edit mode takes the mouse, and a drag moves the layout', (
+    tester,
+  ) async {
+    await prepare(tester);
+    await launch();
+    await showRoster(tester);
+    final window = overlayWindow!;
+    final monitor = primaryMonitor;
+    final start = insideRoster();
+
+    controller.setEditing(true);
+    await pumpUntil(
+      tester,
+      () => !window.isClickThrough,
+      reason: 'the overlay to stop being click-through in edit mode',
+    );
+    expect(windowUnder(start.x, start.y), window.handle);
+    // Edit mode covers the monitor, deliberately: there is nothing else for
+    // the pointer to land on while the button is down.
+    await pumpUntil(
+      tester,
+      () => !seeThrough(),
+      reason: 'the edit backdrop to cover the desktop',
+    );
+
+    await dragMouse(
+      fromX: start.x,
+      fromY: start.y,
+      toX: start.x + 400,
+      toY: start.y + 200,
+      settle: () => tester.pump(const Duration(milliseconds: 40)),
+    );
+    await pumpUntil(
+      tester,
+      () => persisted.isNotEmpty,
+      reason: 'the dragged position to come back from the overlay engine',
+    );
+
+    // The gesture recogniser spends the first few pixels deciding it is a
+    // drag, so the distance is near 400 by 200 rather than exactly it.
+    final moved = persisted.last;
+    expect(
+      (moved.x - 0.02) * monitor.width,
+      inInclusiveRange(340, 400),
+      reason: 'x moved by about the drag, as a fraction of the monitor',
+    );
+    expect((moved.y - 0.08) * monitor.height, inInclusiveRange(150, 200));
+
+    controller.setEditing(false);
+    await pumpUntil(
+      tester,
+      () => window.isClickThrough && seeThrough(),
+      reason: 'the overlay to hand the desktop back after edit mode',
+    );
+
+    await hangUp(tester);
+  });
+
+  // 9.6. The chords, through the one registry, against the real window.
+  testWidgets('the toggle chord hides it and brings it back', (tester) async {
+    const toggle = Hotkey(
+      modifiers: modControl | modAlt | modShift,
+      key: 0x7A, // F11
+    );
+    expect(chordIsFree(toggle.modifiers, toggle.key), isTrue);
+
+    await prepare(tester);
+    await launch();
+    final binder = HotkeyBinder(
+      channel: channel,
+      controller: FakeCallController(),
+      overlay: controller,
+    );
+    addTearDown(binder.dispose);
+    await binder.apply(
+      const HotkeysState(bindings: {HotkeyAction.overlayToggle: toggle}),
+      overlayEnabled: true,
+    );
+    await showRoster(tester);
+
+    pressChord(toggle.modifiers, toggle.key);
+    await pumpUntil(
+      tester,
+      () => !overlayWindow!.isVisible,
+      reason: 'the toggle chord to hide the overlay',
+    );
+    expect(seeThrough(), isTrue);
+
+    pressChord(toggle.modifiers, toggle.key);
+    await pumpUntil(
+      tester,
+      () => platePixels() > 1000,
+      reason: 'the same chord to bring it back',
+    );
+
+    await hangUp(tester);
+    await binder.dispose();
+    await pumpUntil(
+      tester,
+      () => chordIsFree(toggle.modifiers, toggle.key),
+      reason: 'the chord to be released',
+    );
+  });
+
+  // 9.10. A monitor named in a saved layout may have been unplugged since.
+  testWidgets('a monitor that is not there falls back to the primary one', (
+    tester,
+  ) async {
+    await prepare(tester);
+    await launch(monitorId: r'\\.\DISPLAY_THAT_WAS_UNPLUGGED');
+    await showRoster(tester);
+
+    final bounds = overlayWindow!.bounds;
+    final monitor = primaryMonitor;
+    expect(bounds.left, monitor.left);
+    expect(bounds.top, monitor.top);
+    expect(bounds.width, monitor.width);
+    expect(bounds.height, monitor.height);
+
+    await hangUp(tester);
+  });
+
+  // 9.11. The capture these tests take is what a screen share takes, so a
+  // window excluded from capture is absent from it exactly as it would be
+  // from somebody's stream.
+  testWidgets('hidden from capture, it is not in a capture', (tester) async {
+    await prepare(tester);
+    await launch(excludeFromCapture: true);
+    await join([person(_alice, name: 'Alice'), person(_bob, name: 'Bob')]);
+
+    // Up, opaque, and — to anything that captures the screen — not there.
+    await pumpUntil(
+      tester,
+      () =>
+          (overlayWindow?.isVisible ?? false) &&
+          overlayWindow!.layered.alpha == 255,
+      reason: 'the overlay window to be shown and revealed',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(platePixels(), 0);
+    expect(seeThrough(), isTrue);
+
+    // Switched off while it is up, and it is in the very next capture.
+    await controller.setPrefs(
+      const OverlayPrefsState(
+        enabled: true,
+        excludeFromCapture: false,
+        layouts: [
+          OverlayLayout(
+            id: kDefaultOverlayLayoutId,
+            name: 'Default',
+            idleOpacity: 1,
+          ),
+        ],
+      ),
+    );
+    await pumpUntil(
+      tester,
+      () => platePixels() > 1000,
+      reason: 'the roster to appear in a capture once exclusion is off',
     );
 
     await hangUp(tester);

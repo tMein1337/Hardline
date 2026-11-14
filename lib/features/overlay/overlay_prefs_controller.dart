@@ -84,6 +84,9 @@ class OverlayPrefsController extends Notifier<OverlayPrefsState> {
       avatarSize: layout.avatarSize,
       showNames: layout.showNames,
       idleOpacity: layout.idleOpacity,
+      // Was left out, so duplicating a layout set to 50% while talking gave
+      // a copy at full — the one setting that silently did not come along.
+      activeOpacity: layout.activeOpacity,
     );
     _write(state.copyWith(layouts: [...state.layouts, created]));
     return created;

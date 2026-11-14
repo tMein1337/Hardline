@@ -248,100 +248,72 @@ person because one participant cannot demonstrate a grid.
    are now on, so the SFU should be sending small layers for small tiles;
    without them this is where it would fall over.
 
-## 9. Verify the call overlay, and prove the transparency first
+## 9. Verify the call overlay over a real game, in a real call
 
-**Step 1 is a gate**, and it has already failed once: the first time the
-overlay was switched on it filled the monitor with solid white. That is
-diagnosed and rewritten — the Flutter view is a child `HWND` the engine renders
-opaque, so no amount of work on the *window's* composition could ever have
-shown anything through it. Transparency is now a colour key
-(`kChromaKey`, pure magenta) with `LWA_COLORKEY`, and the fade is a window-wide
-`LWA_ALPHA` driven by `OverlayController`. See "Transparency is a colour key"
-in [notes.md](notes.md).
+**The gate has passed, and most of the list with it.** The overlay has been
+seen working — by a screen capture rather than by a person, which is the
+stricter witness. `integration_test/overlay_window_flow.dart` runs the real
+runner window and the real second engine against a faked call, in a debug
+build and in an AOT one, and asserts from what is on the screen and from what
+Windows says about the window:
 
-**None of that has been seen working.** The rewrite is the second attempt at
-this and the first one looked correct too.
+- **Transparency.** Outside the roster the monitor is pixel for pixel what it
+  was before, and the colour key never reaches the screen.
+- **The fade and the linger.** The window holds at full through pauses shorter
+  than *Stay up for*, settles at exactly *Visible when silent* afterwards (the
+  plate measured blended into what is behind it), disappears entirely at zero,
+  and comes back whole when one person speaks.
+- **Clicks fall through**, by Windows' own hit-testing at a pixel the HUD has
+  painted; showing it does not take the foreground; it stays above a window
+  that has just been activated.
+- **Edit mode** takes the mouse and covers the monitor, a real drag comes back
+  as a position in fractions of the monitor, and leaving it hands the desktop
+  back.
+- **The toggle chord**, pressed for real, hides it and brings it back.
+- **A monitor that is not there** falls back to the primary one.
+- **Capture exclusion.** With the setting on, the overlay is up and opaque and
+  absent from a capture; switched off, it is in the next one.
 
-Everything testable without a second person is testable alone here, which makes
-this the rare list that one person can finish.
+Layouts shared between games, a deleted layout's games falling back, the last
+layout refusing to go, and a dragged position surviving a restart are covered
+in `test/overlay/overlay_prefs_controller_test.dart`.
 
-1. **Transparency, before anything else.** Settings → *Call overlay* → switch it
-   on, join a call, and look. The HUD must appear over the desktop with the
-   background **fully transparent** — not white, not black, not a rectangle.
-   - A **solid magenta** screen means the key is being painted but not keyed:
-     the two `kChromaKey` values, one in `overlay_window.cpp` and one in
-     `overlay_app.dart`, have drifted apart.
-   - A **solid white** screen means the colour key is not being applied at all
-     — that is the original failure, and `ApplyTransparency` is where to look.
-   - **Magenta fringing** around the roster is expected in small amounts where
-     an antialiased edge meets the key; a magenta *halo* means something is
-     being drawn without its opaque plate behind it.
-2. **The fade, and the linger.** With nobody speaking the HUD drops to
-   *Visible when silent* — to nothing at all at the default of zero — but only
-   after *Stay up for* has elapsed. Talk, stop, and count: it should hold, then
-   fade. Then talk again before it fades and confirm it never dips.
-   - Set *Stay up for* to its minimum and confirm the HUD follows speech
-     closely; set it to an hour and confirm it simply stays up.
-   - Raise *Visible when silent* and confirm the whole roster settles at that
-     opacity rather than disappearing.
-   - **One person talking brings the whole roster up**, not just them. That is
-     the documented cost of a window-wide fade; the ring is what identifies the
-     speaker. If that turns out to be the wrong trade in practice, the way out
-     is per-pixel alpha, which needs the Flutter view composited through
-     DirectComposition instead of parented as an opaque child — a much larger
-     change than this one.
-3. **Clicks fall through.** Over a game, click where the HUD is. The game must
-   receive the click. This is `WS_EX_TRANSPARENT`, and it is the difference
-   between an overlay and an obstruction.
-4. **Borderless, then true fullscreen.** Minecraft in Borderless Fullscreen: the
-   HUD is there. The same game in true Fullscreen: it is not, and the app does
-   not crash or hang waiting for it. The second half is the documented
-   limitation behaving as documented, not a bug — see "Exclusive fullscreen is
-   out of reach" in [notes.md](notes.md).
-5. **Alt-tab.** Switch to the app and back to the game a few times. The overlay
-   must still be on top afterwards; that is what the two-second `HWND_TOPMOST`
-   timer is for and it is the only thing covering it.
-6. **The chords.** Bind both in settings, then use them from *inside* a game.
-   The toggle chord switches the overlay off and on. The edit chord makes the
-   HUD draggable — the game loses the foreground, which is expected — and
-   pressing it again returns to click-through. A chord another program already
-   holds must be **refused visibly**, not silently ignored.
-7. **The position survives.** Drag the HUD somewhere, leave edit mode, restart
-   the app, rejoin a call. It comes back where it was put. Then change the
-   game's resolution and confirm it is still in the same *place*, not the same
-   pixel — positions are fractions of the monitor.
-8. **One layout, several games.** Assign a second executable to a layout the
-   first already uses (settings, or the *Assign…* control after tabbing back
-   from it). Tab into it and confirm the HUD arrives already arranged, with
-   nothing rebuilt. Then edit that layout and confirm **both** games get the
-   change — that is the point of layouts being named rather than per-game.
-9. **A layout with users, deleted.** Delete a layout two games point at. They
-   must fall back to the default rather than leaving the overlay blank. Then try
-   to delete the last remaining layout: the control must be disabled.
-10. **Multi-monitor.** With two monitors, put the overlay on the second one and
-    confirm it covers that monitor. Unplug it (or disable it in Windows) and
-    confirm the overlay reappears on the primary rather than disappearing to a
-    screen that is not there.
-11. **Capture exclusion.** With the overlay up, share your screen and have the
-    other side confirm they do **not** see your HUD. Then turn the setting off
-    and confirm they do. Windows 10 2004 is the floor for this; on anything
-    older the call fails and the overlay is simply visible, which is cosmetic.
-12. **The graceful exit still works.** Close the window mid-call with the
-    overlay showing. You must still disappear from the participant list at once.
-    The overlay bridge sits in the same message pump as the graceful exit
-    request, and this is the regression it could cause.
-13. **Two engines, one process.** After using the overlay, check the log for
-    anything from flutter_webrtc about a plugin registering twice, and confirm
-    audio still works after the overlay has been shown and hidden a few times.
-    The overlay engine registers no plugins precisely to avoid this, and the
-    symptom if it were wrong would be the app's own call going deaf rather than
-    anything about the overlay.
+What that cannot reach, because it needs a game, a second monitor, or a call
+with somebody in it:
+
+1. **Over a game.** Minecraft in Borderless Fullscreen: the HUD is there. The
+   same game in true Fullscreen: it is not, and the app does not crash or hang
+   waiting for it. The second half is the documented limitation behaving as
+   documented — see "Exclusive fullscreen is out of reach" in
+   [notes.md](notes.md).
+2. **Alt-tab, repeatedly.** Switch to the app and back to the game a few
+   times. The overlay must still be on top; that is what the two-second
+   `HWND_TOPMOST` timer is for. The test covers one activation of an ordinary
+   window, not a game re-asserting itself.
+3. **The edit chord from inside a game.** The toggle chord is tested; the edit
+   chord is driven through the controller rather than pressed, because edit
+   mode takes the foreground and the test wants it back.
+4. **The same place at a different resolution.** Change the game's resolution
+   and confirm the HUD is in the same *place*, not at the same pixel.
+5. **A layout following the game.** Assign a second executable to a layout
+   and tab into it: the HUD should arrive already arranged. The lookup is
+   tested; the foreground watch delivering the executable name is not.
+6. **A real second monitor.** Put the overlay on it and confirm it covers
+   that one; unplug it and confirm the overlay comes back on the primary.
+7. **Capture exclusion, from the other end.** Share your screen and have
+   somebody confirm they do not see your HUD. Windows 10 2004 is the floor;
+   older builds fail the call and the overlay is simply visible.
+8. **The graceful exit still works.** Close the window mid-call with the
+   overlay showing. You must still disappear from the participant list at
+   once — the overlay bridge sits in the same message pump as the exit request.
+9. **Two engines, one process.** After using the overlay, check the log for
+   anything from flutter_webrtc about a plugin registering twice, and confirm
+   audio still works after the overlay has been shown and hidden a few times.
 
 **Not implemented, deliberately:** the overlay cannot show video streams. That
 is the architecture, not an omission — see "Which is also why the overlay cannot
 show video" in [notes.md](notes.md), which also records the one route to it
 (`DwmRegisterThumbnail`) if it is ever wanted.
-
 ## 10. The MatrixRTC ring is a revision behind the MSC
 
 **Done, except for this.** The three things this section held are finished: the
