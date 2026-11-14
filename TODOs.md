@@ -40,12 +40,17 @@ follow yourself, so every list is empty against a single account.
    the badge does *not* clear until you scroll back down. Minimise the window,
    have them send one more, and confirm it survives being minimised.
 
-## 3. Verify on-device encryption against a real account
+## 3. Verify on-device encryption on the Nix build
 
-1. **The way out** *(outstanding)*. On a throwaway install: lock it, forget
-   the passphrase, use *"I have lost the passphrase"*, and confirm the app
-   comes up at the login screen with the stores gone.
-2. **Nix** *(outstanding)*. On the Linux package the setting must refuse to
+The way out of a forgotten passphrase is verified: the real `main()` is run
+against an encrypted store in a throwaway directory, *"I have lost the
+passphrase"* is clicked, and the app comes up at the login screen with the
+store replaced by a fresh unencrypted one and the account list gone
+(`integration_test/locked_launch_flow.dart`).
+
+What is left is the other platform:
+
+1. **Nix** *(outstanding)*. On the Linux package the setting must refuse to
    switch on and say why. That is expected, not a bug — see "The store cipher
    is missing on Nix" in [NIX-PACKAGING.md](NIX-PACKAGING.md), which has the
    two routes to fixing it.
@@ -188,7 +193,7 @@ verify, done *inside* a TODO-5 build-and-run pass — never a blind
 Today it does not, and the app says so rather than pretending — `Settings →
 Security` refuses to switch on, because `requireCipherSupport()` finds no
 cipher and will not key a store with a library that would ignore the key. TODO
-3 step 2 verifies that refusal is what happens. **This item is about removing
+3 verifies that refusal is what happens. **This item is about removing
 the need for it.**
 
 **Why it is missing.** `pubspec.yaml` asks `package:sqlite3` for the
@@ -229,9 +234,9 @@ overrides the request and links `pkgs.sqlite` — plain SQLite, which accepts
    would need to accept either, and a store written on one platform would not
    open on the other. Worth it only if route 1 proves impractical.
 
-**When it works, TODO 3 step 2 inverts** — the Linux package should then pass
-the whole of TODO 3 rather than correctly refusing its last step. Update that
-step and the "The store cipher is missing on Nix" section of
+**When it works, TODO 3 inverts** — the Linux package should then switch the
+setting on rather than correctly refusing to. Update that
+item and the "The store cipher is missing on Nix" section of
 [NIX-PACKAGING.md](NIX-PACKAGING.md), which is where the detail lives, along
 with the `sqlite` comment in `flake.nix`'s `runtimeLibsFor`.
 

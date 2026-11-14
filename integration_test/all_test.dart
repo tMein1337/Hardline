@@ -6,6 +6,7 @@ import 'package:hardline/features/overlay/overlay_app.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'hotkeys_flow.dart' as hotkeys;
+import 'locked_launch_flow.dart' as locked;
 import 'login_flow.dart' as login;
 import 'overlay_window_flow.dart' as overlay;
 import 'room_admin_flow.dart' as rooms;
@@ -60,6 +61,9 @@ void main() {
   group('login', login.main);
   group('hotkeys', hotkeys.main);
   group('rooms', rooms.main);
+  // Last, because it runs the real `main()`, which puts its own root in the
+  // window and builds a client.
+  group('locked launch', locked.main);
 }
 
 /// The overlay engine's entry point, as `lib/main.dart` declares it.
