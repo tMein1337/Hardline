@@ -9,10 +9,7 @@ void main() {
     // Monitors are few, named by index, and never junk. Filtering them would
     // only ever be a way to lose one.
     test('never filters a screen, whatever it is called', () {
-      expect(
-        isShareableSource(name: '', isWindow: false),
-        isTrue,
-      );
+      expect(isShareableSource(name: '', isWindow: false), isTrue);
       expect(
         isShareableSource(
           name: 'Taskbar overflow window',
@@ -53,6 +50,49 @@ void main() {
       );
     });
 
+    // Windows does not translate these, so one entry each covers every
+    // install — unlike the overflow window, which needs a name per language.
+    test('drops the shell surfaces that are named in English everywhere', () {
+      for (final title in const [
+        'Windows Input Experience',
+        'Microsoft Text Input Application',
+        'Shell Handwriting Canvas',
+        'Task Switching',
+        'Snap Assist',
+        'Desktop Window Manager',
+      ]) {
+        expect(
+          isShareableSource(name: title, isWindow: true),
+          isFalse,
+          reason: title,
+        );
+      }
+    });
+
+    // Pins the decision not to match substrings, which would catch every
+    // locale's overflow window in one rule and take this with it. Dropping
+    // somebody's browser from the picker is the worse failure by far.
+    test('keeps a real window whose title contains a denied name', () {
+      expect(
+        isShareableSource(
+          name: 'Stack Overflow - How do I share a window? - Google Chrome',
+          isWindow: true,
+          thumbnailWidth: 1280,
+          thumbnailHeight: 800,
+        ),
+        isTrue,
+      );
+      expect(
+        isShareableSource(
+          name: 'Searching for a needle - Notepad',
+          isWindow: true,
+          thumbnailWidth: 800,
+          thumbnailHeight: 600,
+        ),
+        isTrue,
+      );
+    });
+
     test('drops a window whose thumbnail has no area to capture', () {
       expect(
         isShareableSource(
@@ -78,16 +118,9 @@ void main() {
     // and dropping a real window for being slow is worse than briefly showing
     // a dead one.
     test('keeps a window whose thumbnail has not arrived yet', () {
+      expect(isShareableSource(name: 'Firefox', isWindow: true), isTrue);
       expect(
-        isShareableSource(name: 'Firefox', isWindow: true),
-        isTrue,
-      );
-      expect(
-        isShareableSource(
-          name: 'Firefox',
-          isWindow: true,
-          thumbnailWidth: 320,
-        ),
+        isShareableSource(name: 'Firefox', isWindow: true, thumbnailWidth: 320),
         isTrue,
       );
     });
@@ -107,24 +140,23 @@ void main() {
 
   group('numberedLabels', () {
     test('leaves a unique name exactly as it was', () {
-      expect(
-        numberedLabels(['Firefox', 'Screen 1']),
-        ['Firefox', 'Screen 1'],
-      );
+      expect(numberedLabels(['Firefox', 'Screen 1']), ['Firefox', 'Screen 1']);
     });
 
     test('numbers duplicates from 1, in list order', () {
-      expect(
-        numberedLabels(['Notepad', 'Notepad', 'Notepad']),
-        ['Notepad 1', 'Notepad 2', 'Notepad 3'],
-      );
+      expect(numberedLabels(['Notepad', 'Notepad', 'Notepad']), [
+        'Notepad 1',
+        'Notepad 2',
+        'Notepad 3',
+      ]);
     });
 
     test('numbers only the names that need it', () {
-      expect(
-        numberedLabels(['Notepad', 'Firefox', 'Notepad']),
-        ['Notepad 1', 'Firefox', 'Notepad 2'],
-      );
+      expect(numberedLabels(['Notepad', 'Firefox', 'Notepad']), [
+        'Notepad 1',
+        'Firefox',
+        'Notepad 2',
+      ]);
     });
 
     // The requirement is that the oldest share holds the lowest number *at any
@@ -132,11 +164,7 @@ void main() {
     // has to close the gap rather than leave "Notepad 2" alone on screen.
     test('renumbers after the oldest of a pair is stopped', () {
       final before = ['Notepad', 'Notepad', 'Notepad'];
-      expect(numberedLabels(before), [
-        'Notepad 1',
-        'Notepad 2',
-        'Notepad 3',
-      ]);
+      expect(numberedLabels(before), ['Notepad 1', 'Notepad 2', 'Notepad 3']);
 
       final after = ['Notepad', 'Notepad'];
       expect(numberedLabels(after), ['Notepad 1', 'Notepad 2']);

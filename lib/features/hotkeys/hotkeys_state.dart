@@ -6,24 +6,28 @@ import 'package:flutter/foundation.dart';
 import 'hotkey.dart';
 import 'hotkey_action.dart';
 
-/// Which chord runs which call action.
+/// Which chord runs which action. The only store of that, for every chord.
 ///
-/// A map rather than a field per action, unlike `OverlayPrefsState`'s two named
-/// hotkeys: actions are expected to be added, and a shape that costs five edits
-/// per new one is a shape that eventually gets a new one wired up wrong.
+/// A map rather than a field per action, which is what `OverlayPrefsState`
+/// used to hold for its two: actions are expected to be added, and a shape that
+/// costs five edits per new one is a shape that eventually gets a new one wired
+/// up wrong. The overlay's pair proved it — they were named fields, so they
+/// were registered and dispatched by hand in a second place that no conflict
+/// check could see.
 ///
-/// An action with no entry is simply unbound, which is also the shipped state
-/// — see [kDefaultCallHotkeys].
+/// An action with no entry is unbound. That is the shipped state for the call
+/// actions and not for the overlay's; [kDefaultHotkeys] explains why the two
+/// differ.
 @immutable
-class CallHotkeysState {
-  const CallHotkeysState({this.bindings = kDefaultCallHotkeys});
+class HotkeysState {
+  const HotkeysState({this.bindings = kDefaultHotkeys});
 
   /// Reads whatever it can and drops the rest.
   ///
   /// Tolerant on purpose. This is user preference, not protocol: a value that
   /// cannot be understood should cost its own binding and nothing else, and
   /// must never take the settings pane down with it.
-  factory CallHotkeysState.fromJson(Map<String, Object?> json) {
+  factory HotkeysState.fromJson(Map<String, Object?> json) {
     final bindings = <HotkeyAction, Hotkey>{};
 
     for (final action in HotkeyAction.values) {
@@ -35,7 +39,7 @@ class CallHotkeysState {
       if (hotkey.isBound) bindings[action] = hotkey;
     }
 
-    return CallHotkeysState(bindings: bindings);
+    return HotkeysState(bindings: bindings);
   }
 
   final Map<HotkeyAction, Hotkey> bindings;
@@ -44,14 +48,14 @@ class CallHotkeysState {
 
   bool get hasAny => bindings.isNotEmpty;
 
-  CallHotkeysState withBinding(HotkeyAction action, Hotkey? hotkey) {
+  HotkeysState withBinding(HotkeyAction action, Hotkey? hotkey) {
     final next = Map<HotkeyAction, Hotkey>.from(bindings);
     if (hotkey == null || !hotkey.isBound) {
       next.remove(action);
     } else {
       next[action] = hotkey;
     }
-    return CallHotkeysState(bindings: next);
+    return HotkeysState(bindings: next);
   }
 
   Map<String, Object?> toJson() => {
@@ -61,7 +65,7 @@ class CallHotkeysState {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CallHotkeysState && mapEquals(bindings, other.bindings);
+      other is HotkeysState && mapEquals(bindings, other.bindings);
 
   @override
   int get hashCode => Object.hashAllUnordered([

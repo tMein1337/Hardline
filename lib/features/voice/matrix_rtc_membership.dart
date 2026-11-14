@@ -30,16 +30,29 @@ const String kDeafenedKey = 'io.hardline.deafened';
 
 /// The timeline events a client sends to make everyone else's phone ring.
 ///
-/// Three spellings because the MSC was renamed twice and clients in the wild
-/// still send all of them. This is **not** the membership: a ring is an
-/// ordinary timeline event that says "a call is starting, now", and it is what
-/// actually produces the unread badge — Element sends it carrying
+/// Five spellings because the MSC has been renamed three times and clients in
+/// the wild still send all of them. This is **not** the membership: a ring is
+/// an ordinary timeline event that says "a call is starting, now", and it is
+/// what actually produces the unread badge — Element sends it carrying
 /// `m.mentions: {room: true}`, so the homeserver's `@room` push rule gives it a
 /// highlight tweak and counts it against the room.
+///
+/// `rtc.invite` is the current name, checked 2026-10-18: MSC4075 now calls the
+/// event `m.rtc.invite` and has dropped `notification_type` in favour of
+/// `slot_id` and `sticky_key`. Reading it is free and additive — every use of
+/// this set matches on the type alone, and `isRingExpired` reads `sender_ts`
+/// and `lifetime`, which the new shape still carries. **Sending** the new
+/// spelling is not done here; see TODOs for why that waits.
+///
+/// `m.rtc.decline` is deliberately absent. It is part of the same MSC and it is
+/// not a ring — rendering a decline as "started a call" would be worse than not
+/// rendering it at all.
 ///
 /// Nothing here renders them, which is why a call can leave a room showing a
 /// red 1 with an apparently empty timeline.
 const Set<String> kRtcRingEventTypes = {
+  'org.matrix.msc4075.rtc.invite',
+  'm.rtc.invite',
   'org.matrix.msc4075.rtc.notification',
   'org.matrix.msc4075.call.notify',
   'm.call.notify',
@@ -156,10 +169,7 @@ class LiveKitFocus {
     final url = json['livekit_service_url'];
     final alias = json['livekit_alias'];
     if (url is! String || url.isEmpty) return null;
-    return LiveKitFocus(
-      serviceUrl: url,
-      alias: alias is String ? alias : '',
-    );
+    return LiveKitFocus(serviceUrl: url, alias: alias is String ? alias : '');
   }
 
   Map<String, Object?> toJson() => {

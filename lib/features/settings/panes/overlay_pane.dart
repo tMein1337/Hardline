@@ -7,7 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
+import '../../hotkeys/hotkey.dart';
+import '../../hotkeys/hotkey_action.dart';
 import '../../hotkeys/hotkey_keys.dart';
+import '../../hotkeys/hotkey_provider.dart';
+import '../../hotkeys/hotkeys_controller.dart';
 import '../widgets/hotkey_row.dart';
 import '../../overlay/overlay_channel.dart';
 import '../../overlay/overlay_layout.dart';
@@ -131,23 +135,19 @@ class OverlayPane extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              HotkeyRow(
-                label: 'Hide and show the overlay',
-                hint:
+              _OverlayHotkeyRow(
+                action: HotkeyAction.overlayToggle,
+                description:
                     'Pushes the HUD out of the way without switching the '
                     'feature off, so the same chord brings it back.',
-                hotkey: prefs.toggleHotkey,
-                onChanged: notifier.setToggleHotkey,
               ),
               const SettingsDivider(),
-              HotkeyRow(
-                label: 'Move the overlay',
-                hint:
+              _OverlayHotkeyRow(
+                action: HotkeyAction.overlayEdit,
+                description:
                     'Lets you drag the overlay into place. The game loses '
                     'the foreground while you do, which is unavoidable — a '
                     'window that cannot be clicked cannot be arranged.',
-                hotkey: prefs.editHotkey,
-                onChanged: notifier.setEditHotkey,
               ),
             ],
           ),
@@ -407,9 +407,8 @@ class _LayoutEditor extends ConsumerWidget {
           // Zero is allowed and is not a mistake: "never show me anything"
           // with the overlay still switched on is a coherent thing to want
           // while it is set up, or while a particular game needs the screen.
-          format: (value) => value == 0
-              ? 'Nothing at all'
-              : '${(value * 100).round()}%',
+          format: (value) =>
+              value == 0 ? 'Nothing at all' : '${(value * 100).round()}%',
           onChanged: (value) =>
               onChanged(layout.copyWith(activeOpacity: value), write: false),
           onCommit: (value) => onChanged(layout.copyWith(activeOpacity: value)),
@@ -425,9 +424,8 @@ class _LayoutEditor extends ConsumerWidget {
           // transparency to give them — so at zero the overlay does not dim,
           // it disappears, and somebody who switched the feature on and sees
           // an empty screen has no way to tell that from it being broken.
-          format: (value) => value == 0
-              ? 'Nothing at all'
-              : '${(value * 100).round()}%',
+          format: (value) =>
+              value == 0 ? 'Nothing at all' : '${(value * 100).round()}%',
           onChanged: (value) =>
               onChanged(layout.copyWith(idleOpacity: value), write: false),
           onCommit: (value) => onChanged(layout.copyWith(idleOpacity: value)),
@@ -475,8 +473,17 @@ class _LayoutEditor extends ConsumerWidget {
           ),
         ),
         Text(
-          'Position is set by dragging the overlay itself — '
-          '${hotkeyLabel(prefs.editHotkey)}.',
+          // The chord can be unbound now that it lives in the shared store,
+          // and "dragging the overlay itself — Not set." is not a sentence.
+          switch (ref.watch(hotkeysProvider)[HotkeyAction.overlayEdit]) {
+            final chord? =>
+              'Position is set by dragging the overlay itself — '
+                  '${hotkeyLabel(chord)}.',
+            _ =>
+              'Position is set by dragging the overlay itself. Bind '
+                  '"${HotkeyAction.overlayEdit.label}" under Shortcuts to be '
+                  'able to.',
+          },
           style: context.text.timestamp,
         ),
       ],
@@ -767,6 +774,40 @@ class _LingerCard extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// One of the overlay's two chords, bound through the shared registry.
+///
+/// A widget rather than two inline `HotkeyRow`s because each needs to watch
+/// the bindings and the binder to report a refused or doubly-bound chord, and
+/// `OverlayPane.build` already watches enough.
+class _OverlayHotkeyRow extends ConsumerWidget {
+  const _OverlayHotkeyRow({required this.action, required this.description});
+
+  final HotkeyAction action;
+
+  /// What the chord does, shown when there is nothing wrong with it.
+  final String description;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bindings = ref.watch(hotkeysProvider);
+    final binder = ref.watch(hotkeyBinderProvider);
+
+    return ValueListenableBuilder(
+      valueListenable: binder.rejected,
+      builder: (context, rejected, _) => HotkeyRow(
+        key: Key('hotkey_${action.name}'),
+        label: action.label,
+        hint: description,
+        problem: hotkeyProblem(bindings, rejected, action),
+        hotkey: bindings[action] ?? const Hotkey.none(),
+        onChanged: (hotkey) => ref
+            .read(hotkeysProvider.notifier)
+            .setBinding(action, hotkey.isBound ? hotkey : null),
+      ),
     );
   }
 }

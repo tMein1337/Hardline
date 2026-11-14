@@ -6,7 +6,6 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/injected_providers.dart';
-import '../hotkeys/hotkey.dart';
 import 'overlay_layout.dart';
 import 'overlay_prefs_state.dart';
 
@@ -44,9 +43,6 @@ class OverlayPrefsController extends Notifier<OverlayPrefsState> {
   void setExcludeFromCapture(bool excluded) =>
       _write(state.copyWith(excludeFromCapture: excluded));
 
-  void setToggleHotkey(Hotkey hotkey) =>
-      _write(state.copyWith(toggleHotkey: hotkey));
-
   /// [commit] false while a slider is being dragged; see `setTooltipDelay`.
   void setLinger(Duration linger, {bool commit = true}) => _write(
     state.copyWith(
@@ -59,9 +55,6 @@ class OverlayPrefsController extends Notifier<OverlayPrefsState> {
     ),
     write: commit,
   );
-
-  void setEditHotkey(Hotkey hotkey) =>
-      _write(state.copyWith(editHotkey: hotkey));
 
   /// Replaces one layout, matched by id.
   ///
@@ -137,11 +130,7 @@ class OverlayPrefsController extends Notifier<OverlayPrefsState> {
   void assign(String executable, String layoutId) {
     final exe = executable.toLowerCase();
     if (exe.isEmpty) return;
-    _write(
-      state.copyWith(
-        assignments: {...state.assignments, exe: layoutId},
-      ),
-    );
+    _write(state.copyWith(assignments: {...state.assignments, exe: layoutId}));
   }
 
   void unassign(String executable) {

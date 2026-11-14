@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../activity/message_activity_log.dart';
-import '../../hotkeys/call_hotkey_provider.dart';
+import '../../hotkeys/hotkey_provider.dart';
 import '../../overlay/overlay_provider.dart';
 import '../../voice/stale_membership_sweeper.dart';
 import '../../voice/stale_ring_sweeper.dart';
@@ -43,7 +43,7 @@ class BackgroundWorkers extends ConsumerWidget {
     ref.watch(staleRingSweepProvider);
     ref.watch(staleMembershipSweepProvider);
     ref.watch(overlayDriverProvider);
-    ref.watch(callHotkeyDriverProvider);
+    ref.watch(hotkeyDriverProvider);
     return const SizedBox.shrink();
   }
 }

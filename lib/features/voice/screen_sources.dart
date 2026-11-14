@@ -22,8 +22,22 @@
 /// trying to guess the set in advance: there is no API that says "this window
 /// is a shell artefact", so the only honest approach is a denylist with the
 /// heuristics below carrying everything it misses.
+///
+/// **Translations are not invented here.** A name added from a guess at what
+/// another language calls the overflow window is a string that will never
+/// match anything, and it would make the list look more complete than it is.
+/// The entries below are either reported from a machine running that language
+/// or — in the larger group — names Windows uses internally and does *not*
+/// translate, which is why they carry no companions.
+///
+/// Note also what deliberately is not done: matching a *substring* like
+/// "overflow" would catch every locale at once and is the obvious next idea.
+/// It is wrong. A browser tab on Stack Overflow is titled "Stack Overflow —
+/// Google Chrome", and dropping somebody's browser from the picker is a far
+/// worse failure than leaving one dead entry in it.
 const Set<String> kUnshareableWindowTitles = {
-  // Taskbar overflow / hidden-icon flyout.
+  // Taskbar overflow / hidden-icon flyout. Reported in the display language of
+  // the install, so each of these came from a machine running it.
   'taskbar overflow window',
   'überlauffenster der taskleiste',
   'uberlauffenster der taskleiste',
@@ -38,7 +52,21 @@ const Set<String> kUnshareableWindowTitles = {
   'start menu',
   'search',
   'suchen',
-  // The picker's own dialog, and the sharing indicator Windows draws.
+  // Shell surfaces Windows names in English whatever the display language is,
+  // so one entry each covers every install. All of them appear among the
+  // capture sources and none of them can be shared usefully: the input host
+  // and handwriting canvas are the on-screen keyboard and pen surfaces, and
+  // the two switching overlays only exist while a key is held down.
+  'windows input experience',
+  'microsoft text input application',
+  'shell handwriting canvas',
+  'task switching',
+  'snap assist',
+  'desktop window manager',
+  'windows default lock screen',
+  'cortana',
+  // Our own always-on-top HUD. It is also excluded from capture at the window
+  // level, so this is belt and braces rather than the only guard.
   'hardline overlay',
 };
 

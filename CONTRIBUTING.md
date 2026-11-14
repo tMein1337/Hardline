@@ -106,6 +106,19 @@ dart run tool/generate_third_party_notices.dart --check
 
 All three must pass.
 
+On Windows there is a fourth, which drives the real application in a real
+window and asks Windows itself what happened — whether a chord is actually
+registered, for instance, rather than whether the app believes it is:
+
+```sh
+flutter test integration_test -d windows
+```
+
+It opens a window and presses keys, so leave the machine alone while it runs.
+It never touches your own account or preferences. A new suite goes in
+`integration_test/<name>_flow.dart` and is listed in `all_test.dart`, which
+explains why there is only one file the tool is allowed to find.
+
 If you changed dependencies, also run the advisory check, which needs network
 access:
 

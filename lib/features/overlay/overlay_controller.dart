@@ -42,7 +42,6 @@ class OverlayController {
   }) {
     _subscriptions.addAll([
       channel.foregroundApp.listen(_onForegroundApp),
-      channel.hotkeys.listen(_onHotkey),
       channel.edits.listen(_onOverlayEvent),
     ]);
   }
@@ -115,13 +114,10 @@ class OverlayController {
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
-    await channel.unregisterHotkey(HotkeyId.toggle);
-    await channel.unregisterHotkey(HotkeyId.edit);
     await channel.hide();
     // Deliberately not `channel.dispose()`. The channel is shared — see
     // `overlayChannelProvider` — and closing it here would take the hotkey
     // binder's subscription down with it.
-
   }
 
   // ---------------------------------------------------------------------------
@@ -137,8 +133,6 @@ class OverlayController {
     // is on, with nothing on screen to explain why.
     if (!previous.enabled && prefs.enabled) _hidden = false;
 
-    await _applyHotkeys(previous, prefs);
-
     if (previous.monitorId != prefs.monitorId && _shown) {
       await channel.setMonitor(prefs.monitorId);
     }
@@ -150,36 +144,6 @@ class OverlayController {
     if (!prefs.enabled) _editing = false;
 
     await _reconcile();
-  }
-
-  bool _hotkeysBound = false;
-
-  /// Binds the global chords, but **only while the overlay is switched on**.
-  ///
-  /// A registered hotkey is taken from every other program on the machine for
-  /// as long as it is held. Holding two of them at all times for a feature
-  /// somebody has turned off is not ours to do — it was, until this was
-  /// noticed, and Alt+Shift+O stopped working everywhere else on the system.
-  Future<void> _applyHotkeys(
-    OverlayPrefsState previous,
-    OverlayPrefsState prefs,
-  ) async {
-    if (!prefs.enabled) {
-      if (_hotkeysBound) {
-        await channel.unregisterHotkey(HotkeyId.toggle);
-        await channel.unregisterHotkey(HotkeyId.edit);
-        _hotkeysBound = false;
-      }
-      return;
-    }
-
-    if (!_hotkeysBound || previous.toggleHotkey != prefs.toggleHotkey) {
-      await channel.registerHotkey(HotkeyId.toggle, prefs.toggleHotkey);
-    }
-    if (!_hotkeysBound || previous.editHotkey != prefs.editHotkey) {
-      await channel.registerHotkey(HotkeyId.edit, prefs.editHotkey);
-    }
-    _hotkeysBound = true;
   }
 
   void setPalette(OverlayPalette palette) {
@@ -410,16 +374,17 @@ class OverlayController {
     unawaited(_reconcile());
   }
 
-  void _onHotkey(int id) {
-    switch (id) {
-      case HotkeyId.toggle:
-        _hidden = !_hidden;
-        // Coming back into view should not come back mid-edit.
-        if (_hidden) _editing = false;
-        unawaited(_reconcile());
-      case HotkeyId.edit:
-        setEditing(!_editing);
-    }
+  /// Pushes the HUD out of the way, or brings it back.
+  ///
+  /// Public because the chord that drives it is no longer registered here —
+  /// `HotkeyBinder` owns every global chord and calls this one. The gating that
+  /// used to live beside the registration moved with it, as a per-action gate;
+  /// see `HotkeyGate.overlayEnabled`.
+  void toggleHidden() {
+    _hidden = !_hidden;
+    // Coming back into view should not come back mid-edit.
+    if (_hidden) _editing = false;
+    unawaited(_reconcile());
   }
 
   /// Enters or leaves the mode where the HUD can be dragged into place.

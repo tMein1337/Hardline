@@ -8,9 +8,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Items 1 to 4 and 8 to 9 are **verifications**, not features: the code is
 written and believed correct, but has never been observed working, usually
 because the test needs a second client or a second machine. Items 5 to 7 are the
-Nix packaging: one verification and two pieces of work. Items 10 to 12 are work
-left deliberately unfinished while `issues.md` was being worked through, with
-the reason recorded in each case. Item 13 is an open bug.
+Nix packaging: one verification and two pieces of work. Items 11 and 12 are
+work left deliberately unfinished while `issues.md` was being worked through,
+with the reason recorded in each case. Item 10 is what survived that list.
+Item 13 is an open bug.
 
 ## 1. Verify settings, accounts and verification against Element
 
@@ -341,70 +342,53 @@ is the architecture, not an omission — see "Which is also why the overlay cann
 show video" in [notes.md](notes.md), which also records the one route to it
 (`DwmRegisterThumbnail`) if it is ever wanted.
 
-## 10. Finish what the issues pass left half-done
+## 10. The MatrixRTC ring is a revision behind the MSC
 
-Three things were stopped short on purpose rather than forgotten. Each says why,
-because in every case the reason is the thing to re-read before picking it up.
+**Done, except for this.** The three things this section held are finished: the
+overlay's two chords moved onto the shared hotkey registry, the denylist of
+unshareable windows grew, and whether "a call ended" should be an event was
+settled by reading the MSC rather than by guessing.
 
-1. **Move the overlay's own two chords onto the shared hotkey registry.**
-   `lib/features/hotkeys/` now owns the chord type, the key translation, the
-   capture row and the bindings for mute, deafen and stop-sharing. The
-   overlay's *toggle* and *edit* chords were left where they were — two named
-   fields on `OverlayPrefsState`, applied by `OverlayController._applyHotkeys`,
-   dispatched by a two-case switch in `_onHotkey`.
+What that reading turned up is the item that remains. Checked 2026-10-18:
 
-   **Why it was left.** Moving them means rewriting that controller and
-   migrating persisted bindings out of the `overlay_prefs_v1` blob, in a
-   feature that has never once been on screen — see TODO 9, which is a gate for
-   exactly that reason. If the chords then failed, there would be no way to
-   tell a migration bug from whatever TODO 9 is going to find.
+1. **There is still no call-ended event, and inventing one is still wrong.**
+   MSC4310, which proposed `m.rtc.decline`, was closed as obsolete on
+   2026-09-04 and folded into MSC4075; it states plainly that call endings and
+   duration "are separate concerns". So the derived past-tense row in
+   `SystemEventTile` stays the answer, and `io.hardline.*` stays unwritten.
 
-   **So do this after TODO 9 passes, not before.** The move itself is
-   mechanical: `HotkeyAction` gains `overlayToggle` and `overlayEdit` at ids 1
-   and 2 (already reserved, see `kOverlayHotkeyIds`), `CallHotkeysState`
-   becomes the only binding store, and `OverlayPrefsState.fromJson` keeps
-   reading the two old keys once more to hand them over. `CallHotkeyBinder`
-   already dispatches by id and ignores anything it does not own, so the
-   dispatch half is a `switch` arm each.
+   There *is* now a withdrawal mechanism, which is the nearest thing: an invite
+   is retracted by sending another with the same `sticky_key` and empty
+   content. That is a retraction of the doorbell, not a record that the call
+   ended, so it does not change the row.
 
-   The one behaviour that must survive: the overlay's chords are registered
-   **only while the overlay is enabled** (`overlay_controller.dart`, and the
-   comment there explains that holding a global chord for a disabled feature
-   took Alt+Shift+O away from the whole machine). Call chords deliberately do
-   not work that way. So the registry needs a per-action gate, not one switch
-   for everything.
+2. **The ring we send names an event type the MSC has renamed.** We send
+   `org.matrix.msc4075.rtc.notification` carrying `notification_type`. MSC4075
+   now defines `m.rtc.invite`, has **removed** `notification_type`, and has
+   added `slot_id` and `sticky_key`. `matrix-js-sdk` is being updated to match
+   (PR #5544), so current Element is moving to the new shape.
 
-2. **Decide what "a call ended" is, if it should be an event at all.**
-   Starting a call now sends a ring (`kRingEventType`), which is what makes it
-   appear in everybody's timeline and badge the room — that half is done, and
-   it also fixed a Hardline-started call being silent on every other client.
+   The read side is already tolerant — `kRtcRingEventTypes` gained
+   `org.matrix.msc4075.rtc.invite` and `m.rtc.invite`, which costs nothing
+   because every use matches on the type alone and `isRingExpired` reads
+   `sender_ts` and `lifetime`, both of which survive the rename.
 
-   There is **no ending event in MatrixRTC**, and this pass did not invent one.
-   A call ends when the last membership expires, which is a thing that stops
-   happening rather than a thing that happens: whoever noticed would have to
-   decide they were last out, several clients would race to say so, and Element
-   would draw the loser's attempt as an unknown event in the timeline.
+   **The write side was deliberately not changed, and this is the judgement to
+   re-make rather than inherit.** Two reasons. The MSC is still in review with
+   open blocking questions and carries `needs-implementation`, so the shape may
+   move again; and switching what we send is exactly the kind of change that
+   cannot be verified alone — the whole point of the ring is that it makes
+   *somebody else's* client notify, so a wrong guess is invisible from here and
+   looks like success. Fold it into the §4 session with a second person: send
+   the new spelling, confirm Element rings, and only then drop the old one.
 
-   What is there instead: `SystemEventTile` reads live membership state and
-   writes the row in the past tense once the call is over, so scrolling past no
-   longer reads as though one is in progress. That covers the complaint. A real
-   event is only worth it if a *duration* is wanted, and that needs a spelling
-   other clients agree on — check whether MSC4075 has grown one before writing
-   a `io.hardline.*` event nobody else reads.
+3. **Declines are neither sent nor read.** `m.rtc.decline` is part of MSC4075
+   now. Nothing in the client sends one when an invitation to a call is
+   dismissed, and nothing reads one, so a declined call looks identical to an
+   ignored one. Out of scope until the invite spelling above is settled, since
+   a decline references the invite by event id and would otherwise reference an
+   event type we had just stopped sending.
 
-3. **Keep the unshareable-window denylist fed.**
-   `kUnshareableWindowTitles` in `lib/features/voice/screen_sources.dart` drops
-   shell windows that Windows reports as capturable and which produce a blank
-   or broken stream — the taskbar overflow window being the one that prompted
-   it. There is no API that says "this is a shell artefact", so the list is the
-   honest approach and it is **expected to grow**.
-
-   It is matched case-insensitively against the whole title and is therefore
-   **per display language**: the German and English names for the overflow
-   window are both in it, and any other locale's is not. The zero-area
-   thumbnail heuristic beside it catches some of what the list misses. Add a
-   name when one turns up rather than guessing at the set, and add every
-   language you can get for it.
 
 ## 11. Finish the room and space administration
 
@@ -435,14 +419,13 @@ What does not exist:
    a search box that silently returns nothing on half of them is worse than a
    field that says what it wants. A member list would fix that for people
    already in a neighbouring room.
-3. **Leaving a room, and removing one from a space.** There is no `leaveRoom`
-   call anywhere except *declining an invitation*, which is the same API used
-   for the opposite purpose. So a room joined by mistake from the space
-   overview cannot be left from here, and neither can a space.
-
-   Note the asymmetry that leaves: an invitation can be declined, but the
-   moment it is accepted the decision is final as far as this client is
-   concerned.
+3. **Removing a room from a space.** Leaving is done — `RoomAdmin.leave`
+   handles rooms, spaces and direct chats, and `RoomManageDialog` offers it
+   behind a confirmation. What is still missing is the other direction:
+   detaching a room from a space without leaving the room itself. That is an
+   `m.space.child` write in the *space*, so it needs power there rather than in
+   the room, which is why `RoomAdmin.dismantle` attempts it and reports rather
+   than requiring it.
 4. **Nested spaces are joinable but still not nested.** The space overview
    joins a space inside a space and it arrives on the rail — as a *sibling* of
    the space it came from, because the rail is flat. That is honest but loses

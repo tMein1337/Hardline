@@ -158,8 +158,7 @@ class OverlayChannel {
   Future<void> setOpacity(int alpha) =>
       _invoke<void>('setOpacity', {'value': alpha.clamp(0, 255)});
 
-  Future<void> setMonitor(String id) =>
-      _invoke<void>('setMonitor', {'id': id});
+  Future<void> setMonitor(String id) => _invoke<void>('setMonitor', {'id': id});
 
   Future<void> setCaptureExclusion(bool value) =>
       _invoke<void>('setCaptureExclusion', {'value': value});
@@ -236,10 +235,4 @@ class OverlayChannel {
     }
     return null;
   }
-}
-
-/// Hotkey ids, shared between the registration and the stream that reports it.
-abstract final class HotkeyId {
-  static const toggle = 1;
-  static const edit = 2;
 }

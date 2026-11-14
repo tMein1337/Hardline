@@ -5,10 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../theme/theme_context.dart';
-import '../../hotkeys/call_hotkey_binder.dart';
-import '../../hotkeys/call_hotkey_provider.dart';
-import '../../hotkeys/call_hotkeys_controller.dart';
-import '../../hotkeys/call_hotkeys_state.dart';
+import '../../hotkeys/hotkey_provider.dart';
+import '../../hotkeys/hotkeys_controller.dart';
 import '../../hotkeys/hotkey.dart';
 import '../../hotkeys/hotkey_action.dart';
 import '../../voice/audio_devices_provider.dart';
@@ -369,7 +367,7 @@ class _DeviceSection extends StatelessWidget {
 
 /// The global chords that work from inside a game.
 ///
-/// Unbound out of the box: see [kDefaultCallHotkeys] for why guessing at
+/// Unbound out of the box: see [kDefaultHotkeys] for why guessing at
 /// Alt+M on somebody's behalf would be taking a chord away from whatever
 /// already used it.
 class _CallHotkeys extends ConsumerWidget {
@@ -377,61 +375,44 @@ class _CallHotkeys extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bindings = ref.watch(callHotkeysProvider);
-    final notifier = ref.read(callHotkeysProvider.notifier);
-    final binder = ref.watch(callHotkeyBinderProvider);
+    final bindings = ref.watch(hotkeysProvider);
+    final notifier = ref.read(hotkeysProvider.notifier);
+    final binder = ref.watch(hotkeyBinderProvider);
 
     return SettingsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'These work while another program has the foreground, which is '
-            'the point of them — the app does not need to be in front, or '
-            'even visible. They do nothing unless you are in a call.',
-            style: context.text.timestamp,
-          ),
-          const SizedBox(height: 8),
-          for (final (index, action) in HotkeyAction.values.indexed) ...[
-            if (index > 0) const SettingsDivider(),
-            HotkeyRow(
-              label: action.label,
-              hotkey: bindings[action] ?? const Hotkey.none(),
-              // Named by the conflict rather than a generic refusal: two
-              // actions on one chord is accepted by Windows and then only one
-              // of them is ever delivered, which reads exactly like the second
-              // binding having silently failed.
-              hint: switch (_problemFor(bindings, binder, action)) {
-                final problem? => problem,
-                _ => null,
-              },
-              onChanged: (hotkey) => notifier.setBinding(
-                action,
-                hotkey.isBound ? hotkey : null,
-              ),
+      // Listened to, not read once: Windows answers after the rebuild that
+      // binding the chord causes, so the refusal would otherwise only show up
+      // whenever something else next rebuilt this card.
+      child: ValueListenableBuilder(
+        valueListenable: binder.rejected,
+        builder: (context, rejected, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'These work while another program has the foreground, which is '
+              'the point of them — the app does not need to be in front, or '
+              'even visible. They do nothing unless you are in a call.',
+              style: context.text.timestamp,
             ),
+            const SizedBox(height: 8),
+            for (final (index, action) in HotkeyAction.alwaysOn.indexed) ...[
+              if (index > 0) const SettingsDivider(),
+              HotkeyRow(
+                key: Key('hotkey_${action.name}'),
+                label: action.label,
+                hotkey: bindings[action] ?? const Hotkey.none(),
+                // Named by the conflict rather than a generic refusal: two
+                // actions on one chord means only one of them ever fires,
+                // which reads exactly like the second binding having silently
+                // failed.
+                problem: hotkeyProblem(bindings, rejected, action),
+                onChanged: (hotkey) =>
+                    notifier.setBinding(action, hotkey.isBound ? hotkey : null),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
-  }
-
-  static String? _problemFor(
-    CallHotkeysState bindings,
-    CallHotkeyBinder binder,
-    HotkeyAction action,
-  ) {
-    if (binder.rejected.contains(action)) {
-      return 'Windows refused this chord. Another program is almost certainly '
-          'holding it — pick a different one.';
-    }
-
-    final hotkey = bindings[action];
-    if (hotkey == null) return null;
-
-    final clash = conflictingAction(bindings, action, hotkey);
-    return clash == null
-        ? null
-        : 'Also bound to "${clash.label}". Only one of the two will fire.';
   }
 }

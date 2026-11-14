@@ -78,6 +78,10 @@ hooks:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Runs tests in the real Windows window (flutter test integration_test -d
+  # windows) instead of the headless widget-test binding. See CLAUDE.md.
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
   # Test-only. The unlock gate resolves the store's path through
   # path_provider, whose Windows and Linux implementations are plain Dart

@@ -9,14 +9,6 @@ import 'overlay_layout.dart';
 /// The id every installation starts with, and the one assignments fall back to.
 const kDefaultOverlayLayoutId = 'default';
 
-/// The overlay's settings, layouts and per-application assignments.
-///
-/// **Flat, not namespaced by user id**, following `security_prefs.dart` and the
-/// theme rather than the voice and activity preferences. The rule the codebase
-/// applies: a key that holds opinions about *other people* — volumes, mutes,
-/// who is followed — is per account, because a shared computer must not leak
-/// those between logins. A screen layout is not that. It answers "where on this
-/// monitor do I want things", which does not change when a different account
 /// How long the HUD stays up after the last person stops talking.
 ///
 /// The overlay fades as a whole rather than per person — a layered window has
@@ -34,6 +26,14 @@ const kDefaultOverlayLinger = Duration(seconds: 2);
 const kMinOverlayLinger = Duration(milliseconds: 100);
 const kMaxOverlayLinger = Duration(hours: 1);
 
+/// The overlay's settings, layouts and per-application assignments.
+///
+/// **Flat, not namespaced by user id**, following `security_prefs.dart` and the
+/// theme rather than the voice and activity preferences. The rule the codebase
+/// applies: a key that holds opinions about *other people* — volumes, mutes,
+/// who is followed — is per account, because a shared computer must not leak
+/// those between logins. A screen layout is not that. It answers "where on this
+/// monitor do I want things", which does not change when a different account
 /// signs in.
 @immutable
 class OverlayPrefsState {
@@ -41,7 +41,9 @@ class OverlayPrefsState {
     this.enabled = false,
     this.monitorId = '',
     this.excludeFromCapture = true,
-    this.layouts = const [OverlayLayout(id: kDefaultOverlayLayoutId, name: 'Default')],
+    this.layouts = const [
+      OverlayLayout(id: kDefaultOverlayLayoutId, name: 'Default'),
+    ],
     this.assignments = const {},
     this.defaultLayoutId = kDefaultOverlayLayoutId,
     this.toggleHotkey = const Hotkey(
@@ -91,8 +93,7 @@ class OverlayPrefsState {
 
     final rawDefault = json['defaultLayoutId'];
     final defaultId =
-        rawDefault is String &&
-            layouts.any((layout) => layout.id == rawDefault)
+        rawDefault is String && layouts.any((layout) => layout.id == rawDefault)
         ? rawDefault
         : layouts.first.id;
 
@@ -154,6 +155,17 @@ class OverlayPrefsState {
   /// What anything unassigned gets.
   final String defaultLayoutId;
 
+  /// Where the overlay's chords used to be bound. **Read for migration only.**
+  ///
+  /// `HotkeysController` owns every global chord now, including these two, and
+  /// reads them out of this blob once to carry them over — see
+  /// `_adoptOverlayChords`. Nothing here registers or dispatches them, and
+  /// there is no setter: editing these would change a value nothing reads.
+  ///
+  /// They are still parsed and still written back, deliberately. The adoption
+  /// happens the first time the hotkey store is built, and the overlay's own
+  /// preferences may well be written before that — so dropping the keys on
+  /// write would race the migration and lose a customised chord.
   final Hotkey toggleHotkey;
   final Hotkey editHotkey;
 
@@ -192,8 +204,6 @@ class OverlayPrefsState {
     List<OverlayLayout>? layouts,
     Map<String, String>? assignments,
     String? defaultLayoutId,
-    Hotkey? toggleHotkey,
-    Hotkey? editHotkey,
     Duration? linger,
   }) => OverlayPrefsState(
     enabled: enabled ?? this.enabled,
@@ -202,8 +212,8 @@ class OverlayPrefsState {
     layouts: layouts ?? this.layouts,
     assignments: assignments ?? this.assignments,
     defaultLayoutId: defaultLayoutId ?? this.defaultLayoutId,
-    toggleHotkey: toggleHotkey ?? this.toggleHotkey,
-    editHotkey: editHotkey ?? this.editHotkey,
+    toggleHotkey: toggleHotkey,
+    editHotkey: editHotkey,
     linger: linger ?? this.linger,
   );
 
@@ -240,7 +250,9 @@ class OverlayPrefsState {
     monitorId,
     excludeFromCapture,
     Object.hashAll(layouts),
-    Object.hashAllUnordered(assignments.entries.map((e) => '${e.key}=${e.value}')),
+    Object.hashAllUnordered(
+      assignments.entries.map((e) => '${e.key}=${e.value}'),
+    ),
     defaultLayoutId,
     toggleHotkey,
     editHotkey,
