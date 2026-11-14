@@ -8,6 +8,7 @@ import 'package:integration_test/integration_test.dart';
 import 'hotkeys_flow.dart' as hotkeys;
 import 'login_flow.dart' as login;
 import 'overlay_window_flow.dart' as overlay;
+import 'room_admin_flow.dart' as rooms;
 
 /// Every integration suite, in one application.
 ///
@@ -58,6 +59,7 @@ void main() {
   group('overlay', overlay.main);
   group('login', login.main);
   group('hotkeys', hotkeys.main);
+  group('rooms', rooms.main);
 }
 
 /// The overlay engine's entry point, as `lib/main.dart` declares it.

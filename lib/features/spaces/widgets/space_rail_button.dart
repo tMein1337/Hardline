@@ -38,8 +38,15 @@ class SpaceRailButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final metrics = context.metrics;
-    final size = metrics.railIconSize;
-    final radius = BorderRadius.circular(metrics.railIconRadius);
+    // A space inside another is drawn smaller rather than pushed sideways.
+    // The rail is 64 pixels wide and the tile already uses most of it, so an
+    // indent deep enough to read as one would not leave room for the tile.
+    // Size is the one thing a column of identical squares has to spend.
+    final nested = space.depth > 0;
+    final size = nested ? metrics.railIconSize * 0.72 : metrics.railIconSize;
+    final radius = BorderRadius.circular(
+      nested ? metrics.railIconRadius * 0.72 : metrics.railIconRadius,
+    );
 
     return Hoverable(
       onTap: onTap,
@@ -63,9 +70,16 @@ class SpaceRailButton extends StatelessWidget {
               Expanded(
                 child: Center(
                   child: Tooltip(
-                    message: onSecondaryTap == null
-                        ? space.name
-                        : '${space.name}\nRight-click to manage',
+                    message: [
+                      space.name,
+                      // Said, because nothing else on a folded entry does:
+                      // the spaces inside only appear once it is selected.
+                      if (space.foldedCount > 0)
+                        '${space.foldedCount} '
+                            '${space.foldedCount == 1 ? "space" : "spaces"} '
+                            'inside',
+                      if (onSecondaryTap != null) 'Right-click to manage',
+                    ].join('\n'),
                     preferBelow: false,
                     verticalOffset: 0,
                     margin: const EdgeInsets.only(left: 8),
@@ -122,6 +136,27 @@ class SpaceRailButton extends StatelessWidget {
                                 child: UnreadBadge(
                                   count: space.highlightCount,
                                   borderColor: colors.spaceRail,
+                                ),
+                              ),
+                            // More spaces in here than the rail is showing.
+                            // Bottom right, where an invitation carries its
+                            // envelope: the corner that says something about
+                            // the entry rather than about what is unread.
+                            if (space.foldedCount > 0)
+                              Positioned(
+                                right: -4,
+                                bottom: -4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(1.5),
+                                  decoration: BoxDecoration(
+                                    color: colors.spaceRail,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.unfold_more,
+                                    size: 11,
+                                    color: colors.textMuted,
+                                  ),
                                 ),
                               ),
                           ],

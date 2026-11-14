@@ -1677,3 +1677,81 @@ Positions are **fractions of the monitor**, not pixels. A layout arranged at
 per account because a shared computer must not leak them between logins. A
 screen layout is not that. It answers "where on this monitor do I want things",
 which does not change when a different account signs in.
+
+## Rooms and spaces
+
+### "May I" is asked of state events with `canChangeStateEvent`
+
+Every control in `RoomManageDialog` is gated by a function in
+`room_capabilities.dart`, so nothing is offered that the homeserver would
+refuse. The one mistake worth remembering is which SDK call to ask.
+`Room.canSendEvent(type)` falls back to `events_default` for a type the power
+levels do not name; `Room.canChangeStateEvent(type)` falls back to
+`state_default`. Those are 0 and 50 in an ordinary room. Asking the first about
+a *state* event therefore answers "anybody" for every event type the room does
+not happen to list — and Synapse lists `m.room.name` but not `m.room.topic`.
+`canDescribe` and `canDismantle` both did this.
+
+### Permissions are a map, edited as a copy
+
+`room_permissions.dart` works on the content of `m.room.power_levels` as a
+plain map and never touches the SDK. `withRequiredLevel` returns a copy with
+one entry changed and **everything else carried over**, including fields the
+app has no name for: rebuilding the event from the parts it understands would
+reset every level another client had set for an event type it has never heard
+of. The map handed in belongs to a state event the SDK is still holding, so it
+is never written through.
+
+A room with no power-levels event has an implicit one in which its creator is
+at 100. Writing the first explicit one replaces that wholesale, so
+`RoomAdmin.setPermission` writes the author's own level in with it. Without
+that, the first permission anybody changed in such a room would put everybody
+at zero, permanently.
+
+Being allowed to edit the event is not being allowed to edit all of it. An
+entry already above your own level cannot be changed, and none can be set
+above it; `RoomAdminInfo.canSetPermission` checks both per row, which is why a
+moderator with the right sees some rows as controls and some as text.
+
+### The member list is fetched once and then kept by sync
+
+The client syncs with lazy loading, so a room holds only the members who have
+spoken lately. `roomMembersLoadProvider` asks `/members` once when the list is
+opened and — up to 5000 people — writes the answer into the room's own state.
+`roomMembersProvider` reads that state on every sync tick, so a removal made
+from another client arrives as a member event like any other and the row moves
+without a second fetch. It is forced (`enforceFetchFromServer`) rather than
+left to the SDK's "is the local list complete" check, which compares joined and
+invited counts and so can never notice a missing ban.
+
+### The rail nests, one branch at a time
+
+`space_tree.dart` holds the decision and the reasons. In short: spaces inside
+no other are always on the rail; a space's sub-spaces are drawn beneath it,
+smaller, while it or anything in it is selected. A folded entry carries the
+unread counts of everything beneath it.
+
+Two things the same change put right. A space's rail entry used to show the
+space *room's* own unread count, and a space room holds no conversation — so
+Home lit up for everything and a space for nothing. It now sums the rooms in
+it. And the space overview asked `/hierarchy` with no `max_depth`, which
+returns every room in every sub-space as one flat list; it now asks for one
+level and follows `next_batch`, up to `kMaxHierarchyRooms`.
+
+### `m.space.parent` is a claim, and is shown as one
+
+`setSpaceChild` has always written a parent link into the child. It is read
+now, for one purpose: a room whose space this account has not joined says so
+in its dialog and offers to join it. It is not used to *file* the room
+anywhere, because the specification only trusts a parent link when the space
+lists the room back, and that cannot be checked from outside the space.
+
+### The fake homeserver
+
+`test/support/fake_matrix.dart` is a real `Client` with the requests replaced.
+The rooms are real `Room` objects with real state, so power levels and
+membership are answered by the SDK's own code. Each fake request records a
+line in `calls` and applies what the server would have sent back down sync.
+Anything not overridden still goes to the network and throws, which is the
+right result for a request nobody expected. The integration suite imports it
+from `test/` rather than keeping a second copy.

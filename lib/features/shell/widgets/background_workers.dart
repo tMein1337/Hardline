@@ -29,11 +29,11 @@ import '../../voice/stale_ring_sweeper.dart';
 /// `stale_membership_sweeper.dart` withdraws a membership this device was
 /// killed before it could withdraw itself.
 ///
-/// The **overlay driver** is here for the same reason the sweeps are: its
-/// hotkeys have to be bound whether or not anybody has opened its settings, or
-/// the chord that switches the overlay on would only work after the pane that
-/// describes it had been visited once. The **call hotkey driver** is here for
-/// exactly that reason too, for the chords that mute, deafen and stop a share.
+/// The **overlay driver** is here for the same reason the sweeps are: the
+/// overlay has to follow a call whether or not anybody has opened its
+/// settings. The **hotkey driver** likewise — every global chord, the
+/// overlay's two included, has to be bound before the pane that describes it
+/// has ever been visited.
 class BackgroundWorkers extends ConsumerWidget {
   const BackgroundWorkers({super.key});
 

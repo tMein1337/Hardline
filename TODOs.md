@@ -8,9 +8,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Items 1 to 4 and 8 to 9 are **verifications**, not features: the code is
 written and believed correct, but has never been observed working, usually
 because the test needs a second client or a second machine. Items 5 to 7 are the
-Nix packaging: one verification and two pieces of work. Items 11 and 12 are
-work left deliberately unfinished while `issues.md` was being worked through,
-with the reason recorded in each case. Item 10 is what survived that list.
+Nix packaging: one verification and two pieces of work. Item 10 is what
+survived the pass through `issues.md`; item 11 was built in the pass after
+and is another verification; item 12 is left deliberately unfinished, with
+the reason recorded.
 
 ## 1. Verify settings, accounts and verification against Element
 
@@ -389,56 +390,65 @@ What that reading turned up is the item that remains. Checked 2026-10-18:
    event type we had just stopped sending.
 
 
-## 11. Finish the room and space administration
+## 11. Verify the room and space administration against a real homeserver
 
-Creating rooms and spaces works. A space lists what it contains and lets you
-join it, by address or from an invitation, and people can be invited to one.
-What is still missing is everything that comes *after* — and it is missing as a
-set, which is why it is one item.
+**Built, and tested against a homeserver that is not one.** Everything this
+section used to list as missing exists: room settings, a member list with
+removal, bans and roles, a permissions page, taking a room out of a space, a
+rail that nests, a hierarchy that is paged, and a reader for `m.space.parent`.
+`test/rooms/` and `test/spaces/` cover it against `FakeMatrixClient` — a real
+SDK `Client` holding real `Room` state with the requests replaced — and
+`integration_test/room_admin_flow.dart` clicks through it in the real window.
 
-`lib/core/matrix/room_capabilities.dart` is where the "may I" questions go. It
-holds `canAddToSpace` and `canInvite`, each because something asks it. Its own
-note records that "can I administer this room" was written and removed rather
-than left as a guess.
+What the fake cannot say is what a homeserver *refuses*. Every control is
+gated on the power levels the client can read, and the authorisation rules
+have corners that are easier to get wrong than to test for without one:
 
-What does not exist:
+1. **A moderator's view.** In a room made by Element on Synapse, sign in as
+   somebody at 50 and open the dialog. Name, topic and picture should be live;
+   "what new members can read" and the permissions page should be text. Then
+   try each live control — none may fail at the server. `canDescribe` was
+   wrong in exactly this way before (it asked `events_default` about a state
+   event), and that was found by reading, not by running.
+2. **Roles.** Make somebody a moderator, then an admin; confirm Element shows
+   the same, and that the row then offers nothing. Step yourself down and
+   confirm the server accepts it and the dialog stops offering what you gave
+   up.
+3. **Lifting a ban** as somebody with the ban level but not the kick level.
+   The dialog hides the button on the reading that it needs both. If Synapse
+   accepts it anyway, the rule in `canUnbanMember` is too strict.
+4. **"Anyone in its space."** Set it, then join from an account that is in the
+   space and not invited to the room. Then remove that account from the space
+   and confirm it can no longer join. This is the one setting whose whole
+   effect is on somebody else.
+5. **The directory switch.** It is gated on the level for
+   `m.room.canonical_alias`, which is what servers ask for in practice and not
+   something the specification promises. On a homeserver that only lets
+   server admins publish, it will be offered and refused — the refusal is
+   shown, but the switch should not have been there.
+6. **A room with a few thousand members.** The list fetches `/members` once
+   and writes the result into room state. Past 5000 it does not, and shows
+   the fetch as it stood. Neither path has been seen at that size.
+7. **A space with more than a hundred rooms**, for the paging, and one with a
+   sub-space, to confirm `max_depth=1` returns the sub-space as an entry
+   rather than nothing at all — the specification says it does, and the fake
+   was written from the specification.
 
-1. **Room settings.** Name, topic, avatar, visibility, and who may do what.
-   Every one of these is a state event this account may or may not be allowed
-   to send, so each control needs a capability check beside it rather than a
-   button that fails at the server.
-2. **Member management.** No member list exists anywhere in the app —
-   `getParticipants()` is called only to build the mention and follow
-   candidate lists. Kick, ban and power-level changes all hang off a list that
-   has to be built first.
+Left out on purpose, each because nothing in the client could finish the job:
 
-   Inviting does *not*, and is done: `InvitePeopleDialog` takes a user id,
-   because it needs no list. It cannot offer completion for the same reason —
-   the user directory is a per-homeserver feature many deployments disable, and
-   a search box that silently returns nothing on half of them is worse than a
-   field that says what it wants. A member list would fix that for people
-   already in a neighbouring room.
-3. **Removing a room from a space.** Leaving is done — `RoomAdmin.leave`
-   handles rooms, spaces and direct chats, and `RoomManageDialog` offers it
-   behind a confirmation. What is still missing is the other direction:
-   detaching a room from a space without leaving the room itself. That is an
-   `m.space.child` write in the *space*, so it needs power there rather than in
-   the room, which is why `RoomAdmin.dismantle` attempts it and reports rather
-   than requiring it.
-4. **Nested spaces are joinable but still not nested.** The space overview
-   joins a space inside a space and it arrives on the rail — as a *sibling* of
-   the space it came from, because the rail is flat. That is honest but loses
-   the shape of the place. Deciding whether the rail should nest is the real
-   work; the join button no longer waits on it.
-
-Two smaller things in the same area:
-
-- **The hierarchy is fetched once, capped at 100 rooms, and never paginated.**
-  `spaceHierarchyProvider` ignores `next_batch`. A space larger than that shows
-  its first hundred children and no indication there are more.
-- **`m.space.parent` is written by `setSpaceChild`** but nothing reads it, so a
-  room knows which space it is in only when that space has been synced.
-
+- **Knocking.** A room already set to it is described, not offered: nothing
+  here can answer a knock, so setting it would make a room nobody can enter.
+- **Putting an existing room into a space.** Creating a room in one works and
+  taking one out works. Adding needs a way to pick the room, which is a
+  picker this app does not have yet.
+- **A reason for a removal or a ban.** The API takes one. The dialog does not
+  ask, because a required field in front of an urgent action is the wrong
+  default and an optional one is a third control in a confirmation.
+- **Levels other than 0, 50 and 100.** Shown for what they are when another
+  client has set one; never set from here.
+- **Checking a parent the room claims.** `m.space.parent` is the room's word
+  for it, and is only to be believed if the space lists the room back — which
+  cannot be seen without joining. It is shown as somewhere to go and look.
 ## 12. Registration stops where the browser has to start
 
 `m.login.dummy`, `m.login.password`, `m.login.terms` and

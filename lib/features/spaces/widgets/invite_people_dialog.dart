@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/injected_providers.dart';
 import '../../../theme/theme_context.dart';
+import '../../common/hoverable.dart';
+import '../../common/mx_avatar.dart';
+import '../../rooms/room_members.dart';
 
 /// Invites somebody to a room or a space, by user id.
 ///
@@ -14,6 +17,10 @@ import '../../../theme/theme_context.dart';
 /// it is a per-homeserver feature that many deployments disable, and a search
 /// box that silently returns nothing on half of them is worse than a field
 /// that says what it wants.
+///
+/// What it can do without a directory is complete from people this account
+/// is already in a room with — see `invitableMatching`. Their ids are in local
+/// state, so typing part of a name offers them and no request is made.
 ///
 /// Several at once, because inviting a group to a new space one dialog at a
 /// time is the kind of thing that makes people give up and use Element.
@@ -85,10 +92,27 @@ class _InvitePeopleDialogState extends ConsumerState<InvitePeopleDialog> {
     final userId = _input.text.trim();
     final problem = InvitePeopleDialog.validateUserId(userId);
     if (problem != null) {
+      // What was typed is not an id. If it names exactly one person this
+      // account already knows, that is plainly who was meant — pressing Enter
+      // on "ali" with one Alice on offer should not be answered with a
+      // lecture about what a user id starts with.
+      final known = _suggestions();
+      if (known.length == 1) return _inviteId(known.single.userId);
       setState(() => _error = problem);
       return;
     }
+    await _inviteId(userId);
+  }
 
+  /// People already known to this account whom the text could mean.
+  List<KnownPerson> _suggestions() => invitableMatching(
+    ref.read(clientProvider),
+    roomId: widget.roomId,
+    query: _input.text,
+  );
+
+  Future<void> _inviteId(String userId) async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -163,8 +187,63 @@ class _InvitePeopleDialogState extends ConsumerState<InvitePeopleDialog> {
                   onPressed: _busy ? null : _invite,
                 ),
               ),
+              onChanged: (_) => setState(() => _error = null),
               onSubmitted: (_) => _invite(),
             ),
+            // Offered, never required: the field still takes any id. These
+            // are only the people whose id is already sitting in a room this
+            // account shares with them — which is nearly everybody anybody
+            // wants to invite, and needs no directory to find.
+            for (final person in _suggestions())
+              Hoverable(
+                onTap: _busy ? null : () => _inviteId(person.userId),
+                builder: (context, hovered) => Container(
+                  key: Key('invite_suggestion_${person.userId}'),
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: hovered ? colors.listItemHover : null,
+                    borderRadius: BorderRadius.circular(
+                      context.metrics.rowRadius,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      MxAvatar(
+                        name: person.name,
+                        seed: person.userId,
+                        mxcUri: person.avatarMxc,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          person.name,
+                          style: context.text.subtitle.copyWith(
+                            color: colors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // The id beside the name, because two people can share
+                      // a name and this is an invitation going to one of them.
+                      Flexible(
+                        child: Text(
+                          person.userId,
+                          style: context.text.timestamp,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (_error case final message?) ...[
               const SizedBox(height: 8),
               Text(
