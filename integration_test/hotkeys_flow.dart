@@ -65,6 +65,7 @@ class _RecordingOverlay extends OverlayController {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  requireOwnDesktop();
 
   final theme = buildThemeData(AppPalettes.dark, AppMetrics.standard);
 

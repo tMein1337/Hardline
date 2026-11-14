@@ -11,7 +11,6 @@ because the test needs a second client or a second machine. Items 5 to 7 are the
 Nix packaging: one verification and two pieces of work. Items 11 and 12 are
 work left deliberately unfinished while `issues.md` was being worked through,
 with the reason recorded in each case. Item 10 is what survived that list.
-Item 13 is an open bug.
 
 ## 1. Verify settings, accounts and verification against Element
 
@@ -469,72 +468,6 @@ Also unverified, because it needs a homeserver that asks for each:
 3. **`registrationPageFor`** is a *guess* — Element hosted at the homeserver's
    own domain, because there is no discovery for this. Wrong on a homeserver
    that hosts no web client, where it costs a browser tab.
-
-## 13. The overlay does not appear on the first call after launch
-
-**Open, reproducible, and not diagnosed.** It appears on every later call in
-the same session. Restarting the client brings it back.
-
-Four separate causes were found and fixed while chasing this. Each was a real
-defect and each is worth keeping — **none of them was this one**, and the
-symptom survived all four. They are listed so the next attempt does not spend
-its time re-finding them:
-
-1. **The chroma key was dropped before the window existed.** `setChromaKey` is
-   sent immediately before the first `show`, but the bridge did `if (overlay_)`
-   and the window is created lazily *by* `show`. The key is now remembered in
-   `OverlayBridge::pending_chroma_key_` and applied in `EnsureOverlay`.
-   Ruled out as the cause: a key mismatch paints an opaque sheet over the
-   monitor, which is a loud symptom, not a missing overlay.
-2. **The first draw waited for every avatar.** `setParticipants` fetched all of
-   them before reconciling, and a roster change mid-fetch bumped the generation
-   and returned *without* drawing. A connecting call changes its roster several
-   times, so the draw was abandoned repeatedly; by the next call the avatars
-   were cached and it was instant. Now it draws first and fills faces in after,
-   and `fetchAvatarBytes` has a 5s timeout. This is the one that best fitted
-   the symptom and it still did not fix it.
-3. **Leaving edit mode never restored the opacity**, so the HUD stayed pinned
-   at full for the rest of the session once arranged. That is why the edit
-   chord looked like it "refreshed" the overlay.
-4. **A changed opacity setting was never pushed at the window** until something
-   else caused a reconcile — closing the settings screen, which changes the
-   foreground application.
-
-### Check this before anything else
-
-`Visible when silent` is very likely still **0** on the existing layout, and at
-zero the whole window goes invisible once `Stay up for` elapses. That alone
-produces exactly this report, and the migration in `OverlayLayout.fromJson`
-**cannot help here**: it only lifts a zero written *before* `activeOpacity`
-existed, and an intermediate build wrote `activeOpacity` into the stored layout
-without touching `idleOpacity`. So a layout saved during development carries
-`activeOpacity: 1.0` alongside `idleOpacity: 0.0` and is left alone, correctly
-by the rule and unhelpfully in fact.
-
-Settle that first — set it to something above zero, restart, join a call. If
-the overlay appears, this whole item is that and nothing more.
-
-### If it is not that
-
-Nothing below has been tested; they are what is left after the four above.
-
-- **`show()` may be failing the first time.** `OverlayChannel.show` turns a
-  `PlatformException` into `debugPrint` plus `false`, `_shown` stays false, and
-  nothing announces it. `EnsureOverlay` returns `overlay_unavailable` when
-  `OverlayWindow::Create` fails, which includes the second Flutter engine
-  failing to start — plausibly a startup race that a later attempt does not
-  hit. **Instrument this first**: log the return of `channel.show`, and make
-  `EnsureOverlay`'s failure say *which* step failed.
-- **The second engine's first frame may be very late.** The window would be up
-  and keyed correctly while the engine is still booting, so the HUD is blank
-  through the linger and the window is at its idle opacity by the time anything
-  paints. Time the gap between `show` returning and the first `overlayEvent`
-  or first push being rendered.
-- **`_prefs.enabled` or `_hidden` at the moment of the first join.** Both are
-  cheap to log and would be embarrassing to have missed.
-
-The instrumentation is the work here, not the fix. Four wrong guesses is enough
-evidence that this one will not be reasoned out from the source.
 
 ## second to last Plattform Support
 - Linux

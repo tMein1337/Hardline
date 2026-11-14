@@ -200,7 +200,15 @@ class OverlaySnapshot {
     'editing': editing,
   };
 
-  String encode() => jsonEncode(toJson());
+  /// [serial] numbers this particular *sending* of the snapshot, so the far
+  /// side can say which one it has put on screen — see [OverlayDrawn].
+  ///
+  /// On the envelope rather than a field, deliberately. Two snapshots with the
+  /// same contents are the same snapshot, which is what lets the controller
+  /// skip sending one that has not changed; a serial inside the value would
+  /// make every one of them different from the last.
+  String encode({int serial = 0}) =>
+      jsonEncode({...toJson(), 'serial': serial});
 
   @override
   bool operator ==(Object other) =>
@@ -262,6 +270,58 @@ class OverlayEdit {
   String encode() => jsonEncode({'kind': 'edit', 'layout': layout.toJson()});
 }
 
+/// The overlay isolate saying it is listening.
+///
+/// Sent once, the moment its handler is installed. **Anything pushed before
+/// this may never have arrived**, and that is not a theoretical concern — it
+/// is what made the overlay stay empty for the whole of the first call after
+/// launch. The engine is created by the first `show`, the snapshot rides in
+/// with it, and the speaking update follows a moment later; a platform channel
+/// with nobody listening yet keeps exactly one message, so the second pushed
+/// the first one out. Every later call found the engine already up.
+///
+/// So the app does not assume. On this it sends the whole state again.
+@immutable
+class OverlayReady {
+  const OverlayReady();
+
+  String encode() => jsonEncode({'kind': 'ready'});
+}
+
+/// The overlay isolate saying a snapshot has reached the screen.
+///
+/// [serial] is the one the snapshot was sent with. The app holds the window
+/// invisible until the snapshot it showed the window *for* has been drawn —
+/// otherwise what appears first is whatever the engine last painted: nothing
+/// at all while it boots, or the roster of the previous call.
+@immutable
+class OverlayDrawn {
+  const OverlayDrawn(this.serial);
+
+  factory OverlayDrawn.fromJson(Map<String, Object?> json) =>
+      OverlayDrawn(json['serial'] is int ? json['serial']! as int : 0);
+
+  final int serial;
+
+  String encode() => jsonEncode({'kind': 'drawn', 'serial': serial});
+}
+
+/// Which sending of a snapshot [payload] was, or 0 if it does not say.
+///
+/// Separate from [decodeOverlayMessage] because the serial is on the envelope
+/// rather than in the value — see [OverlaySnapshot.encode].
+int overlaySerialOf(String? payload) {
+  if (payload == null || payload.isEmpty) return 0;
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is! Map) return 0;
+    final serial = decoded['serial'];
+    return serial is int ? serial : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
 /// Reads whichever kind of message arrived, or null if it was not one of ours.
 ///
 /// Total: a malformed payload is dropped, never thrown. The channel is not a
@@ -277,6 +337,8 @@ Object? decodeOverlayMessage(String? payload) {
       'snapshot' => OverlaySnapshot.fromJson(json),
       'speaking' => OverlaySpeaking.fromJson(json),
       'edit' => OverlayEdit.fromJson(json),
+      'ready' => const OverlayReady(),
+      'drawn' => OverlayDrawn.fromJson(json),
       _ => null,
     };
   } catch (_) {

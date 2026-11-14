@@ -9,6 +9,7 @@ import 'package:hardline/features/overlay/overlay_channel.dart';
 import 'package:hardline/features/overlay/overlay_controller.dart';
 import 'package:hardline/features/overlay/overlay_layout.dart';
 import 'package:hardline/features/overlay/overlay_prefs_state.dart';
+import 'package:hardline/features/overlay/overlay_wire.dart';
 import 'package:hardline/features/voice/live_participant.dart';
 import 'package:hardline/features/voice/speaking_participants.dart';
 
@@ -17,18 +18,36 @@ import 'package:hardline/features/voice/speaking_participants.dart';
 /// Subclasses the real channel rather than mocking an interface, which is the
 /// idiom the rest of this suite uses. Every method channel call underneath is
 /// a no-op off Windows, so nothing here reaches a platform.
+///
+/// It also plays the overlay engine's one line in the conversation: a window
+/// that is shown reports the snapshot it was shown with as drawn. Without
+/// that the controller rightly keeps the window at zero opacity for ever, and
+/// every test here would be watching it do so. What happens when the overlay
+/// does *not* answer is `overlay_handshake_test.dart`'s subject.
 class _FakeChannel extends OverlayChannel {
   final opacities = <int>[];
   bool shown = false;
+
+  final _events = StreamController<String>.broadcast(sync: true);
+
+  @override
+  Stream<String> get edits => _events.stream;
 
   @override
   Future<bool> show({
     required String monitorId,
     required bool clickThrough,
     required bool excludeFromCapture,
+    required int opacity,
     required String state,
   }) async {
     shown = true;
+    // What the window is shown at is a value the window holds, exactly as if
+    // it had been set.
+    opacities.add(opacity);
+    // A turn of the event loop later, as the real one is at the very least:
+    // the controller only learns the window is up when this call returns.
+    Timer.run(() => _events.add(OverlayDrawn(overlaySerialOf(state)).encode()));
     return true;
   }
 
@@ -101,6 +120,12 @@ void main() {
       inCall: true,
       participants: [_person('@a:example.org')],
     );
+    // The window comes up at nothing and is raised once the overlay has
+    // drawn. That answer is a turn of the event loop behind `show`.
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    // Dropped so the tests below read what the *settings* did to the window,
+    // which is their subject, rather than the zero every show begins with.
+    channel.opacities.remove(0);
   }
 
   setUp(() {

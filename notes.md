@@ -1471,6 +1471,84 @@ Avatars are fetched by the app side through the same `avatarUriProvider` the
 rest of the app uses, so the overlay gets the thumbnail already in cache rather
 than a second copy at a size nothing else asked for.
 
+### A window is not a HUD, so the overlay answers back
+
+The overlay did not appear on the first call after launch, appeared on every
+call after it, and went missing again after a restart. Four real defects were
+fixed while chasing it and none of them was it.
+
+**The cause.** The first `show` of a process is what creates the second engine.
+The snapshot rode in with that call, and the speaking update followed as soon
+as it returned. Both reached the overlay isolate before its Dart was
+listening: the handler was installed from a widget's `initState`, and `runApp`
+only *schedules* the first build. A platform channel with nobody listening
+keeps **one** message, so the speaking update pushed the snapshot out. The
+overlay came up knowing who was talking and not who was in the call, drew an
+empty roster, and stayed that way until the roster next changed — which in a
+call of the same people is never. Every later call found the engine running.
+
+**Why it took so long to find: it only happens in an AOT build.** In a debug
+build, creating the engine loads the kernel on the calling thread; `show`
+blocks for half a second and the far side is listening long before the app
+sends anything else. In AOT it returns in about 30 ms. It never once reproduced
+under `flutter run`, which is where it was being looked for. Measured, in
+`integration_test/overlay_window_flow.dart`, by capturing the screen: debug
+painted the roster on the first call, a profile build of the same code did not.
+
+Two changes, so that it does not depend on timing at all:
+
+- **The overlay listens from its first line.** `runOverlayApp` installs the
+  handler before `runApp`, on an `OverlayModel` that exists before any widget
+  does. Nothing can arrive earlier — the engine delivers messages on the thread
+  that is running the isolate.
+- **The overlay says what it has done.** `ready` once it is listening, and
+  `drawn(serial)` once the frame showing a given snapshot has finished. On
+  `ready` the app sends the whole state again, because whatever went before may
+  not have arrived and there is no way to ask.
+
+**And the window is shown at zero opacity until `drawn` arrives.** This is the
+part worth keeping even if the race could never happen again, because `show`
+returning says the *window* is up and nothing about what is in it. There are
+three things it can hold that are not this call, and all three were on screen
+at some point:
+
+- nothing, while the engine boots;
+- the compiled-in colour key, before the first snapshot lands. The window is
+  keyed on the real palette by then, so in any theme but the shipped one that
+  frame is an opaque sheet over the whole monitor. With the shipped theme the
+  two keys happen to match, which is why the reported symptom was "nothing"
+  rather than "a black screen";
+- the roster of the previous call. The engine does not draw while its window
+  is hidden, so the last frame of one call was the first frame of the next.
+
+It also covers the failure nothing else can detect: an engine that never runs
+a line of Dart. `FlutterViewController` hands back an engine and a view for a
+program whose `overlayMain` cannot be resolved, so `OverlayWindow::Create`
+succeeds, and what is left is the window with nothing painted into it — a black
+sheet. It now stays invisible, and five seconds later the log says which of
+the two it is: an engine that announced itself and is not drawing, or one that
+never started.
+
+The serial is on the message envelope, not in `OverlaySnapshot`. Two snapshots
+with the same contents have to stay equal, or the controller could no longer
+skip sending one that has not changed.
+
+**The linger starts at the reveal**, not at `show`. The engine's start-up is
+not the HUD's time on screen.
+
+### Why the integration suites are driven, not run with `flutter test`
+
+`flutter test integration_test` does not compile the test file as the program.
+It generates a bootstrap that imports it under a prefix and compiles *that*.
+The overlay engine resolves `overlayMain` by name in the root library — the
+Windows embedder has no way to name another — so under `flutter test` it finds
+nothing and never starts. `flutter drive --target=…` compiles the target
+itself, which is why `all_test.dart` declares its own `overlayMain`.
+
+`--profile` is for the overlay suite only. `flutter_test`'s `enterText` and
+simulated key events do nothing in a profile build, so the other suites fail
+there for reasons that have nothing to do with the app.
+
 ### Transparency is a colour key, because the Flutter view is opaque
 
 This section used to describe `SetWindowCompositionAttribute` with

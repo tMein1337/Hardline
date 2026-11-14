@@ -63,8 +63,9 @@ class OverlayWindow {
   OverlayWindow& operator=(OverlayWindow const&) = delete;
 
   // Creates the window and its engine, hidden. Returns false if either failed,
-  // in which case the overlay is simply unavailable and the app carries on.
-  bool Create();
+  // in which case the overlay is simply unavailable and the app carries on;
+  // `failure`, when given, is told which step it was.
+  bool Create(std::string* failure = nullptr);
 
   // Whether the window and its engine exist.
   bool ok() const { return controller_ != nullptr; }

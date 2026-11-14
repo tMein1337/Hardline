@@ -82,6 +82,9 @@ class OverlayChannel {
 
   /// Raw payloads the overlay isolate sent back, for `overlay_wire.dart` to
   /// decode. Kept opaque here so this file knows nothing about the format.
+  ///
+  /// Named for the first thing that came back over it, a dragged layout. It
+  /// also carries the overlay saying it is listening and that it has drawn.
   Stream<String> get edits => _edits.stream;
 
   Future<void> dispose() async {
@@ -112,10 +115,15 @@ class OverlayChannel {
   /// [state] is sent with it rather than pushed afterwards: the engine does not
   /// exist until this call returns, so anything pushed before it would have
   /// been dropped and the HUD would come up blank until somebody spoke.
+  ///
+  /// [opacity] is what the window is shown *at*, 0..255, applied before it
+  /// becomes visible. The controller passes zero and raises it once the
+  /// overlay has drawn [state]; see `OverlayDrawn`.
   Future<bool> show({
     required String monitorId,
     required bool clickThrough,
     required bool excludeFromCapture,
+    required int opacity,
     required String state,
   }) async {
     if (!isSupported) return false;
@@ -124,12 +132,14 @@ class OverlayChannel {
         'monitor': monitorId,
         'clickThrough': clickThrough,
         'excludeFromCapture': excludeFromCapture,
+        'opacity': opacity.clamp(0, 255),
         'state': state,
       });
       return true;
     } on PlatformException catch (error) {
       // The window or its engine would not start. The overlay is then simply
-      // unavailable; nothing else in the app depends on it.
+      // unavailable; nothing else in the app depends on it. The message names
+      // the step that failed — see `OverlayWindow::Create`.
       debugPrint('[overlay] could not show: ${error.message}');
       return false;
     } on MissingPluginException {

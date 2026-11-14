@@ -8,6 +8,8 @@ import 'package:hardline/features/voice/livekit_call_controller.dart';
 import 'package:hardline/features/voice/noise_gate.dart';
 import 'package:hardline/features/voice/speaking_participants.dart';
 
+import 'win32.dart';
+
 /// A call that exists only as far as the rest of the app can tell.
 ///
 /// The real controller wants a Matrix client, a token service and a live SFU,
@@ -75,6 +77,28 @@ LiveParticipant person(String userId, {String? name}) => LiveParticipant(
   micMuted: false,
   feeds: const [],
 );
+
+/// Refuses to run a suite on a desktop somebody is using.
+///
+/// These suites press real chords, drag the real mouse and put a topmost
+/// window over the monitor. If another application has the foreground — a
+/// game, most likely, since that is what the overlay is for — those keys go
+/// to it and that window goes over it. Found the obvious way: a run started
+/// while a match was in progress.
+///
+/// Called at the top of each suite's `main`, so every test in it fails at
+/// once with the reason rather than one at a time with a timeout.
+void requireOwnDesktop() {
+  setUpAll(() {
+    if (!foregroundIsOurs) {
+      fail(
+        'Another application has the foreground, so this suite will not '
+        'run: it would send key presses to it and draw over it. Run it when '
+        'the machine is otherwise idle, and leave the test window in front.',
+      );
+    }
+  });
+}
 
 /// Pumps until [condition] holds, or fails the test saying what was awaited.
 ///

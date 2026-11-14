@@ -88,7 +88,18 @@ OverlayWindow::~OverlayWindow() {
   }
 }
 
-bool OverlayWindow::Create() {
+bool OverlayWindow::Create(std::string* failure) {
+  // Every way out of here says which step it was. "The overlay could not be
+  // created" sent somebody through four wrong guesses about a bug that was
+  // somewhere else entirely; the least this can do is rule itself out by name.
+  auto fail = [failure](const char* step) {
+    if (failure) {
+      *failure = std::string(step) + " (GetLastError " +
+                 std::to_string(::GetLastError()) + ")";
+    }
+    return false;
+  };
+
   static bool registered = false;
   if (!registered) {
     WNDCLASSW window_class = {};
@@ -99,7 +110,9 @@ bool OverlayWindow::Create() {
     // No background brush, so nothing paints over the transparency before
     // Flutter's first frame arrives.
     window_class.hbrBackground = nullptr;
-    if (!::RegisterClassW(&window_class)) return false;
+    if (!::RegisterClassW(&window_class)) {
+      return fail("The overlay window class could not be registered.");
+    }
     registered = true;
   }
 
@@ -125,7 +138,7 @@ bool OverlayWindow::Create() {
       kOverlayWindowClass, L"Hardline Overlay", WS_POPUP, bounds.left,
       bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top,
       nullptr, nullptr, ::GetModuleHandle(nullptr), this);
-  if (!window_) return false;
+  if (!window_) return fail("The overlay window could not be created.");
 
   ApplyTransparency();
   SetExcludedFromCapture(excluded_from_capture_);
@@ -138,8 +151,20 @@ bool OverlayWindow::Create() {
     controller_ = nullptr;
     ::DestroyWindow(window_);
     window_ = nullptr;
-    return false;
+    return fail("The overlay's Flutter engine or view could not be created.");
   }
+
+  // That check passes for an engine that will never run a line of Dart. If
+  // `overlayMain` cannot be found -- AOT dropped it, or the program was built
+  // from a file that does not declare it -- the engine object and its view
+  // exist, the isolate does not, and nothing here can tell. What is on screen
+  // is then this window with nothing ever painted into it, which is an opaque
+  // black sheet over the whole monitor.
+  //
+  // So the window is never trusted to be worth looking at on the strength of
+  // having been created. The app shows it at zero opacity and raises it only
+  // when the overlay's own Dart reports a frame drawn -- see `OverlayDrawn` in
+  // overlay_wire.dart.
 
   // Deliberately no RegisterPlugins here -- see the header for why registering
   // flutter_webrtc a second time would break the app's own calls.

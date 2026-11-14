@@ -171,11 +171,11 @@ bool OverlayBridge::CreateMessageWindow() {
   return message_window_ != nullptr;
 }
 
-bool OverlayBridge::EnsureOverlay() {
+bool OverlayBridge::EnsureOverlay(std::string* failure) {
   if (overlay_ && overlay_->ok()) return true;
 
   auto overlay = std::make_unique<OverlayWindow>(project_);
-  if (!overlay->Create()) return false;
+  if (!overlay->Create(failure)) return false;
   overlay_ = std::move(overlay);
 
   // The key Dart asked for before there was a window to ask about.
@@ -255,15 +255,24 @@ void OverlayBridge::HandleCall(const MethodCall& call,
   }
 
   if (method == "show") {
-    if (!EnsureOverlay()) {
-      result->Error("overlay_unavailable",
-                    "The overlay window or its engine could not be created.");
+    std::string failure;
+    if (!EnsureOverlay(&failure)) {
+      result->Error("overlay_unavailable", failure);
       return;
     }
-    const std::string monitor = StringArg(map, "monitor");
-    if (!monitor.empty()) overlay_->SetMonitor(monitor);
+    // Unconditionally, the empty id included. Empty means "the primary
+    // monitor", and skipping the call for it left an overlay that had been
+    // moved to a second monitor sitting there after the setting was changed
+    // back while it was hidden. `SetMonitor` resolves an id it cannot find to
+    // the primary one, which is the same answer.
+    overlay_->SetMonitor(StringArg(map, "monitor"));
     overlay_->SetExcludedFromCapture(BoolArg(map, "excludeFromCapture", true));
     overlay_->SetClickThrough(BoolArg(map, "clickThrough", true));
+    // Before the window is visible, so there is no frame at the old value.
+    // The app passes zero and raises it once the overlay engine confirms it
+    // has drawn the state sent below; what the window holds until then is
+    // either nothing or the last frame of the previous call.
+    overlay_->SetOpacity(IntArg(map, "opacity", 255));
     overlay_->Show();
     // Whatever the app knew before the window existed never reached it.
     PushState(StringArg(map, "state"));

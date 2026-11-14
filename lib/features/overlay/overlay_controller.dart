@@ -84,6 +84,32 @@ class OverlayController {
   OverlaySnapshot? _lastSnapshot;
   OverlaySpeaking? _lastSpeaking;
 
+  /// Numbers each *sending* of a snapshot; see `OverlaySnapshot.encode`.
+  int _serial = 0;
+
+  /// The sending the window was last shown for.
+  ///
+  /// The window gets no opacity until the overlay reports that one — or a
+  /// later one — drawn. See [_onDrawn].
+  int _revealSerial = 0;
+
+  /// Whether the overlay has drawn what the window was shown for.
+  bool _revealed = false;
+
+  /// Set when the overlay isolate announces itself, so the next pass sends it
+  /// who is speaking as well as the roster. See [_onReady].
+  bool _resendSpeaking = false;
+
+  /// Whether the overlay isolate has ever been heard from in this session.
+  bool _engineSeen = false;
+
+  /// Running since the last `show` returned, for the log lines that say how
+  /// long the engine took to come up and to draw.
+  Stopwatch? _sinceShow;
+
+  /// Fires if a shown window is never drawn into. See [_armRevealWatchdog].
+  Timer? _revealWatchdog;
+
   /// mxc uri to bytes. Avatars change about never, and re-fetching one per
   /// participant change would put an HTTP request behind every join.
   final Map<String, Uint8List?> _avatars = {};
@@ -111,6 +137,8 @@ class OverlayController {
     _disposed = true;
     _lingerTimer?.cancel();
     _lingerTimer = null;
+    _revealWatchdog?.cancel();
+    _revealWatchdog = null;
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
@@ -163,6 +191,20 @@ class OverlayController {
     required bool inCall,
     required List<LiveParticipant> participants,
   }) async {
+    // Said once per call, at the moment it starts, because "the overlay did
+    // not appear" has three answers that look identical from the outside and
+    // only one of them is a bug: it is switched off, it was pushed away with
+    // the chord, or it should be there and is not.
+    if (inCall && !_inCall && OverlayChannel.isSupported) {
+      debugPrint(
+        '[overlay] call joined: '
+        '${!_prefs.enabled
+            ? 'not showing, the overlay is switched off'
+            : _hidden
+            ? 'not showing, it was hidden with the toggle chord'
+            : 'showing'}',
+      );
+    }
     _inCall = inCall;
     final generation = ++_generation;
 
@@ -356,9 +398,108 @@ class OverlayController {
   }
 
   void _applyOpacity(int alpha) {
-    if (_sentOpacity == alpha) return;
-    _sentOpacity = alpha;
-    unawaited(channel.setOpacity(alpha));
+    // Nothing at all until the overlay has drawn what the window was shown
+    // for. Whatever the settings say, a window whose contents are not the
+    // current call's is not one to make visible — see [_onDrawn], which is
+    // what recomputes the real value once it is.
+    final effective = _revealed ? alpha : 0;
+    if (_sentOpacity == effective) return;
+    _sentOpacity = effective;
+    unawaited(channel.setOpacity(effective));
+  }
+
+  // ---------------------------------------------------------------------------
+  // The overlay talking back
+  //
+  // The window and the engine inside it are two things, and for a long time
+  // this class treated one as evidence of the other: `show` returned, so the
+  // HUD was assumed to be on screen. It was not, on the first call after every
+  // launch. `show` creates the engine, and the snapshot handed to it arrived
+  // before the engine's Dart had started listening — as did the speaking
+  // update sent straight afterwards. A platform channel nobody is listening on
+  // keeps one message, so the second pushed out the first, and the overlay
+  // came up holding who was speaking and no idea who was in the call. Every
+  // later call found the engine already running and worked.
+  //
+  // It only happened in an AOT build. In a debug build creating the engine
+  // loads the kernel on the calling thread, which takes long enough that the
+  // far side is listening by the time anything else is sent — so it never
+  // once reproduced under `flutter run`, which is where it was being chased.
+  //
+  // Two things make it not depend on timing at all. The overlay installs its
+  // handler before `runApp` rather than from a widget, and it *says* when it
+  // is listening and when it has drawn, so this side acts on what happened
+  // instead of on what it sent.
+  // ---------------------------------------------------------------------------
+
+  /// The overlay isolate is listening, so send it everything.
+  ///
+  /// Whatever was pushed before this may have been dropped, and there is no
+  /// way to ask. Sending the state again costs one snapshot per engine start.
+  void _onReady() {
+    _engineSeen = true;
+    final since = _sinceShow;
+    debugPrint(
+      '[overlay] engine ready'
+      '${since == null ? '' : ' ${since.elapsedMilliseconds}ms after show'}',
+    );
+    _lastSnapshot = null;
+    _resendSpeaking = true;
+    unawaited(_reconcile());
+  }
+
+  /// The overlay has put snapshot [serial] on screen.
+  ///
+  /// This, and not `show` returning, is what makes the window visible. Before
+  /// it the window holds whatever the engine last painted, and none of the
+  /// possibilities is worth looking at: nothing while the engine boots; the
+  /// compiled-in colour key before the first snapshot lands, which in any
+  /// theme but the shipped one is an opaque sheet over the monitor; or the
+  /// roster of the previous call, for the frame or two before the new one
+  /// replaces it.
+  void _onDrawn(int serial) {
+    if (!_shown || _revealed || serial < _revealSerial) return;
+    _revealed = true;
+    _revealWatchdog?.cancel();
+    _revealWatchdog = null;
+    final since = _sinceShow;
+    if (since != null) {
+      debugPrint('[overlay] drawn ${since.elapsedMilliseconds}ms after show');
+    }
+
+    // Comes up as though somebody were talking, then settles to idle once the
+    // linger runs out. Coming up already faded would look like the overlay
+    // had failed to appear; coming up at full when the user has chosen a
+    // dimmer talking opacity would announce it with a flash of exactly the
+    // brightness they asked it not to use.
+    //
+    // The linger starts here rather than at `show`, so the time the engine
+    // spent starting is not taken out of the time the HUD is on screen.
+    _applyOpacity(_editing ? 255 : _activeOpacityByte);
+    _onSpeechChanged(_lastSpeaking?.userIds.isNotEmpty ?? false);
+  }
+
+  /// Says so if a window that was shown is never drawn into.
+  ///
+  /// The window stays at zero opacity in that case, which is the right thing
+  /// for it to do and also completely silent — the overlay is switched on, a
+  /// call is up, and nothing appears. This is the line that tells the two
+  /// apart from a setting.
+  void _armRevealWatchdog() {
+    _revealWatchdog?.cancel();
+    _revealWatchdog = Timer(const Duration(seconds: 5), () {
+      _revealWatchdog = null;
+      if (_disposed || !_shown || _revealed) return;
+      debugPrint(
+        '[overlay] the window is up but nothing has been drawn into it for '
+        '5s, so it is being left invisible rather than covering the screen. '
+        '${_engineSeen ? 'The overlay engine did announce itself: it is running and '
+                  'not drawing.' : 'The overlay engine never announced itself. If the log has '
+                  '"Could not resolve main entrypoint function", '
+                  '`overlayMain` is missing from the library that holds '
+                  '`main`.'}',
+      );
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -402,13 +543,17 @@ class OverlayController {
   }
 
   void _onOverlayEvent(String payload) {
-    final message = decodeOverlayMessage(payload);
-    if (message is! OverlayEdit) return;
-    // Only position comes back from a drag; everything else about the layout is
-    // edited in settings, where there is room for labelled controls.
-    persistLayout(
-      activeLayout.copyWith(x: message.layout.x, y: message.layout.y),
-    );
+    switch (decodeOverlayMessage(payload)) {
+      case OverlayReady():
+        _onReady();
+      case OverlayDrawn(:final serial):
+        _onDrawn(serial);
+      case OverlayEdit(:final layout):
+        // Only position comes back from a drag; everything else about the
+        // layout is edited in settings, where there is room for labelled
+        // controls.
+        persistLayout(activeLayout.copyWith(x: layout.x, y: layout.y));
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -461,6 +606,10 @@ class OverlayController {
         _lingerTimer?.cancel();
         _lingerTimer = null;
         _sentOpacity = null;
+        _revealed = false;
+        _revealWatchdog?.cancel();
+        _revealWatchdog = null;
+        _sinceShow = null;
         await channel.hide();
       }
       return;
@@ -476,28 +625,40 @@ class OverlayController {
     if (!_shown) {
       // Before the window exists, so its very first frame is keyed correctly.
       await channel.setChromaKey(_palette.chromaKey);
+
+      final serial = ++_serial;
+      _revealSerial = serial;
+      _revealed = false;
+      final clock = Stopwatch()..start();
+      // At zero opacity. The window being up says nothing about what is in
+      // it; [_onDrawn] raises it once the overlay has drawn this snapshot.
       _shown = await channel.show(
         monitorId: _prefs.monitorId,
         clickThrough: !_editing,
         excludeFromCapture: _prefs.excludeFromCapture,
-        state: snapshot.encode(),
+        opacity: 0,
+        state: snapshot.encode(serial: serial),
+      );
+      // Unconditional, and one line per call. The first `show` of a session
+      // is the one that starts a second Flutter engine, and how long that took
+      // — or that it failed — is the first thing to want when the overlay did
+      // not appear.
+      debugPrint(
+        '[overlay] show ${_shown ? 'returned' : 'FAILED'} after '
+        '${clock.elapsedMilliseconds}ms'
+        '${_engineSeen ? '' : ' (first of this session, starts the engine)'}',
       );
       _lastSnapshot = _shown ? snapshot : null;
+      if (!_shown) return;
+
+      _sentOpacity = 0;
+      _sinceShow = clock;
+      _armRevealWatchdog();
       // The window had no engine to push to until now, so whatever the last
       // speaking update said never arrived.
-      if (_shown && _lastSpeaking != null) {
+      _resendSpeaking = false;
+      if (_lastSpeaking != null) {
         await channel.pushState(_lastSpeaking!.encode());
-      }
-      // Full for the first moment either way. Coming up already faded would
-      // look like the overlay had failed to appear, and the linger below puts
-      // it right a second or two later if nobody is in fact talking.
-      if (_shown) {
-        // Comes up as though somebody were talking, then settles to idle once
-        // the linger runs out. Coming up at full when the user has chosen a
-        // dimmer talking opacity would announce the overlay with a flash of
-        // exactly the brightness they asked it not to use.
-        _applyOpacity(_activeOpacityByte);
-        _onSpeechChanged(_lastSpeaking?.userIds.isNotEmpty ?? false);
       }
       return;
     }
@@ -514,7 +675,15 @@ class OverlayController {
 
     if (_lastSnapshot != snapshot) {
       _lastSnapshot = snapshot;
-      await channel.pushState(snapshot.encode());
+      await channel.pushState(snapshot.encode(serial: ++_serial));
+    }
+    // After the roster, never before it: the overlay draws a ring around
+    // somebody it has been told about.
+    if (_resendSpeaking) {
+      _resendSpeaking = false;
+      if (_lastSpeaking != null) {
+        await channel.pushState(_lastSpeaking!.encode());
+      }
     }
   }
 }

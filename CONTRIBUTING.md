@@ -111,13 +111,26 @@ window and asks Windows itself what happened — whether a chord is actually
 registered, for instance, rather than whether the app believes it is:
 
 ```sh
-flutter test integration_test -d windows
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/all_test.dart -d windows
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/overlay_window_flow.dart -d windows --profile
 ```
 
-It opens a window and presses keys, so leave the machine alone while it runs.
-It never touches your own account or preferences. A new suite goes in
+Every suite against a debug build, then the overlay's again with `--profile`.
+That is an AOT build, like the one that ships, and it matters for exactly that
+suite: a debug build starts the overlay's second engine slowly enough to hide a
+bug that every release had. The others are not run that way because
+`flutter_test` cannot type into a profile build — `enterText` arrives empty — so
+they would fail there with nothing wrong.
+
+It opens a window, presses real keys, drags the real mouse and puts the overlay
+over the whole primary monitor, so only run it on a machine nobody is using; it
+refuses to start if some other application has the foreground. It never touches
+your own account or preferences. A new suite goes in
 `integration_test/<name>_flow.dart` and is listed in `all_test.dart`, which
-explains why there is only one file the tool is allowed to find.
+explains why it is one file and why it is driven rather than run with
+`flutter test`.
 
 If you changed dependencies, also run the advisory check, which needs network
 access:

@@ -53,8 +53,9 @@ class OverlayBridge {
 
   // Brings the overlay engine up if it is not already. Returns false when the
   // window or engine could not be created, which leaves the overlay simply
-  // unavailable rather than taking the app down with it.
-  bool EnsureOverlay();
+  // unavailable rather than taking the app down with it; `failure` is told
+  // which step it was.
+  bool EnsureOverlay(std::string* failure);
 
   // Sends the overlay engine a state payload, dropping it if there is no
   // overlay yet -- the next push after `show` carries the whole state anyway.
