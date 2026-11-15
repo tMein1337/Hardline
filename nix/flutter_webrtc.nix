@@ -16,7 +16,7 @@
 # is bumped, re-read that manifest and re-pin url + hash.
 #
 # STALE: pubspec now resolves flutter_webrtc 1.6.3, which requests
-# libwebrtc.m150.7871.07. Re-pin before the next Nix build (TODOs.md item 5).
+# libwebrtc.m150.7871.07. Re-pin before the next Nix build (TODOs.md item 8).
 {
   lib,
   stdenv,

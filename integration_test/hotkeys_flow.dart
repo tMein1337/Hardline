@@ -271,8 +271,8 @@ void main() {
     await unmount(tester);
   });
 
-  // TODOs.md 9.6: "A chord another program already holds must be refused
-  // visibly, not silently ignored."
+  // A chord another program already holds must be refused visibly, not
+  // silently ignored.
   testWidgets('a chord another program holds is refused where it shows', (
     tester,
   ) async {

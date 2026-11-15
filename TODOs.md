@@ -5,13 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1, 3, 8 and 9 are **verifications**, not features: the code is
-written and believed correct, but has never been observed working, usually
-because the test needs a second client or a second machine. Items 5 to 7 are the
-Nix packaging: one verification and two pieces of work. Item 10 is what
-survived the pass through `issues.md`; item 11 was built in the pass after
-and is another verification; item 12 is left deliberately unfinished, with
-the reason recorded.
+What is left, and only that: finished work is in the git history, with the
+reasoning in the commit messages.
+
+Items 1 to 7 are the Windows app. Almost all of them are **verifications**:
+the code is written and tested as far as one machine can test it, and what
+remains needs Element, a second person, a game, or a homeserver configured a
+particular way. Items 8 to 10 are the Nix packaging. The last two sections are
+for later.
 
 ## 1. Verify settings, accounts and verification against Element
 
@@ -25,88 +26,16 @@ itself. What needs a second client:
 2. **Recovery key round trip** — enter a *wrong* recovery key and confirm the
    error is comprehensible rather than a stack trace.
 
-## 2. The activity summary — verified
+The same session should settle item 5.1, which also needs Element.
 
-Done, against a real homeserver with two accounts:
-`integration_test/two_users_flow.dart` runs the app as one person and a
-second client as the other. It covers the whole of what this item listed —
-typing appearing and clearing on its own when the homeserver lets it lapse,
-the row switching to a time and the message landing in the feed, a mention
-badging the room, opening it clearing the badge while the other side sees the
-read receipt arrive, a mention while scrolled up into history staying unread
-until the list is back at the bottom, and one arriving while the window is
-minimised surviving until it is restored.
+## 2. The noise gate: what a test call cannot settle
 
-It is opt-in, because it signs two accounts in and talks in a room:
-
-```powershell
-flutter drive --driver=test_driver/integration_test.dart `
-  --target=integration_test/two_users_flow.dart -d windows `
-  --dart-define=HARDLINE_LIVE_ACCOUNTS=.claude/test-accounts.json
-```
-## 3. Verify on-device encryption on the Nix build
-
-The way out of a forgotten passphrase is verified: the real `main()` is run
-against an encrypted store in a throwaway directory, *"I have lost the
-passphrase"* is clicked, and the app comes up at the login screen with the
-store replaced by a fresh unencrypted one and the account list gone
-(`integration_test/locked_launch_flow.dart`).
-
-What is left is the other platform:
-
-1. **Nix** *(outstanding)*. On the Linux package the setting must refuse to
-   switch on and say why. That is expected, not a bug — see "The store cipher
-   is missing on Nix" in [NIX-PACKAGING.md](NIX-PACKAGING.md), which has the
-   two routes to fixing it.
-
-## 4. The speaking indicator and the noise gate — verified, with one open point
-
-Measured from the other end of a real call rather than listened to:
-`integration_test/call_flow.dart` plays a synthetic voice into VB-Audio's
-virtual cable, which the app uses as its microphone, and a second call
-participant — the app's own `LiveKitCallController`, signed in as the second
-test account — reads what arrives from its receiver statistics. Each of the
-five checks this item listed is an assertion there:
-
-1. **The gate gates**, and opens on the first syllable: with the breakpoint
-   just above a murmur, the murmur reaches the listener as nothing at all, and
-   a word costs between 50 and 170ms of onset against the ungated call.
-2. **No chopping inside a sentence**: six words with 250ms pauses between them
-   keep the gate open throughout, while a 1.6s pause closes it. The hold is
-   600ms; 400 was measured too short (see `kGateHold`).
-3. **The breakpoint set too high**: no packet at all reaches the listener, and
-   A's own meter shows the voice below the line.
-4. **Encryption survives it**: in an end-to-end encrypted call the listener
-   still decodes A at full level after the gate has been toggled ten times.
-5. **Turning it off restores you**, without rejoining.
-
-And the ring: the listener sees A speaking while A talks, and stops seeing it
-once A is quiet.
-
-Getting there found five defects, all fixed:
-
-- **The device list was empty**, so the chosen microphone and speaker were
-  never applied: WebRTC on Windows enumerates no audio devices until a peer
-  connection has an audio transceiver (`audio_device_wake.dart`).
-- **The gate had never closed.** flutter_webrtc before 1.6.3 dropped every
-  encoding change on desktop, and once it stopped dropping them the sender
-  refused the ones this app sent (`gate_encodings.dart`).
-- **Once it closed, it could never open again** for anybody alone in their
-  process — which is everybody. WebRTC stops reading the microphone when the
-  last sender stops, and the gate listens through that microphone. The call
-  test had missed it because its second participant shares the process and
-  kept the device recording. Fixed with a loopback sender that keeps it read
-  while the gate is shut (`capture_keeper.dart`); tested with A alone.
-- **The meter read held vowels as silence.** It averaged decibels across one
-  band spanning 10Hz–8kHz, and the empty bins between a voice's harmonics
-  dragged that average down. It now takes the loudest of 64 narrow bands
-  (`MicTap.bandCount`). That moved the whole scale: the default breakpoint is
-  now -80 instead of -95, and thresholds and trims stored on the old scale
-  are reset to the defaults (`kMeterScale`).
-- **The hold was still 400ms**: the constant had been raised, the constructor
-  default had not.
-
-Run it with the accounts (see item 2) and VB-Audio's cable installed:
+`integration_test/call_flow.dart` checks the gate from the other end of a real
+call — the app talking into VB-Audio's virtual cable, a second participant
+measuring what arrives — and passes: no clipped onsets, no holes inside a
+sentence, nothing at all when the breakpoint is too high, an encrypted call
+surviving the gate being toggled, and the speaking ring at the far end. Run
+it with the test accounts and the cable installed:
 
 ```powershell
 flutter drive --driver=test_driver/integration_test.dart `
@@ -114,191 +43,29 @@ flutter drive --driver=test_driver/integration_test.dart `
   --dart-define=HARDLINE_LIVE_ACCOUNTS=.claude/test-accounts.json
 ```
 
-**Open: how quickly "immediately" is.** Point 5 asks that the listener hear you
-again *immediately* when the gate is switched off. The test asserts within 2s,
-not within the ungated latency, because this rig cannot measure it: the
-listener's jitter buffer (`inbound-rtp.jitterBufferDelay`) climbs by roughly
-100ms for every second of audio, gate or no gate — it was seen passing a
-second while A's gate never closed — so anything measured late in the run
-carries a delay that is not A's. The likeliest cause is the rig itself: both
-participants share one audio device in one process, playing out to a digital
-output with nothing plugged into it. It needs two machines, or two people, to
-settle.
+Two things it cannot judge, both for people:
 
-**Also still for people to judge**: whether a real voice, rather than the
-test's synthetic one, is gated as cleanly. The test switches WebRTC's noise
-suppression off, because the suppressor takes a synthetic voice for noise and
-pulls it down within a second or two; real speech is not treated that way, but
-nobody has listened to the gate with suppression on.
+1. **How quickly "immediately" is.** Switching the gate off should bring you
+   back at once. The test asks for within 2s rather than within the ungated
+   latency, because on this rig the listener's jitter buffer
+   (`inbound-rtp.jitterBufferDelay`) climbs by roughly 100ms for every second
+   of audio, gate or no gate — so anything measured late in a run carries a
+   delay that is not the speaker's. The likeliest cause is the rig itself:
+   both participants share one audio device in one process, playing out to a
+   digital output with nothing plugged into it. Two machines would settle it.
+2. **A real voice, with noise suppression on.** The test switches WebRTC's
+   noise suppression off, because it takes the synthetic voice for noise and
+   pulls it down within a second or two. Real speech is not treated that way,
+   but nobody has listened to the gate with suppression on. Have somebody on
+   the other end listen for clipped first syllables and words with holes in
+   them, with the breakpoint set just above the room as the settings say.
 
 **If the ring never appears for anybody**, check the log for
 `microphone tap is delivering`. Its absence means the local half never started
 and the remote half is measured separately — the two do not share a path, so
 one working is not evidence about the other.
 
-## 5. Verify the NixOS package end to end on a clean machine
-
-The Nix work builds and the process comes up, but "comes up" is all that has
-been checked. `nix develop` + `flutter run -d linux` shows a window and
-initialises E2EE; the hermetic `packages.default` is only verified as far as
-*loading every native lib and reaching GTK display init* (see
-`NIX-PACKAGING.md`) — not as a usable client. Nobody has run
-`nix run github:tMein1337/Hardline` on a machine that is not this one, with no
-checkout and no dev shell, and actually driven it.
-
-**First, re-pin libwebrtc.** flutter_webrtc went from 1.6.0 to 1.6.3 for the
-noise gate (item 4), and 1.6.3 asks for `libwebrtc.m150.7871.07`, while
-`nix/flutter_webrtc.nix` still pre-fetches `m144.7559.09`. Until the URL and
-hash there are updated from the plugin's `third_party/libwebrtc_version.ini`,
-the Nix build is expected to fail at the plugin's CMake step, which will try
-to download the release it does not find.
-
-What still needs proving:
-
-1. **`nix run` on a clean NixOS box.** A machine that has never built this,
-   straight from the flake ref. It must render a real first frame — not merely
-   reach display init — then log in, sync, and open a room. This is the path the
-   README tells people to use and it is the least-exercised one.
-2. **The GPU/window half specifically.** The wrapper bakes
-   `/run/opengl-driver/lib` for exactly this; confirm a frame actually paints on
-   both X11 and Wayland, since a bufferless Wayland surface is the silent failure
-   that leaves a live process with no visible window.
-3. **A call.** libwebrtc is the reason the whole runtime-libs dance exists.
-   Joining a call, sending audio and screen-sharing is what proves the rpath'd
-   `DT_NEEDED` libs (libgbm/libdrm/…) resolve at *runtime*, not just at link.
-4. **The speaking ring, the meter and the noise gate.** Unverified on Linux,
-   but — unlike on-device encryption — nothing is known to be missing.
-   livekit_client implements `startVisualizer` in `linux/livekit_plugin.cpp`
-   with the same `AddSink` on `RTCAudioTrack` that Windows uses, and
-   `rtpSenderSetParameters` lives in flutter_webrtc's shared `common/cpp`. So
-   this is a "run it and see", not a port.
-
-   Three separate things, which fail independently:
-
-   - **The ring for other people** is pure Dart over WebRTC statistics. If
-     anything here works on Linux, this does.
-   - **The meter** wants the native tap and falls back to statistics without it,
-     so a bar that moves proves nothing about the tap. The log does:
-     `microphone tap is delivering`.
-   - **The gate** needs the tap, and refuses to switch on without it — the
-     settings pane says so rather than offering a control that does nothing. If
-     `startVisualizer` fails to build or to run under Nix, this is the half that
-     goes missing, and it will say so on its own.
-
-   Check `buildFlutterApplication` actually compiles livekit_client's Linux
-   plugin, `shared_cpp` FFT sources and all. Nothing in `flake.nix` supplies a
-   `customSourceBuilder` for it, so it goes through the generic path.
-5. **Non-NixOS via nixGL.** The `nix run --impure …#nixGLIntel -- nix run …`
-   line in "Run on Linux with Nix" has never been run. Confirm it on a non-NixOS
-   distro, and with the Nvidia variant if a card is available.
-6. **A second build reproduces.** Delete the result and `nix build` again: the
-   two fixed-output derivations (the libwebrtc zip, the pub cache) must still
-   hash-match. A drifting hash is how a hermetic build quietly stops being one.
-7. **It is an app, not just a binary.** The package now ships a `.desktop` entry
-   and a hicolor icon. Install it (`programs.hardline.enable`, or the overlay),
-   rebuild, and confirm **Hardline shows up in the app menu with its icon**.
-   Launch it **from the menu** — the window's dock/taskbar tile must show the
-   Hardline icon, not a generic one; that is the tell that `StartupWMClass`
-   matches the GTK app-id. Check **X11 and Wayland** separately.
-8. **The cache actually serves.** After CI has pushed to Cachix, on a machine
-   that never built this: `nix run --accept-flake-config github:tMein1337/Hardline`
-   must **download** from `hardline.cachix.org` rather than compile (the log says
-   `copying path … from 'https://hardline.cachix.org'`).
-
-Once this passes, the "Run on Linux with Nix" section stops being a claim and
-becomes a tested path. Running past the environment fixes is what surfaces the
-app-logic bugs sitting behind them, so read the log as well as the window: the
-unhandled Riverpod exception this list used to carry was found exactly that way.
-It is fixed — `_LoginScreenState._submit` read `ref` after `signIn` returned, by
-which point the router had already swapped the login screen for the shell — and
-a first launch should now come up with nothing in the log at all.
-
-## 6. Publish a binary cache, and keep the nixpkgs pin fresh
-
-Two Nix-distribution chores, separate from proving the build works (TODO 5).
-
-**A binary cache (Cachix).** The heavy part of this build is the *build-time*
-closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
-plugins, and the pub-cache FOD — none of which is in the runtime closure.
-Without a cache every consumer rebuilds all of it from source; with one they
-download only the runtime closure and never materialise the toolchain. This is
-the single biggest thing for anyone consuming the flake.
-
-The wiring is in place: `flake.nix` advertises the substituter via `nixConfig`
-and carries the cache's real public key, and `.github/workflows/nix.yml` builds
-`.#hardline` on every push to `main` and pushes it to Cachix. One manual step
-remains, which cannot be committed:
-
-1. Add a write auth token as the `CACHIX_AUTH_TOKEN` repository secret so CI can
-   push.
-
-**Keep the pin on a recent `nixos-unstable`.** The input already tracks
-`nixos-unstable`; the *revision* is what is frozen in `flake.lock`. The closer
-that revision is to what an unstable-tracking consumer runs, the more low-level
-libs (glibc, gtk3, glib, mesa) hash-identically and collapse to one shared copy
-instead of two — free disk for consumers. A stale pin shares nothing.
-
-**But a pin bump is not a no-op — it is the highest-risk change in the whole Nix
-setup.** `nix flake update` can move the very things the build is pinned
-against: the Flutter/Dart version (must satisfy `sdk: ^3.12.2`), nixpkgs'
-built-in pub source builders (the `super_native_extensions` 0.9.1 mapping in
-`flake.nix`), and the `cargoHash`es under `nix/`. Treat a bump as a change to
-verify, done *inside* a TODO-5 build-and-run pass — never a blind
-`nix flake update` on faith.
-
-## 7. Make on-device encryption work on the Nix build
-
-Today it does not, and the app says so rather than pretending — `Settings →
-Security` refuses to switch on, because `requireCipherSupport()` finds no
-cipher and will not key a store with a library that would ignore the key. TODO
-3 verifies that refusal is what happens. **This item is about removing
-the need for it.**
-
-**Why it is missing.** `pubspec.yaml` asks `package:sqlite3` for the
-SQLite3MultipleCiphers build through `hooks.user_defines`. Everywhere except
-here that is honoured. nixpkgs carries its own source builder for the `sqlite3`
-pub package which patches the build hook:
-
-```nix
-substituteInPlace lib/src/hook/compile/description.dart \
-  --replace-fail "return fromGitHub(LibraryType.sqlite3);" "return LookupSystem('sqlite3');"
-```
-
-It has to: the unpatched hook downloads a prebuilt library from GitHub at build
-time, which no hermetic build can allow. But the patch is unconditional, so it
-overrides the request and links `pkgs.sqlite` — plain SQLite, which accepts
-`PRAGMA key` and ignores it.
-
-**Two routes, and they are not equivalent.**
-
-1. **Package SQLite3MultipleCiphers in this flake**, and supply a
-   `customSourceBuilders.sqlite3` of our own that patches to
-   `LookupSystem('sqlite3mc')` instead. `flake.nix` already does exactly this
-   shape for `flutter_webrtc`, whose builder pre-fetches a prebuilt library as
-   a fixed-output derivation (`nix/flutter_webrtc.nix`) — so the pattern is
-   established and the file to copy is sitting there.
-
-   **Preferred, and the reason is on-disk format.** One cipher everywhere means
-   one store format everywhere: a database written on Windows opens on Linux,
-   and `store_cipher.dart` keeps its single pinned `chacha20` and its single
-   set of pragmas. The cost is a `sha256` that only a real `nix build` can
-   produce, which is why this could not be done from the machine the feature
-   was written on.
-
-2. **Use `pkgs.sqlcipher`**, which nixpkgs already has, patching to
-   `LookupSystem('sqlcipher')`. Far less work. But SQLCipher is a *different*
-   cipher with different pragmas and a different header: `store_cipher.dart`
-   would have to learn both and choose at runtime, `requireCipherSupport()`
-   would need to accept either, and a store written on one platform would not
-   open on the other. Worth it only if route 1 proves impractical.
-
-**When it works, TODO 3 inverts** — the Linux package should then switch the
-setting on rather than correctly refusing to. Update that
-item and the "The store cipher is missing on Nix" section of
-[NIX-PACKAGING.md](NIX-PACKAGING.md), which is where the detail lives, along
-with the `sqlite` comment in `flake.nix`'s `runtimeLibsFor`.
-
-## 8. Verify the call grid and multiple screen shares
+## 3. Verify the call grid and multiple screen shares
 
 The grid replaces `CallStage` and is covered by tests that drive it from
 hand-built values (`test/voice/call_grid_test.dart`,
@@ -311,38 +78,18 @@ person because one participant cannot demonstrate a grid.
    are now on, so the SFU should be sending small layers for small tiles;
    without them this is where it would fall over.
 
-## 9. Verify the call overlay over a real game, in a real call
+## 4. Verify the call overlay over a real game, in a real call
 
-**The gate has passed, and most of the list with it.** The overlay has been
-seen working — by a screen capture rather than by a person, which is the
-stricter witness. `integration_test/overlay_window_flow.dart` runs the real
-runner window and the real second engine against a faked call, in a debug
-build and in an AOT one, and asserts from what is on the screen and from what
-Windows says about the window:
+Everything one person can check without a game is covered:
+`integration_test/overlay_window_flow.dart` drives the real runner window and
+the real second engine, in a debug build and an AOT one, and asserts from the
+screen and from what Windows says about the window — transparency, the fade
+and the linger, clicks falling through, staying on top, edit mode and a real
+drag, the toggle chord pressed for real, the fallback from a missing monitor,
+and capture exclusion. Layouts are covered by
+`test/overlay/overlay_prefs_controller_test.dart`.
 
-- **Transparency.** Outside the roster the monitor is pixel for pixel what it
-  was before, and the colour key never reaches the screen.
-- **The fade and the linger.** The window holds at full through pauses shorter
-  than *Stay up for*, settles at exactly *Visible when silent* afterwards (the
-  plate measured blended into what is behind it), disappears entirely at zero,
-  and comes back whole when one person speaks.
-- **Clicks fall through**, by Windows' own hit-testing at a pixel the HUD has
-  painted; showing it does not take the foreground; it stays above a window
-  that has just been activated.
-- **Edit mode** takes the mouse and covers the monitor, a real drag comes back
-  as a position in fractions of the monitor, and leaving it hands the desktop
-  back.
-- **The toggle chord**, pressed for real, hides it and brings it back.
-- **A monitor that is not there** falls back to the primary one.
-- **Capture exclusion.** With the setting on, the overlay is up and opaque and
-  absent from a capture; switched off, it is in the next one.
-
-Layouts shared between games, a deleted layout's games falling back, the last
-layout refusing to go, and a dragged position surviving a restart are covered
-in `test/overlay/overlay_prefs_controller_test.dart`.
-
-What that cannot reach, because it needs a game, a second monitor, or a call
-with somebody in it:
+What needs a game, a second monitor, or a call with somebody in it:
 
 1. **Over a game.** Minecraft in Borderless Fullscreen: the HUD is there. The
    same game in true Fullscreen: it is not, and the app does not crash or hang
@@ -377,27 +124,16 @@ with somebody in it:
 is the architecture, not an omission — see "Which is also why the overlay cannot
 show video" in [notes.md](notes.md), which also records the one route to it
 (`DwmRegisterThumbnail`) if it is ever wanted.
-## 10. The MatrixRTC ring is a revision behind the MSC
 
-**Done, except for this.** The three things this section held are finished: the
-overlay's two chords moved onto the shared hotkey registry, the denylist of
-unshareable windows grew, and whether "a call ended" should be an event was
-settled by reading the MSC rather than by guessing.
+## 5. The MatrixRTC ring is a revision behind the MSC
 
-What that reading turned up is the item that remains. Checked 2026-10-18:
+Checked against MSC4075 on 2026-10-18. There is still no call-ended event, and
+inventing one is still wrong: MSC4310 (`m.rtc.decline`) was folded into
+MSC4075, which says call endings and duration "are separate concerns". So the
+derived past-tense row in `SystemEventTile` stays, and `io.hardline.*` stays
+unwritten. What remains:
 
-1. **There is still no call-ended event, and inventing one is still wrong.**
-   MSC4310, which proposed `m.rtc.decline`, was closed as obsolete on
-   2026-09-04 and folded into MSC4075; it states plainly that call endings and
-   duration "are separate concerns". So the derived past-tense row in
-   `SystemEventTile` stays the answer, and `io.hardline.*` stays unwritten.
-
-   There *is* now a withdrawal mechanism, which is the nearest thing: an invite
-   is retracted by sending another with the same `sticky_key` and empty
-   content. That is a retraction of the doorbell, not a record that the call
-   ended, so it does not change the row.
-
-2. **The ring we send names an event type the MSC has renamed.** We send
+1. **The ring we send names an event type the MSC has renamed.** We send
    `org.matrix.msc4075.rtc.notification` carrying `notification_type`. MSC4075
    now defines `m.rtc.invite`, has **removed** `notification_type`, and has
    added `slot_id` and `sticky_key`. `matrix-js-sdk` is being updated to match
@@ -414,26 +150,29 @@ What that reading turned up is the item that remains. Checked 2026-10-18:
    move again; and switching what we send is exactly the kind of change that
    cannot be verified alone — the whole point of the ring is that it makes
    *somebody else's* client notify, so a wrong guess is invisible from here and
-   looks like success. Fold it into the §4 session with a second person: send
-   the new spelling, confirm Element rings, and only then drop the old one.
+   looks like success. Do it in the Element session of item 1: send the new
+   spelling, confirm Element rings, and only then drop the old one.
 
-3. **Declines are neither sent nor read.** `m.rtc.decline` is part of MSC4075
+2. **Declines are neither sent nor read.** `m.rtc.decline` is part of MSC4075
    now. Nothing in the client sends one when an invitation to a call is
    dismissed, and nothing reads one, so a declined call looks identical to an
    ignored one. Out of scope until the invite spelling above is settled, since
    a decline references the invite by event id and would otherwise reference an
    event type we had just stopped sending.
 
+   An invite can now also be withdrawn — another one with the same
+   `sticky_key` and empty content. That retracts the doorbell; it is not a
+   record that the call ended, so it does not change the row either.
 
-## 11. Verify the room and space administration against a real homeserver
+## 6. Verify the room and space administration against a real homeserver
 
-**Built, and tested against a homeserver that is not one.** Everything this
-section used to list as missing exists: room settings, a member list with
-removal, bans and roles, a permissions page, taking a room out of a space, a
-rail that nests, a hierarchy that is paged, and a reader for `m.space.parent`.
-`test/rooms/` and `test/spaces/` cover it against `FakeMatrixClient` — a real
-SDK `Client` holding real `Room` state with the requests replaced — and
-`integration_test/room_admin_flow.dart` clicks through it in the real window.
+**Built, and tested against a homeserver that is not one.** Room settings, a
+member list with removal, bans and roles, a permissions page, taking a room out
+of a space, a rail that nests, a paged hierarchy and a reader for
+`m.space.parent` are covered against `FakeMatrixClient` — a real SDK `Client`
+holding real `Room` state with the requests replaced — in `test/rooms/` and
+`test/spaces/`, and clicked through in the real window by
+`integration_test/room_admin_flow.dart`.
 
 What the fake cannot say is what a homeserver *refuses*. Every control is
 gated on the power levels the client can read, and the authorisation rules
@@ -484,7 +223,8 @@ Left out on purpose, each because nothing in the client could finish the job:
 - **Checking a parent the room claims.** `m.space.parent` is the room's word
   for it, and is only to be believed if the space lists the room back — which
   cannot be seen without joining. It is shown as somewhere to go and look.
-## 12. Registration stops where the browser has to start
+
+## 7. Registration stops where the browser has to start
 
 `m.login.dummy`, `m.login.password`, `m.login.terms` and
 `m.login.registration_token` are driven in-app. Anything else — a captcha, an
@@ -514,13 +254,185 @@ Also unverified, because it needs a homeserver that asks for each:
    own domain, because there is no discovery for this. Wrong on a homeserver
    that hosts no web client, where it costs a browser tab.
 
-## second to last Plattform Support
-- Linux
-- Macos
+## 8. Verify the NixOS package end to end on a clean machine
+
+The Nix work builds and the process comes up, but "comes up" is all that has
+been checked. `nix develop` + `flutter run -d linux` shows a window and
+initialises E2EE; the hermetic `packages.default` is only verified as far as
+*loading every native lib and reaching GTK display init* (see
+`NIX-PACKAGING.md`) — not as a usable client. Nobody has run
+`nix run github:tMein1337/Hardline` on a machine that is not this one, with no
+checkout and no dev shell, and actually driven it.
+
+**First, re-pin libwebrtc.** flutter_webrtc went from 1.6.0 to 1.6.3 for the
+noise gate, and 1.6.3 asks for `libwebrtc.m150.7871.07`, while
+`nix/flutter_webrtc.nix` still pre-fetches `m144.7559.09`. Until the URL and
+hash there are updated from the plugin's `third_party/libwebrtc_version.ini`,
+the Nix build is expected to fail at the plugin's CMake step, which will try
+to download the release it does not find.
+
+What still needs proving:
+
+1. **`nix run` on a clean NixOS box.** A machine that has never built this,
+   straight from the flake ref. It must render a real first frame — not merely
+   reach display init — then log in, sync, and open a room. This is the path the
+   README tells people to use and it is the least-exercised one.
+2. **The GPU/window half specifically.** The wrapper bakes
+   `/run/opengl-driver/lib` for exactly this; confirm a frame actually paints on
+   both X11 and Wayland, since a bufferless Wayland surface is the silent failure
+   that leaves a live process with no visible window.
+3. **A call.** libwebrtc is the reason the whole runtime-libs dance exists.
+   Joining a call, sending audio and screen-sharing is what proves the rpath'd
+   `DT_NEEDED` libs (libgbm/libdrm/…) resolve at *runtime*, not just at link.
+4. **The speaking ring, the meter and the noise gate.** Unverified on Linux,
+   but nothing is known to be missing. livekit_client implements
+   `startVisualizer` in `linux/livekit_plugin.cpp` with the same `AddSink` on
+   `RTCAudioTrack` that Windows uses, and `rtpSenderSetParameters` lives in
+   flutter_webrtc's shared `common/cpp`. So this is a "run it and see", not a
+   port.
+
+   Four separate things, which fail independently:
+
+   - **The ring for other people** is pure Dart over WebRTC statistics. If
+     anything here works on Linux, this does.
+   - **The meter** wants the native tap and falls back to statistics without it,
+     so a bar that moves proves nothing about the tap. The log does:
+     `microphone tap is delivering`.
+   - **The gate** needs the tap, and refuses to switch on without it — the
+     settings pane says so rather than offering a control that does nothing. If
+     `startVisualizer` fails to build or to run under Nix, this is the half that
+     goes missing, and it will say so on its own.
+   - **The gate reopening.** While it is shut, `CaptureKeeper` holds a loopback
+     sender open so the microphone goes on being read; on Windows, without it,
+     the gate closed once and never opened again. Close the gate, then speak:
+     it must open, and the log must say
+     `capture keeper holding the microphone open`.
+
+   Check `buildFlutterApplication` actually compiles livekit_client's Linux
+   plugin, `shared_cpp` FFT sources and all. Nothing in `flake.nix` supplies a
+   `customSourceBuilder` for it, so it goes through the generic path.
+5. **On-device encryption refuses, and says why.** Until item 10 is done, the
+   setting in `Settings → Security` must refuse to switch on under Nix and
+   explain it — see "The store cipher is missing on Nix" in
+   [NIX-PACKAGING.md](NIX-PACKAGING.md). That is the expected result, not a
+   bug. (The way out of a forgotten passphrase is verified on Windows, by
+   `integration_test/locked_launch_flow.dart`.)
+6. **Non-NixOS via nixGL.** The `nix run --impure …#nixGLIntel -- nix run …`
+   line in "Run on Linux with Nix" has never been run. Confirm it on a non-NixOS
+   distro, and with the Nvidia variant if a card is available.
+7. **A second build reproduces.** Delete the result and `nix build` again: the
+   two fixed-output derivations (the libwebrtc zip, the pub cache) must still
+   hash-match. A drifting hash is how a hermetic build quietly stops being one.
+8. **It is an app, not just a binary.** The package ships a `.desktop` entry
+   and a hicolor icon. Install it (`programs.hardline.enable`, or the overlay),
+   rebuild, and confirm **Hardline shows up in the app menu with its icon**.
+   Launch it **from the menu** — the window's dock/taskbar tile must show the
+   Hardline icon, not a generic one; that is the tell that `StartupWMClass`
+   matches the GTK app-id. Check **X11 and Wayland** separately.
+9. **The cache actually serves.** After CI has pushed to Cachix, on a machine
+   that never built this: `nix run --accept-flake-config github:tMein1337/Hardline`
+   must **download** from `hardline.cachix.org` rather than compile (the log says
+   `copying path … from 'https://hardline.cachix.org'`).
+
+Once this passes, the "Run on Linux with Nix" section stops being a claim and
+becomes a tested path. Read the log as well as the window: running past the
+environment fixes is what surfaces the app-logic bugs sitting behind them, and
+a first launch should come up with nothing in the log at all.
+
+## 9. Publish a binary cache, and keep the nixpkgs pin fresh
+
+Two Nix-distribution chores, separate from proving the build works (item 8).
+
+**A binary cache (Cachix).** The heavy part of this build is the *build-time*
+closure — the Flutter SDK, Dart, the Rust toolchain for the two cargokit
+plugins, and the pub-cache FOD — none of which is in the runtime closure.
+Without a cache every consumer rebuilds all of it from source; with one they
+download only the runtime closure and never materialise the toolchain. This is
+the single biggest thing for anyone consuming the flake.
+
+The wiring is in place: `flake.nix` advertises the substituter via `nixConfig`
+and carries the cache's real public key, and `.github/workflows/nix.yml` builds
+`.#hardline` on every push to `main` and pushes it to Cachix. One manual step
+remains, which cannot be committed:
+
+1. Add a write auth token as the `CACHIX_AUTH_TOKEN` repository secret so CI can
+   push.
+
+**Keep the pin on a recent `nixos-unstable`.** The input already tracks
+`nixos-unstable`; the *revision* is what is frozen in `flake.lock`. The closer
+that revision is to what an unstable-tracking consumer runs, the more low-level
+libs (glibc, gtk3, glib, mesa) hash-identically and collapse to one shared copy
+instead of two — free disk for consumers. A stale pin shares nothing.
+
+**But a pin bump is not a no-op — it is the highest-risk change in the whole Nix
+setup.** `nix flake update` can move the very things the build is pinned
+against: the Flutter/Dart version (must satisfy `sdk: ^3.12.2`), nixpkgs'
+built-in pub source builders (the `super_native_extensions` 0.9.1 mapping in
+`flake.nix`), and the `cargoHash`es under `nix/`. Treat a bump as a change to
+verify, done *inside* an item-8 build-and-run pass — never a blind
+`nix flake update` on faith.
+
+## 10. Make on-device encryption work on the Nix build
+
+Today it does not, and the app says so rather than pretending — `Settings →
+Security` refuses to switch on, because `requireCipherSupport()` finds no
+cipher and will not key a store with a library that would ignore the key. Item
+8.5 checks that the refusal is what happens. **This item is about removing
+the need for it.**
+
+**Why it is missing.** `pubspec.yaml` asks `package:sqlite3` for the
+SQLite3MultipleCiphers build through `hooks.user_defines`. Everywhere except
+here that is honoured. nixpkgs carries its own source builder for the `sqlite3`
+pub package which patches the build hook:
+
+```nix
+substituteInPlace lib/src/hook/compile/description.dart \
+  --replace-fail "return fromGitHub(LibraryType.sqlite3);" "return LookupSystem('sqlite3');"
+```
+
+It has to: the unpatched hook downloads a prebuilt library from GitHub at build
+time, which no hermetic build can allow. But the patch is unconditional, so it
+overrides the request and links `pkgs.sqlite` — plain SQLite, which accepts
+`PRAGMA key` and ignores it.
+
+**Two routes, and they are not equivalent.**
+
+1. **Package SQLite3MultipleCiphers in this flake**, and supply a
+   `customSourceBuilders.sqlite3` of our own that patches to
+   `LookupSystem('sqlite3mc')` instead. `flake.nix` already does exactly this
+   shape for `flutter_webrtc`, whose builder pre-fetches a prebuilt library as
+   a fixed-output derivation (`nix/flutter_webrtc.nix`) — so the pattern is
+   established and the file to copy is sitting there.
+
+   **Preferred, and the reason is on-disk format.** One cipher everywhere means
+   one store format everywhere: a database written on Windows opens on Linux,
+   and `store_cipher.dart` keeps its single pinned `chacha20` and its single
+   set of pragmas. The cost is a `sha256` that only a real `nix build` can
+   produce, which is why this could not be done from the machine the feature
+   was written on.
+
+2. **Use `pkgs.sqlcipher`**, which nixpkgs already has, patching to
+   `LookupSystem('sqlcipher')`. Far less work. But SQLCipher is a *different*
+   cipher with different pragmas and a different header: `store_cipher.dart`
+   would have to learn both and choose at runtime, `requireCipherSupport()`
+   would need to accept either, and a store written on one platform would not
+   open on the other. Worth it only if route 1 proves impractical.
+
+**When it works, item 8.5 inverts** — the Linux package should then switch the
+setting on rather than correctly refusing to. Update that point and the "The
+store cipher is missing on Nix" section of [NIX-PACKAGING.md](NIX-PACKAGING.md),
+which is where the detail lives, along with the `sqlite` comment in
+`flake.nix`'s `runtimeLibsFor`.
+
+## Later: platform support
+
+- Linux (beyond the Nix package)
+- macOS
 - iOS
 - Android
 
-## ideas
+## Ideas
+
 - Video streams inside the always-on-top overlay. Not possible as the overlay
   is built — a second Flutter engine cannot render the app engine's textures —
   but `DwmRegisterThumbnail` could mirror the grid's tiles into it. See "Which

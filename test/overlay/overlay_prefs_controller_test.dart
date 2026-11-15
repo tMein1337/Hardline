@@ -59,7 +59,7 @@ void main() {
     });
   });
 
-  // TODOs.md 9.8: layouts are named things, not properties of a game.
+  // Layouts are named things, not properties of a game.
   group('one layout, several games', () {
     test('editing it changes it for every game that uses it', () {
       final shared = notifier().addLayout('Shared');
@@ -75,7 +75,6 @@ void main() {
     });
   });
 
-  // TODOs.md 9.9.
   group('deleting a layout', () {
     test('sends the games that used it back to the default', () {
       final doomed = notifier().addLayout('Doomed');
@@ -119,7 +118,7 @@ void main() {
     });
   });
 
-  // TODOs.md 9.7: a dragged position is written as it is dropped, and is
+  // A dragged position is written as it is dropped, and is
   // there again after a restart.
   test('a dragged position is stored and read back', () {
     notifier().updateLayout(state().layouts.single.copyWith(x: 0.3, y: 0.7));

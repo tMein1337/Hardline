@@ -23,8 +23,9 @@ import 'support/live.dart';
 
 // What the other side of a call hears, measured rather than listened to.
 //
-// TODOs.md 4 was written for two people: somebody talks, somebody else says
-// whether they heard the start of the sentence, or holes in it, or nothing.
+// The noise gate's checks were written for two people: somebody talks,
+// somebody else says whether they heard the start of the sentence, or holes
+// in it, or nothing.
 // Here the person talking is a signal the test writes into a virtual audio
 // cable, and the person listening is a second call participant reading its
 // own receiver statistics twenty times a second.
@@ -435,7 +436,7 @@ void main() {
       '[call] A\'s meter: voice at ${loudDb.toStringAsFixed(1)} dB, murmur '
       'at ${murmurDb.toStringAsFixed(1)} dB',
     );
-    // Just above the room noise, as TODOs.md 4.1 says to set it — not halfway
+    // Just above the room noise, as the settings say to set it — not halfway
     // to the voice, which puts every quieter syllable below the line.
     final breakpoint = (murmurDb + 6).clamp(kMinThresholdDb, kMaxThresholdDb);
     expect(
@@ -635,11 +636,11 @@ void main() {
       'ungated; B jitter buffer (elapsed:ms): ${ear.bufferTimeline()}',
     );
     expect(back, isNotNull, reason: 'B must hear A again');
-    // Not "within the ungated latency", which is what 4.5 asks for and which
+    // Not "within the ungated latency", which is what was asked for and which
     // this rig cannot judge: B's jitter buffer grows by about 100ms for every
     // second of audio, gate or no gate — it was seen climbing past a second
     // while A's gate never closed — so anything measured late in this test
-    // carries a delay that has nothing to do with A. See TODOs.md item 4.
+    // carries a delay that has nothing to do with A. See TODOs.md item 2.
     expect(
       back! - const Duration(milliseconds: 1500),
       lessThan(const Duration(seconds: 2)),

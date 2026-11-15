@@ -19,7 +19,8 @@ flutter analyze
 flutter test                                       # Unit- und Widget-Tests (test/)
 # Echte Windows-App-Tests (integration_test/). Alle Suiten im Debug-Build,
 # danach die Overlay-Suite noch einmal mit --profile: das ist ein AOT-Build wie
-# das Release, und der Overlay-Fehler aus TODO 13 trat nur dort auf.
+# das Release, und der Fehler „Overlay leer beim ersten Anruf nach dem Start“
+# (Commit bb059af) trat nur dort auf.
 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/all_test.dart -d windows
 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/overlay_window_flow.dart -d windows --profile
 dart format --output=none --set-exit-if-changed lib test integration_test test_driver

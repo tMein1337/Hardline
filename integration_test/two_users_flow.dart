@@ -15,7 +15,7 @@ import 'support/win32.dart';
 
 // Two people, against a real homeserver.
 //
-// Everything in TODOs.md 2 needs somebody else: you cannot follow yourself,
+// The activity summary needs somebody else: you cannot follow yourself,
 // your own typing is not shown to you, and a mention you send does not badge
 // your own room. So this suite has two accounts.
 //
@@ -57,7 +57,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // ------------------------------------------------------------------
-    // TODOs.md 2.1: typing.
+    // Typing.
     // ------------------------------------------------------------------
     // A short timeout and no "stopped" afterwards: the badge has to clear
     // on its own when the homeserver lets the typing lapse, with nothing
@@ -112,7 +112,7 @@ void main() {
     expect(find.text('typing…'), findsNothing);
 
     // ------------------------------------------------------------------
-    // TODOs.md 2.2: mentions and read receipts.
+    // Mentions and read receipts.
     // ------------------------------------------------------------------
     // Enough history that the open room can be scrolled away from its
     // newest end.

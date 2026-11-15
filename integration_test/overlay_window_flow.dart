@@ -165,7 +165,7 @@ void main() {
     await channel.dispose();
   });
 
-  // TODOs.md 13, as it was reported: nothing on the first call after launch,
+  // The overlay bug as it was reported: nothing on the first call after launch,
   // fine on every call after it, and back again after a restart.
   //
   // **This has to be the first test in the process to show the overlay**, and
@@ -284,7 +284,7 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // TODOs.md 9 — the parts of it one person and no game can check.
+  // TODOs.md 4 — the parts of it one person and no game can check.
   // ---------------------------------------------------------------------------
 
   /// Joins a two-person call and waits until the roster is on screen.

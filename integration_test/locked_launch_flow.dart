@@ -27,7 +27,7 @@ import 'support/fakes.dart';
 // vodozemac, which refuses a second time. Unlocking with the right passphrase
 // is `test/auth/unlock_screen_test.dart` and `launch_sequence_test.dart`.
 //
-// TODOs.md 3.1 asked for this on a throwaway install: lock it, forget the
+// The check asked for was on a throwaway install: lock it, forget the
 // passphrase, use "I have lost the passphrase", and confirm the app comes up
 // at the login screen with the stores gone. A throwaway install is what the
 // temp directory below is. Everything `main` would have found under
