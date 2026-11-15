@@ -16,8 +16,10 @@ dependencies:
   http: ^1.2.0
   # Concrete WebRTC implementation for voice/video calls. 1.5.0 is the floor:
   # that release added Windows loopback capture, which is what lets a screen
-  # share carry the shared application's audio.
-  flutter_webrtc: ^1.6.0
+  # share carry the shared application's audio. 1.6.3 is the floor now: before
+  # it, the desktop plugin never applied a change to a sender's encodings, so
+  # the noise gate could not close (see lib/features/voice/gate_encodings.dart).
+  flutter_webrtc: ^1.6.3
   # MatrixRTC calls are relayed by a LiveKit SFU (this homeserver deploys one,
   # and it is what Element Call connects to). livekit_client sits on top of the
   # same flutter_webrtc version, so the two do not fight over native bits.

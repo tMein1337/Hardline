@@ -26,6 +26,18 @@ void main() {
       expect(gate.update(-40, at(0)), isTrue);
     });
 
+    // The constant was once raised to 600ms while the constructor went on
+    // defaulting to 400, so the app ran on the old hold and the measurement
+    // that prompted the change kept failing.
+    test('holds for kGateHold unless told otherwise', () {
+      final gate = NoiseGate(thresholdDb: -55);
+
+      expect(gate.hold, kGateHold);
+      expect(gate.update(-40, at(0)), isTrue);
+      expect(gate.update(-70, at(kGateHold.inMilliseconds - 1)), isTrue);
+      expect(gate.update(-70, at(kGateHold.inMilliseconds)), isFalse);
+    });
+
     test('stays open through a pause shorter than the hold', () {
       final gate = NoiseGate(
         thresholdDb: -55,

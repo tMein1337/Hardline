@@ -30,9 +30,9 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 ///
 /// The visualizer does not hand back a level. It hands back frequency-band
 /// magnitudes, already squashed by its own curve: `sqrt(1 - |dB| / 100)` over a
-/// window clamped to -100..-30 dB. One band is asked for, which makes it a
-/// broadband reading, and that curve is **undone** to recover the decibels
-/// before anything else sees it.
+/// window clamped to -100..-30 dB. Many narrow bands are asked for and the
+/// loudest is taken (see [bandCount] for why not one wide one), and that curve
+/// is **undone** to recover the decibels before anything else sees it.
 ///
 /// Everything downstream then works in dB, which is the unit the threshold is
 /// stored and displayed in. That matters for more than tidiness: loudness is
@@ -40,10 +40,11 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 /// differences nobody can hear — and a number somebody can read off a meter and
 /// type back in is worth far more than an abstract 0..1.
 ///
-/// It is a *relative* reading rather than a calibrated one. The magnitude comes
-/// from one FFT band spanning 10Hz to 8kHz, referenced to full scale, so it
-/// behaves like dBFS and is repeatable on one microphone — which is all a gate
-/// threshold needs — without being a measurement anybody should quote.
+/// It is a *relative* reading rather than a calibrated one. The magnitude is
+/// the strongest narrow FFT band between 10Hz and 8kHz, referenced to full
+/// scale, so it behaves like dBFS and is repeatable on one microphone — which
+/// is all a gate threshold needs — without being a measurement anybody should
+/// quote.
 class MicTap {
   /// What silence reads.
   ///
@@ -100,11 +101,11 @@ class MicTap {
 
     final visualizer = lk.createVisualizer(
       track,
-      // One band, uncentred: the centring step sorts and mirrors the bands for
-      // a symmetrical waveform drawing, which is meaningless for a single
-      // broadband reading.
+      // Many narrow bands, of which the loudest is the reading — see
+      // [bandCount]. Uncentred: the centring step sorts and mirrors the bands
+      // for a symmetrical drawing, which is meaningless here.
       options: const lk.AudioVisualizerOptions(
-        barCount: 1,
+        barCount: bandCount,
         centeredBands: false,
       ),
     );
@@ -151,15 +152,46 @@ class MicTap {
   Future<void> dispose() => detach();
 
   void _onBands(lk.AudioVisualizerEvent event) {
-    final band = event.event.firstOrNull;
-    if (band is! num) return;
+    final db = loudestDb(event.event);
+    if (db == null) return;
 
     if (!_delivered) {
       _delivered = true;
       debugPrint('[voice] microphone tap is delivering');
     }
-    final db = decibelsOf(band.toDouble());
     if (db > _peak) _peak = db;
+  }
+
+  /// How many bands the visualizer is asked for.
+  ///
+  /// It splits 10Hz–8kHz into this many and reports, for each, the *average
+  /// of the decibels* of the FFT bins inside it. Averaging decibels is what
+  /// makes a wide band useless as a level: the bins between a voice's
+  /// harmonics are nearly empty, sit far down, and drag the mean with them.
+  /// With **one** band — what this used to ask for — a held vowel read as
+  /// quiet while the onset before it read loud, so the gate saw every
+  /// syllable as a click followed by silence (`integration_test/call_flow.dart`:
+  /// a word played at -14 dBFS was over the breakpoint for its first 100ms and
+  /// under it for the rest, while the other end heard it loud throughout).
+  /// It is also why the reading was "systematically low" and needed the trim.
+  ///
+  /// Sixty-four bands are about five bins, 120Hz, each — narrower than the
+  /// spacing of a voice's harmonics, so a band holding one is dominated by
+  /// it — and the loudest of them follows the strongest part of the sound,
+  /// which is what a level is.
+  static const bandCount = 64;
+
+  /// The loudest band of one visualizer event, in dB, or null if it carried
+  /// none.
+  @visibleForTesting
+  static double? loudestDb(List<Object?> bands) {
+    double? loudest;
+    for (final band in bands) {
+      if (band is! num) continue;
+      final db = decibelsOf(band.toDouble());
+      if (loudest == null || db > loudest) loudest = db;
+    }
+    return loudest;
   }
 
   /// Undoes the visualizer's curve to recover decibels.

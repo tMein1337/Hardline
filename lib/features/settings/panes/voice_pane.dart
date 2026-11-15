@@ -165,7 +165,8 @@ class VoicePane extends ConsumerWidget {
                         min: kMinThresholdDb,
                         max: kMaxThresholdDb,
                         // One decibel a step. Finer would be false precision on a
-                        // reading taken from one FFT band.
+                        // reading taken from FFT bands, which is relative and
+                        // not calibrated.
                         divisions: (kMaxThresholdDb - kMinThresholdDb).round(),
                         label: '${prefs.micThresholdDb.round()} dB',
                         onChanged: (value) => ref

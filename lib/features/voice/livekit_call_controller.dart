@@ -19,12 +19,25 @@ import 'delayed_leave.dart';
 import 'livekit_token_service.dart';
 import 'focus_policy.dart';
 import 'join_failure.dart';
+import 'audio_device_wake.dart';
 import 'audio_level_sampler.dart';
 import 'matrix_rtc_membership.dart';
 import 'noise_gate.dart';
 import 'speaking_participants.dart';
 import 'voice_joinability.dart';
 import 'voice_prefs_state.dart';
+
+/// Whether the microphone is captured with WebRTC's echo cancellation, noise
+/// suppression and automatic gain control. Always true outside tests.
+///
+/// The call tests drive the microphone with a synthetic voice, and noise
+/// suppression treats a voice that regular as noise: within a second or two it
+/// had pulled the test's words down until the other end heard a murmur and the
+/// gate read them as quiet. What is under test there is the gate, not the
+/// suppressor, so those tests switch processing off. People talking are not
+/// suppressed this way, and keep it on.
+@visibleForTesting
+bool debugMicAudioProcessing = true;
 
 enum CallStatus { idle, joining, connected, leaving, failed }
 
@@ -1367,14 +1380,22 @@ class LiveKitCallController extends ChangeNotifier {
     final prefs = readPrefs();
     String? deviceId;
     try {
-      final inputs = await lk.Hardware.instance.audioInputs();
+      // Awake, or the list is empty at exactly this moment — just before the
+      // microphone is published there is no audio transceiver yet — and
+      // capture falls back to the system default. See withAudioDevicesAwake.
+      final (:inputs, outputs: _) = await listAudioDevices();
       deviceId = matchDevice(prefs.inputDevice, inputs)?.deviceId;
     } catch (error, stack) {
       debugPrint('[voice] resolving microphone failed: $error\n$stack');
     }
     // Null means "no constraint", which is the right behaviour when the user
     // has not chosen a device yet.
-    return lk.AudioCaptureOptions(deviceId: deviceId);
+    return lk.AudioCaptureOptions(
+      deviceId: deviceId,
+      echoCancellation: debugMicAudioProcessing,
+      noiseSuppression: debugMicAudioProcessing,
+      autoGainControl: debugMicAudioProcessing,
+    );
   }
 
   /// Applies the remembered microphone and output device.
@@ -1394,27 +1415,33 @@ class LiveKitCallController extends ChangeNotifier {
   Future<void> applyAudioDevices() async {
     final prefs = readPrefs();
 
-    try {
-      final inputs = await lk.Hardware.instance.audioInputs();
-      final input = matchDevice(prefs.inputDevice, inputs);
-      if (input != null) {
-        await lk.Hardware.instance.selectAudioInput(input);
-        debugPrint('[voice] microphone -> ${input.label}');
-      }
-    } catch (error, stack) {
-      debugPrint('[voice] selecting microphone failed: $error\n$stack');
-    }
+    // Listed and selected with the native module awake. Asleep it lists
+    // nothing, so neither choice was ever applied when joining — the moment
+    // this runs, before the microphone is published, is exactly when no
+    // audio transceiver exists. See `withAudioDevicesAwake`.
+    await withAudioDevicesAwake(() async {
+      final (:inputs, :outputs) = await listAudioDevices();
 
-    try {
-      final outputs = await lk.Hardware.instance.audioOutputs();
-      final output = matchDevice(prefs.outputDevice, outputs);
-      if (output != null) {
-        await lk.Hardware.instance.selectAudioOutput(output);
-        debugPrint('[voice] output -> ${output.label}');
+      try {
+        final input = matchDevice(prefs.inputDevice, inputs);
+        if (input != null) {
+          await lk.Hardware.instance.selectAudioInput(input);
+          debugPrint('[voice] microphone -> ${input.label}');
+        }
+      } catch (error, stack) {
+        debugPrint('[voice] selecting microphone failed: $error\n$stack');
       }
-    } catch (error, stack) {
-      debugPrint('[voice] selecting output failed: $error\n$stack');
-    }
+
+      try {
+        final output = matchDevice(prefs.outputDevice, outputs);
+        if (output != null) {
+          await lk.Hardware.instance.selectAudioOutput(output);
+          debugPrint('[voice] output -> ${output.label}');
+        }
+      } catch (error, stack) {
+        debugPrint('[voice] selecting output failed: $error\n$stack');
+      }
+    });
 
     // `selectAudioInput` above moved the native device module's recording
     // index, which is not enough on its own: a capture already running was
@@ -1469,8 +1496,7 @@ class LiveKitCallController extends ChangeNotifier {
   /// reason to print what it actually ended up with rather than assume.
   Future<void> logAudioDevices() async {
     try {
-      final inputs = await lk.Hardware.instance.audioInputs();
-      final outputs = await lk.Hardware.instance.audioOutputs();
+      final (:inputs, :outputs) = await listAudioDevices();
 
       debugPrint(
         '[voice] audio devices\n'
@@ -1553,6 +1579,19 @@ class LiveKitCallController extends ChangeNotifier {
         );
       }
     }
+  }
+
+  /// Silent once disposed.
+  ///
+  /// [dispose] starts a teardown it does not wait for — it has to, so a hard
+  /// exit still withdraws the membership — and that teardown disconnects the
+  /// LiveKit room, whose events land in handlers that notify. Each of those
+  /// would otherwise be a "used after being disposed" assertion, one per
+  /// event, on every account switch.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 
   @override

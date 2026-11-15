@@ -14,6 +14,9 @@
 # Version/URL are pinned to what flutter_webrtc 1.6.0 requests
 # (libwebrtc_version.ini: binary_version = libwebrtc.m144.7559.09). If the plugin
 # is bumped, re-read that manifest and re-pin url + hash.
+#
+# STALE: pubspec now resolves flutter_webrtc 1.6.3, which requests
+# libwebrtc.m150.7871.07. Re-pin before the next Nix build (TODOs.md item 5).
 {
   lib,
   stdenv,

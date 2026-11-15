@@ -3302,7 +3302,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 Shipped as part of the Flutter SDK; see the Flutter and
 Dart SDK note above.
 
-### flutter_webrtc 1.6.0
+### flutter_webrtc 1.6.3
 
 - Source: hosted
 - Dependency: direct main
@@ -4111,7 +4111,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### livekit_client 2.10.0
+### livekit_client 2.13.2
 
 - Source: hosted
 - Dependency: direct main

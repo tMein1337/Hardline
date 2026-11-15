@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
+import 'audio_device_wake.dart';
+
 import '../../core/util/snapshot_list.dart';
 import 'voice_prefs_state.dart';
 
@@ -44,8 +46,9 @@ final audioDevicesProvider = StreamProvider<AudioDevices>((ref) {
   Future<void> emit() async {
     if (controller.isClosed) return;
     try {
-      final inputs = await lk.Hardware.instance.audioInputs();
-      final outputs = await lk.Hardware.instance.audioOutputs();
+      // Through the waking helper: outside a call the native module lists
+      // nothing at all, and this list is mostly looked at outside one.
+      final (:inputs, :outputs) = await listAudioDevices();
       if (controller.isClosed) return;
       controller.add(
         AudioDevices(

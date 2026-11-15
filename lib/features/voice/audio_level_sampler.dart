@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
+import 'capture_keeper.dart';
 import 'gate_encodings.dart';
 import 'mic_tap.dart';
 import 'noise_gate.dart';
@@ -68,13 +69,12 @@ class GateSettings {
 /// no gain on a local capture source (`SetVolume` is playout gain, implemented
 /// for remote sources only), and automatic gain control is already running.
 ///
-/// It is needed because the reading is systematically low. The tap asks the
-/// visualizer for **one** band spanning 10Hz to 8kHz and gets the average
-/// magnitude across it, so speech energy — which lives between roughly 100Hz
-/// and 4kHz — is divided among a majority of near-empty bins. Ordinary talking
-/// on a dynamic microphone measures around -90 dB on this scale rather than the
-/// -35 the same voice would show as a broadband level. Without a trim the whole
-/// useful range is a few decibels above the floor.
+/// It is for a microphone that reads quietly — a quiet room, a soft speaker,
+/// an interface with little gain — so that its voice lands where the threshold
+/// has room to work. It used to be needed by everybody: the tap once read one
+/// wide band, which put ordinary talking near -90 on this scale. It now reads
+/// the loudest of many narrow ones (see `MicTap.bandCount`), and a voice sits
+/// tens of decibels higher without help.
 ///
 /// If somebody is too quiet for *other people*, this is not the control for it
 /// — that is the microphone's own level, in the operating system's sound
@@ -162,6 +162,11 @@ class AudioLevelSampler {
   /// Reads the microphone upstream of the gate. See [MicTap].
   final _tap = MicTap();
 
+  /// Keeps the microphone recording while the gate holds the sender shut,
+  /// without which the tap goes dark the moment the gate closes. See
+  /// [CaptureKeeper].
+  final _keeper = CaptureKeeper();
+
   /// Begins measuring [room].
   ///
   /// **`stop()` must be awaited before the new room is set.** It is async — it
@@ -189,6 +194,7 @@ class AudioLevelSampler {
     // Never leave a call with the microphone shut by a gate that has stopped
     // running. The track outlives this object's interest in it.
     await _openMicrophone();
+    await _keeper.release();
 
     _room = null;
     onMicLevel(const MicLevel.none());
@@ -279,6 +285,8 @@ class AudioLevelSampler {
       _liveGate = null;
       _gateEffective = true;
       await _openMicrophone();
+      // The sender is active again and keeps the device recording itself.
+      await _keeper.release();
       onMicLevel(
         MicLevel(
           db: db,
@@ -425,7 +433,7 @@ class AudioLevelSampler {
   ///    two pulling the level back up.
   ///
   /// A hard cut rather than a ramp is fine here, and that is the hold's doing:
-  /// the gate closes 400ms *after* the level drops, so the transition happens
+  /// the gate closes [kGateHold] *after* the level drops, so the transition happens
   /// during silence rather than across a waveform. There is nothing to click.
   Future<void> _setMicrophoneOpen(bool open) async {
     final track = _localTrack();
@@ -443,6 +451,26 @@ class AudioLevelSampler {
     }
 
     if (open == !_muzzled) return;
+
+    // Before the sender is shut, something else must be keeping the device
+    // recording — or the tap goes dark with it and the gate never opens
+    // again. If that cannot be arranged, the gate does not close at all: an
+    // unwanted noise reaching the call is a nuisance, a microphone that
+    // silently never comes back is not.
+    if (!open && sender != null) {
+      final kept = await _keeper.keep(track.mediaStreamTrack);
+      if (!kept) {
+        if (_gateEffective) {
+          debugPrint(
+            '[voice] the gate cannot close: nothing would keep the microphone '
+            'being read while it was shut',
+          );
+        }
+        _gateEffective = false;
+        return;
+      }
+    }
+
     _muzzled = !open;
 
     try {

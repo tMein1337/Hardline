@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hardline/features/overlay/overlay_app.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'call_flow.dart' as call;
 import 'hotkeys_flow.dart' as hotkeys;
 import 'locked_launch_flow.dart' as locked;
 import 'login_flow.dart' as login;
@@ -64,6 +65,8 @@ void main() {
   group('rooms', rooms.main);
   // Skipped unless given an accounts file; see the suite.
   group('two users', two_users.main);
+  // Skipped unless given an accounts file; also needs VB-Audio's cable.
+  group('call', call.main);
   // Last, because it runs the real `main()`, which puts its own root in the
   // window and builds a client.
   group('locked launch', locked.main);

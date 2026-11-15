@@ -64,6 +64,29 @@ void main() {
     });
   });
 
+  // A voice's energy sits in a few harmonics. Reading the loudest band, not
+  // their mean, is what keeps a held vowel from reading as silence.
+  group('one event, many bands', () {
+    test('reads the loudest band', () {
+      final bands = [
+        MicTap.bandForDecibels(-100),
+        MicTap.bandForDecibels(-45),
+        MicTap.bandForDecibels(-90),
+      ];
+
+      expect(MicTap.loudestDb(bands), closeTo(-45, 1e-9));
+    });
+
+    test('an event with no bands carries no reading', () {
+      expect(MicTap.loudestDb(const []), isNull);
+      expect(MicTap.loudestDb(const ['nonsense', null]), isNull);
+    });
+
+    test('silence in every band reads silence', () {
+      expect(MicTap.loudestDb(const [0, 0, 0]), MicTap.silenceDb);
+    });
+  });
+
   group('before anything has been measured', () {
     test('a fresh tap is not live and reads silence', () {
       final tap = MicTap();

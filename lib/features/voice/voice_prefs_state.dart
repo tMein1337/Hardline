@@ -176,13 +176,11 @@ class VoiceUserPrefs {
 
 /// The quietest threshold the slider offers, in dB.
 ///
-/// The tap's own floor, and not a round number chosen for looks. The first
-/// version stopped at -80 on the theory that the last twenty were only ever a
-/// silent room — which was wrong. The reading comes from one FFT band averaged
-/// across 10Hz to 8kHz, so speech energy is divided among mostly empty high
-/// bins and lands far below the broadband level it feels like; on a dynamic
-/// microphone ordinary talking measured about -90. A floor above somebody's
-/// voice is a threshold they cannot reach, and a gate that never opens.
+/// The tap's own floor, and not a round number chosen for looks. A floor above
+/// somebody's voice is a threshold they cannot reach, and a gate that never
+/// opens — so the slider goes all the way down to what silence reads, even
+/// though since the reading became the loudest of many narrow bands (see
+/// `MicTap.bandCount`) a voice lands far above it.
 const kMinThresholdDb = -100.0;
 
 /// The loudest threshold the slider offers, in dB.
@@ -197,7 +195,24 @@ const kMaxThresholdDb = -30.0;
 /// when their own avatar rings, and a ring that is too eager is a far smaller
 /// annoyance than one that never appears — which is the complaint that started
 /// this whole feature.
-const kDefaultThresholdDb = -95.0;
+///
+/// **-80, and it was -95** on the old one-band reading, where talking measured
+/// around -90. On the current scale a word played at -14 dBFS reads about -42
+/// and a murmur at -52 dBFS about -80 (`integration_test/call_flow.dart`), so
+/// this sits at a murmur: any speech clears it, an ordinary quiet room does
+/// not. -95 now would be under the noise of most rooms, and ring forever.
+const kDefaultThresholdDb = -80.0;
+
+/// Which scale [VoicePrefsState.micThresholdDb] and
+/// [VoicePrefsState.micGainDb] were set on.
+///
+/// 2 since `MicTap` reads the loudest of many bands rather than one wide one,
+/// which moved every reading up by tens of decibels. A threshold or trim set
+/// against the old meter means nothing on the new one — a +40 trim would pin
+/// the meter to the ceiling and hold the gate and the ring open for good — so
+/// values stored without this marker are dropped for the defaults rather than
+/// misapplied.
+const kMeterScale = 2;
 
 /// How much the microphone reading can be trimmed up, in dB.
 ///
@@ -265,9 +280,10 @@ class VoicePrefsState {
 
   /// Decibels added to the microphone reading before anything looks at it.
   ///
-  /// A trim on the *measurement*, not on the audio. It exists because the
-  /// reading is systematically low — see [kMinThresholdDb] — so without it a
-  /// quiet microphone spends the whole scale in its bottom few decibels.
+  /// A trim on the *measurement*, not on the audio. It exists for a quiet
+  /// microphone, which would otherwise spend the whole scale in its bottom few
+  /// decibels. It was once needed by everybody, when the reading was a single
+  /// wide band and systematically low; see `MicTap.bandCount`.
   final double micGainDb;
 
   /// Whether [micThreshold] also stops audio being sent.
@@ -342,6 +358,7 @@ class VoicePrefsState {
     'deafened': deafened,
     'shareSystemAudio': shareSystemAudio,
     'verboseCallLog': verboseCallLog,
+    'meterScale': kMeterScale,
     'micThresholdDb': micThresholdDb,
     'micGainDb': micGainDb,
     'noiseGate': noiseGate,
@@ -357,6 +374,8 @@ class VoicePrefsState {
   /// Tolerant of anything: an unknown `version`, wrong types, missing keys.
   static VoicePrefsState fromJson(Map<String, Object?> json) {
     final rawUsers = json['users'];
+    // Set against another meter, they would be misread on this one.
+    final sameScale = json['meterScale'] == kMeterScale;
     return VoicePrefsState(
       selfMuted: json['selfMuted'] == true,
       deafened: json['deafened'] == true,
@@ -365,14 +384,17 @@ class VoicePrefsState {
       // A stored threshold outside the slider's range would be a gate nobody
       // could reopen from the settings screen.
       micThresholdDb: switch (json['micThresholdDb']) {
-        final num value => value.toDouble().clamp(
+        final num value when sameScale => value.toDouble().clamp(
           kMinThresholdDb,
           kMaxThresholdDb,
         ),
         _ => kDefaultThresholdDb,
       },
       micGainDb: switch (json['micGainDb']) {
-        final num value => value.toDouble().clamp(0.0, kMaxMicGainDb),
+        final num value when sameScale => value.toDouble().clamp(
+          0.0,
+          kMaxMicGainDb,
+        ),
         _ => 0.0,
       },
       noiseGate: json['noiseGate'] == true,

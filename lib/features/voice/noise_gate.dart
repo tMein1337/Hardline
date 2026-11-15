@@ -5,6 +5,27 @@ import 'package:flutter/foundation.dart';
 
 import 'mic_tap.dart';
 
+/// How long the level must stay below the breakpoint before the gate closes.
+///
+/// **600ms, and it was 400.** 400 is the figure usually quoted for voice gates,
+/// and it was measured too short here: a voice played into the microphone
+/// with ordinary 250ms pauses between words, the breakpoint set just above
+/// the room as the settings tell people to set it, reached the other end of
+/// a call with a 200ms hole between two of the words
+/// (`integration_test/call_flow.dart`).
+///
+/// The reason is the measurement, not the speaker. The level is read every
+/// 100ms, as that interval's peak, and the end of a word is quieter than its
+/// middle — so a soft last syllable reads below the line before the pause has
+/// even begun. A soft syllable plus a short pause is already more than 400ms
+/// "below", in the middle of somebody's sentence.
+///
+/// The cost is that noise follows the end of speech for 600ms rather than
+/// 400ms before the gate shuts. That is a cough's tail audible a moment
+/// longer, against words arriving with holes in them; the second is the
+/// failure people actually complain about.
+const kGateHold = Duration(milliseconds: 600);
+
 /// Decides, from a stream of microphone levels in dB, whether to transmit.
 ///
 /// Pure and synchronous: it takes a level and a timestamp and returns a
@@ -49,10 +70,7 @@ import 'mic_tap.dart';
 /// makes that possible: it says whether anything is being sent, which is the
 /// fact somebody needs in order to reach for the switch.
 class NoiseGate {
-  NoiseGate({
-    required this.thresholdDb,
-    this.hold = const Duration(milliseconds: 400),
-  });
+  NoiseGate({required this.thresholdDb, this.hold = kGateHold});
 
   /// Decibels at or above which the gate opens, on the same scale [MicTap]
   /// reports — so a threshold read off the meter is the threshold to set.
@@ -60,9 +78,7 @@ class NoiseGate {
 
   /// How long the level must stay below [thresholdDb] before the gate closes.
   ///
-  /// Long enough to carry the pause between words, short enough that a room
-  /// going quiet does not keep transmitting for noticeably long. 400ms is the
-  /// usual figure for voice gates and is what Discord's own release lands near.
+  /// See [kGateHold].
   final Duration hold;
 
   bool _open = false;

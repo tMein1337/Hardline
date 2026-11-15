@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1, 3, 4, 8 and 9 are **verifications**, not features: the code is
+Items 1, 3, 8 and 9 are **verifications**, not features: the code is
 written and believed correct, but has never been observed working, usually
 because the test needs a second client or a second machine. Items 5 to 7 are the
 Nix packaging: one verification and two pieces of work. Item 10 is what
@@ -59,30 +59,77 @@ What is left is the other platform:
    is missing on Nix" in [NIX-PACKAGING.md](NIX-PACKAGING.md), which has the
    two routes to fixing it.
 
-## 4. Verify the speaking indicator and the noise gate with other people
+## 4. The speaking indicator and the noise gate — verified, with one open point
 
-**And the gate, from the other end** — everything below needs somebody
-listening, because the entire question is what *they* hear:
+Measured from the other end of a real call rather than listened to:
+`integration_test/call_flow.dart` plays a synthetic voice into VB-Audio's
+virtual cable, which the app uses as its microphone, and a second call
+participant — the app's own `LiveKitCallController`, signed in as the second
+test account — reads what arrives from its receiver statistics. Each of the
+five checks this item listed is an assertion there:
 
-1. **The gate actually gates.** Turn it on, set the breakpoint above your room
-   noise, and stay quiet with a fan or a keyboard going. They should hear
-   nothing. Then talk: they hear you, from the first syllable — a gate that
-   clips word onsets is the usual failure and it is obvious to the listener
-   long before it is obvious to you.
-2. **No chopping inside sentences.** Talk normally, with the pauses a sentence
-   has. They must hear continuous speech, not words with holes between them.
-   That is the 400ms hold; if it is too short they will say you sound "cut up".
-3. **The breakpoint set too high.** Deliberately set it above your speaking
-   level and confirm they hear *nothing at all* — and that the meter shows you
-   why. This is the failure mode the settings pane warns about, and it should
-   be diagnosable from your own screen rather than only from their complaint.
-4. **Encryption survives it.** The gate works by deactivating the RTP encoding
-   on the sender, in a call that is end-to-end encrypted with a frame cryptor
-   attached to that same sender. Toggling it repeatedly must not garble their
-   audio or break it permanently. Nothing suggests it will; nothing has tested
-   it either.
-5. **Turning it off restores you.** Switch it off mid-call and confirm they
-   hear you again immediately, without rejoining.
+1. **The gate gates**, and opens on the first syllable: with the breakpoint
+   just above a murmur, the murmur reaches the listener as nothing at all, and
+   a word costs between 50 and 170ms of onset against the ungated call.
+2. **No chopping inside a sentence**: six words with 250ms pauses between them
+   keep the gate open throughout, while a 1.6s pause closes it. The hold is
+   600ms; 400 was measured too short (see `kGateHold`).
+3. **The breakpoint set too high**: no packet at all reaches the listener, and
+   A's own meter shows the voice below the line.
+4. **Encryption survives it**: in an end-to-end encrypted call the listener
+   still decodes A at full level after the gate has been toggled ten times.
+5. **Turning it off restores you**, without rejoining.
+
+And the ring: the listener sees A speaking while A talks, and stops seeing it
+once A is quiet.
+
+Getting there found five defects, all fixed:
+
+- **The device list was empty**, so the chosen microphone and speaker were
+  never applied: WebRTC on Windows enumerates no audio devices until a peer
+  connection has an audio transceiver (`audio_device_wake.dart`).
+- **The gate had never closed.** flutter_webrtc before 1.6.3 dropped every
+  encoding change on desktop, and once it stopped dropping them the sender
+  refused the ones this app sent (`gate_encodings.dart`).
+- **Once it closed, it could never open again** for anybody alone in their
+  process — which is everybody. WebRTC stops reading the microphone when the
+  last sender stops, and the gate listens through that microphone. The call
+  test had missed it because its second participant shares the process and
+  kept the device recording. Fixed with a loopback sender that keeps it read
+  while the gate is shut (`capture_keeper.dart`); tested with A alone.
+- **The meter read held vowels as silence.** It averaged decibels across one
+  band spanning 10Hz–8kHz, and the empty bins between a voice's harmonics
+  dragged that average down. It now takes the loudest of 64 narrow bands
+  (`MicTap.bandCount`). That moved the whole scale: the default breakpoint is
+  now -80 instead of -95, and thresholds and trims stored on the old scale
+  are reset to the defaults (`kMeterScale`).
+- **The hold was still 400ms**: the constant had been raised, the constructor
+  default had not.
+
+Run it with the accounts (see item 2) and VB-Audio's cable installed:
+
+```powershell
+flutter drive --driver=test_driver/integration_test.dart `
+  --target=integration_test/call_flow.dart -d windows `
+  --dart-define=HARDLINE_LIVE_ACCOUNTS=.claude/test-accounts.json
+```
+
+**Open: how quickly "immediately" is.** Point 5 asks that the listener hear you
+again *immediately* when the gate is switched off. The test asserts within 2s,
+not within the ungated latency, because this rig cannot measure it: the
+listener's jitter buffer (`inbound-rtp.jitterBufferDelay`) climbs by roughly
+100ms for every second of audio, gate or no gate — it was seen passing a
+second while A's gate never closed — so anything measured late in the run
+carries a delay that is not A's. The likeliest cause is the rig itself: both
+participants share one audio device in one process, playing out to a digital
+output with nothing plugged into it. It needs two machines, or two people, to
+settle.
+
+**Also still for people to judge**: whether a real voice, rather than the
+test's synthetic one, is gated as cleanly. The test switches WebRTC's noise
+suppression off, because the suppressor takes a synthetic voice for noise and
+pulls it down within a second or two; real speech is not treated that way, but
+nobody has listened to the gate with suppression on.
 
 **If the ring never appears for anybody**, check the log for
 `microphone tap is delivering`. Its absence means the local half never started
@@ -98,6 +145,13 @@ initialises E2EE; the hermetic `packages.default` is only verified as far as
 `NIX-PACKAGING.md`) — not as a usable client. Nobody has run
 `nix run github:tMein1337/Hardline` on a machine that is not this one, with no
 checkout and no dev shell, and actually driven it.
+
+**First, re-pin libwebrtc.** flutter_webrtc went from 1.6.0 to 1.6.3 for the
+noise gate (item 4), and 1.6.3 asks for `libwebrtc.m150.7871.07`, while
+`nix/flutter_webrtc.nix` still pre-fetches `m144.7559.09`. Until the URL and
+hash there are updated from the plugin's `third_party/libwebrtc_version.ini`,
+the Nix build is expected to fail at the plugin's CMake step, which will try
+to download the release it does not find.
 
 What still needs proving:
 

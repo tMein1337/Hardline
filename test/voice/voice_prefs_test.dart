@@ -123,6 +123,34 @@ void main() {
       expect(state.forUser('@bob:example.org').devices, isEmpty);
     });
 
+    test('a threshold and trim round-trip on the current meter', () {
+      final state = const VoicePrefsState().copyWith(
+        micThresholdDb: -61,
+        micGainDb: 6,
+      );
+      final back = VoicePrefsState.fromJson(
+        jsonDecode(jsonEncode(state.toJson())) as Map<String, Object?>,
+      );
+
+      expect(back.micThresholdDb, -61);
+      expect(back.micGainDb, 6);
+    });
+
+    // Stored before the meter changed scale: a +40 trim from then would pin
+    // the new meter to its ceiling and hold the gate and the ring open.
+    test('a threshold and trim from the old meter are dropped', () {
+      final state = VoicePrefsState.fromJson({
+        'version': 2,
+        'micThresholdDb': -92,
+        'micGainDb': 40,
+        'noiseGate': true,
+      });
+
+      expect(state.micThresholdDb, kDefaultThresholdDb);
+      expect(state.micGainDb, 0);
+      expect(state.noiseGate, isTrue, reason: 'the switch means what it did');
+    });
+
     test('malformed JSON degrades to defaults instead of throwing', () {
       final state = VoicePrefsState.fromJson({
         'selfMuted': 'yes',

@@ -29,7 +29,7 @@ void main() {
       expect(open.single.active, isTrue);
     });
 
-    test('flips active on the encodings a sender does report', () {
+    test('one encoding per encoding a sender reports', () {
       final params = rtc.RTCRtpParameters(
         encodings: [
           rtc.RTCRtpEncoding(rid: 'a'),
@@ -46,24 +46,60 @@ void main() {
       expect(reopened.every((e) => e.active == true), isTrue);
     });
 
-    // Everything else about an encoding — the rid, the bitrate ceiling, the
-    // simulcast scaling — belongs to whoever published the track. A gate that
-    // rebuilt them from scratch would silently drop a sender's configuration
-    // every time somebody stopped talking.
-    test('preserves everything other than active', () {
+    // The other half of the bug. The cached encodings carry fields a sender
+    // will not take back — ssrc 0, maxBitrate 0, a video-only scale factor —
+    // and once flutter_webrtc 1.6.3 started applying them, WebRTC refused the
+    // whole change. Only `active` and the `rid` that says which encoding are
+    // sent; the native side leaves every other field as the publisher set it.
+    test('sends nothing but active and rid', () {
       final params = rtc.RTCRtpParameters(
         encodings: [
-          rtc.RTCRtpEncoding(rid: 'high', maxBitrate: 96000, ssrc: 42),
+          rtc.RTCRtpEncoding(
+            rid: 'high',
+            maxBitrate: 0,
+            ssrc: 0,
+            scaleResolutionDownBy: 1.0,
+          ),
         ],
       );
 
       final encoding = gateEncodings(params, open: false).single;
-      expect(encoding.rid, 'high');
-      expect(encoding.maxBitrate, 96000);
-      expect(encoding.ssrc, 42);
       expect(encoding.active, isFalse);
+      expect(encoding.rid, 'high');
+      expect(encoding.maxBitrate, isNull);
+      expect(encoding.ssrc, isNull);
+      expect(encoding.scaleResolutionDownBy, isNull);
+      expect(encoding.numTemporalLayers, isNull);
     });
 
+    test('the map sent carries only active, rid and priority', () {
+      final params = rtc.RTCRtpParameters(
+        encodings: [rtc.RTCRtpEncoding(rid: 'a', maxBitrate: 0)],
+      );
+      params.encodings = gateEncodings(params, open: false);
+      final sent = (params.toMap()['encodings'] as List).single as Map;
+      expect(sent.keys.toSet(), {'active', 'rid', 'priority'});
+    });
+
+    test('keeps the priority the sender had', () {
+      final params = rtc.RTCRtpParameters(
+        encodings: [rtc.RTCRtpEncoding(priority: rtc.RTCPriorityType.high)],
+      );
+      expect(
+        gateEncodings(params, open: false).single.priority,
+        rtc.RTCPriorityType.high,
+      );
+    });
+
+    // A fresh list, so the gate never edits the sender's cached parameters
+    // in place — a closed gate used to leave `active: false` sitting in them.
+    test('does not modify the encodings it was given', () {
+      final original = rtc.RTCRtpEncoding(rid: 'a', active: true);
+      final params = rtc.RTCRtpParameters(encodings: [original]);
+
+      gateEncodings(params, open: false);
+      expect(original.active, isTrue);
+    });
     test('round trips closed and open again', () {
       final params = rtc.RTCRtpParameters(encodings: [rtc.RTCRtpEncoding()]);
 

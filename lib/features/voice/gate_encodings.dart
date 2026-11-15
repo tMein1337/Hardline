@@ -9,40 +9,64 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 /// made the breakpoint do nothing, and because it is the only part of that path
 /// which can be tested without a live peer connection.
 ///
-/// **Why this is not just a loop over what the sender already has.** The gate
-/// used to read `sender.parameters`, walk `parameters.encodings`, set `active`
-/// on each, and hand the object back. Three things conspire to make that a
-/// silent no-op on Windows:
+/// **The gate had never once closed.** Measured from the other end of a call
+/// (`integration_test/call_flow.dart`): with the gate on and the level well
+/// below the breakpoint, the listener heard the room exactly as loudly as with
+/// it off, while the sender's own statistics went on counting fifty packets a
+/// second and reporting the encoding active. Two defects, one on each side of
+/// the platform channel, each hiding the other:
 ///
-///  * `RTCRtpSenderNative.parameters` returns a **cached field**, populated
-///    once when the sender was built from the platform's map. For an audio
-///    sender that map routinely carries no encodings at all.
-///  * `for (final e in parameters.encodings ?? const [])` over an empty list
-///    runs zero times, so the object goes back exactly as it came.
-///  * The native side (`updateRtpParameters` in flutter_webrtc's
-///    `flutter_peerconnection.cc`) zips the incoming list against the encodings
-///    libwebrtc actually has and stops as soon as the incoming list runs out.
-///    An empty list therefore sets nothing, and `set_parameters` still reports
-///    success.
+///  * **flutter_webrtc before 1.6.3 never applied an encoding change** on
+///    Windows or Linux. Its native `updateRtpParameters` set `active` on
+///    *copies* of the encodings and never wrote them back, so
+///    `set_parameters` was handed the parameters unchanged and reported
+///    success. 1.6.3 writes them back ("fix(desktop): write encoding changes
+///    back in RtpSender setParameters").
+///  * **This function then asked for something the sender refuses.** It used
+///    to hand back the sender's cached encodings with `active` flipped, and
+///    those carry everything else too — `ssrc: 0`, `maxBitrate: 0`, a
+///    `scaleResolutionDownBy` that means nothing for audio. While the native
+///    side discarded the lot, that cost nothing. Once it applied them, WebRTC
+///    rejected the change outright: `setParameters` returned false and the
+///    gate reported itself unavailable.
 ///
-/// No exception, no failed result anybody looked at, and the meter cheerfully
-/// reporting that nothing was being sent while the microphone transmitted the
-/// whole time.
+/// So this sends **only what the gate is about**: one encoding per encoding
+/// the sender has, carrying `active`, the `rid` that identifies it and the
+/// priority it already had, and nothing else. The native side reads the sender's current parameters and
+/// overwrites only the fields it is given, so everything the publisher
+/// configured — bitrate, priority, the ssrc — stays exactly as it was.
 ///
-/// So: when the sender knows its encodings, reuse them and flip `active`. When
-/// it does not, **synthesise one**. The native side zips against its own list,
-/// so a single entry reaches the first real encoding, which for a
-/// non-simulcast audio sender is the only one there is.
+/// When the sender reports no encodings at all, which an audio sender
+/// routinely does from Dart, one is sent anyway: the native side zips the list
+/// against its own and a single entry reaches the first real encoding, which
+/// for a non-simulcast audio sender is the only one there is.
 List<rtc.RTCRtpEncoding> gateEncodings(
   rtc.RTCRtpParameters parameters, {
   required bool open,
 }) {
   final existing = parameters.encodings;
-  if (existing == null || existing.isEmpty) {
-    return [rtc.RTCRtpEncoding(active: open)];
-  }
-  for (final encoding in existing) {
-    encoding.active = open;
-  }
-  return existing;
+  if (existing == null || existing.isEmpty) return [_only(open: open)];
+  return [
+    for (final encoding in existing)
+      _only(open: open, rid: encoding.rid, priority: encoding.priority),
+  ];
 }
+
+/// An encoding carrying [open], [rid] and [priority], and nothing else.
+///
+/// The nulls are explicit because `RTCRtpEncoding` defaults two fields to
+/// values — one temporal layer, no downscale — and `toMap` sends whatever is
+/// not null. `priority` it sends always, so it is carried over from the
+/// encoding being gated rather than left at the constructor's default, which
+/// would quietly lower a sender the publisher had raised.
+rtc.RTCRtpEncoding _only({
+  required bool open,
+  String? rid,
+  rtc.RTCPriorityType priority = rtc.RTCPriorityType.low,
+}) => rtc.RTCRtpEncoding(
+  active: open,
+  rid: rid,
+  numTemporalLayers: null,
+  scaleResolutionDownBy: null,
+  priority: priority,
+);
