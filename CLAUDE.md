@@ -37,6 +37,12 @@ erst fragen, ob getestet werden soll.
   allem kein Spiel im Vordergrund. Die Tastendrücke landen sonst dort. Vorher
   prüfen, welches Fenster vorn ist; die Suiten brechen zur Sicherheit selbst
   ab, wenn es nicht ihr eigenes ist (`requireOwnDesktop`).
+- **Geteilter Desktop:** Arbeitet der Nutzer auf dem zweiten Monitor weiter,
+  mit `--dart-define=HARDLINE_SHARED_DESKTOP=true` starten. Dann bricht keine
+  Suite ab; stattdessen steht nach jedem Test, den etwas gestört haben könnte,
+  eine `[desktop]`-Zeile im Log (fremdes Fenster im Vordergrund, wie lange;
+  Maus während eines Test-Drags bewegt). Fehlschläge mit so einer Zeile davor
+  erst wiederholen, bevor man die App verdächtigt. Nie, wenn ein Spiel läuft.
 - Sie dürfen **nie** die echten Nutzerdaten anfassen (`%APPDATA%`, echter
   Account, echte Datenbank). Wie in `test/`: `SharedPreferences.setMockInitialValues`,
   temporäre Verzeichnisse und Fake-Controller statt eines echten Homeservers.

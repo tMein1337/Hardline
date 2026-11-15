@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hardline/features/voice/live_participant.dart';
@@ -88,15 +90,87 @@ LiveParticipant person(String userId, {String? name}) => LiveParticipant(
 ///
 /// Called at the top of each suite's `main`, so every test in it fails at
 /// once with the reason rather than one at a time with a timeout.
+///
+/// **Shared desktop.** With `--dart-define=HARDLINE_SHARED_DESKTOP=true` it
+/// does not refuse, and instead watches: every stretch in which another
+/// application had the foreground, and every time the mouse was moved during
+/// one of the test's own drags, is printed after the test it happened in as
+/// `[desktop]` lines. For somebody working on a second monitor while this
+/// runs, so that a failure can be told apart from their interference
+/// afterwards. A test with no `[desktop]` line after it ran undisturbed.
+///
+/// What it does not change is what the suites do: the chords are global
+/// hotkeys, which Windows delivers to this app whatever is in front, but the
+/// overlay still covers the primary monitor and the drag still moves the real
+/// pointer there.
 void requireOwnDesktop() {
-  setUpAll(() {
+  if (sharedDesktop) {
+    _watchDesktop();
+    return;
+  }
+  setUpAll(() async {
+    // A window launched by a background process is not always given the
+    // foreground by Windows. One request for it, then the check: an idle
+    // desktop hands it over, a busy one keeps whatever has it.
+    if (!foregroundIsOurs) {
+      appWindow.bringToFront();
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
     if (!foregroundIsOurs) {
       fail(
         'Another application has the foreground, so this suite will not '
         'run: it would send key presses to it and draw over it. Run it when '
-        'the machine is otherwise idle, and leave the test window in front.',
+        'the machine is otherwise idle, and leave the test window in front, '
+        'or pass --dart-define=HARDLINE_SHARED_DESKTOP=true to run anyway '
+        'and be told afterwards what interfered.',
       );
     }
+  });
+}
+
+/// See [requireOwnDesktop].
+const sharedDesktop = bool.fromEnvironment('HARDLINE_SHARED_DESKTOP');
+
+void _watchDesktop() {
+  Timer? sampler;
+  final clock = Stopwatch();
+  // When another application took the foreground, and which one; null while
+  // it is ours.
+  ({Duration since, String title})? away;
+
+  void endAway() {
+    final stretch = away;
+    if (stretch == null) return;
+    away = null;
+    final ms = (clock.elapsed - stretch.since).inMilliseconds;
+    desktopIncidents.add(
+      '"${stretch.title}" had the foreground for ${ms}ms, from '
+      '${stretch.since.inMilliseconds}ms into the test',
+    );
+  }
+
+  setUp(() {
+    desktopIncidents.clear();
+    away = null;
+    clock
+      ..reset()
+      ..start();
+    sampler = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (foregroundIsOurs) {
+        endAway();
+      } else {
+        away ??= (since: clock.elapsed, title: foregroundTitle);
+      }
+    });
+  });
+
+  tearDown(() {
+    sampler?.cancel();
+    endAway();
+    for (final incident in desktopIncidents) {
+      debugPrint('[desktop] $incident');
+    }
+    desktopIncidents.clear();
   });
 }
 
@@ -105,17 +179,23 @@ void requireOwnDesktop() {
 /// `pumpAndSettle` waits for frames to stop being scheduled, which says
 /// nothing about a reply still on its way back from the runner. Everything
 /// these tests assert about Windows arrives that way.
+///
+/// [poll] runs before each check, for a condition that has to be fetched
+/// rather than read.
 Future<void> pumpUntil(
   WidgetTester tester,
   bool Function() condition, {
   required String reason,
   Duration timeout = const Duration(seconds: 10),
+  Future<void> Function()? poll,
 }) async {
   final deadline = DateTime.now().add(timeout);
+  await poll?.call();
   while (!condition()) {
     if (DateTime.now().isAfter(deadline)) {
       fail('Timed out after ${timeout.inSeconds}s waiting for: $reason');
     }
     await tester.pump(const Duration(milliseconds: 50));
+    await poll?.call();
   }
 }

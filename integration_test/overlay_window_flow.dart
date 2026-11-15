@@ -309,6 +309,30 @@ void main() {
     await prepare(tester);
     await launch();
     final before = ScreenShot.of(primaryMonitor);
+    // A control, with no overlay yet: how much the desktop changes by itself
+    // in about the time the roster takes to appear. A video or an animation
+    // on this monitor fails the comparison below without anything being wrong
+    // with the overlay, and this is what says so.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final drift = ScreenShot.of(primaryMonitor).differenceFrom(before);
+    if (drift > 3000) {
+      desktopIncidents.add(
+        'the primary monitor changed by itself: $drift pixels in 500ms with '
+        'no overlay on it, so the comparison of it below cannot be trusted',
+      );
+    }
+    // The taskbar, if it is on this monitor. Windows 11 redraws it in another
+    // shade when a window covers its monitor — measured: the whole 48-pixel
+    // strip, every pixel of it, the moment the roster appeared — so it is
+    // left out of the comparison below. What matters about it is checked
+    // instead: it is still there, under the overlay, taking the clicks.
+    final bar = taskbar?.bounds;
+    final barOnThisMonitor =
+        bar != null &&
+        primaryMonitor.contains(bar.left + bar.width ~/ 2, bar.top);
+    final barPoint = barOnThisMonitor
+        ? (x: bar.left + bar.width ~/ 2, y: bar.top + bar.height ~/ 2)
+        : null;
     await showRoster(tester);
     final after = ScreenShot.of(primaryMonitor);
     // Counted, never saved: this one is somebody's whole desktop.
@@ -317,13 +341,30 @@ void main() {
     // hole; unkeyed, it is a sheet.
     expect(after.count(_palette.chromaKey), 0);
 
+    if (barPoint != null) {
+      expect(
+        windowClassOf(windowUnder(barPoint.x, barPoint.y)),
+        'Shell_TrayWnd',
+        reason: 'the taskbar stays reachable under the overlay',
+      );
+    }
+
     // And the monitor is what it was, apart from a roster's worth of pixels.
     // Generous, because a desktop has a clock on it; a sheet over a
     // 3440x1440 monitor is five million pixels, not twenty thousand.
-    final changed = after.differenceFrom(before);
+    final changed = after.differenceFrom(
+      before,
+      ignoring: barOnThisMonitor ? bar : null,
+    );
     expect(changed, greaterThan(3000), reason: 'the roster is there');
-    expect(changed, lessThan(60000), reason: 'and little else moved');
-
+    expect(
+      changed,
+      lessThan(60000),
+      reason:
+          'and little else moved. Roster at ${rosterArea()}; taskbar at '
+          '$bar; changed pixels, taskbar included, '
+          '${after.differenceMap(before)}',
+    );
     await hangUp(tester);
   });
 

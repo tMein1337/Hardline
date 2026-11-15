@@ -373,6 +373,60 @@ bool get foregroundIsOurs {
   return pid == _getCurrentProcessId();
 }
 
+final _getWindowText = _user32
+    .lookupFunction<
+      Int32 Function(IntPtr, Pointer<Uint16>, Int32),
+      int Function(int, Pointer<Uint16>, int)
+    >('GetWindowTextW');
+
+final _getCursorPos = _user32
+    .lookupFunction<
+      Int32 Function(Pointer<Int32>),
+      int Function(Pointer<Int32>)
+    >('GetCursorPos');
+
+/// The title of the window in front, for saying *what* took it.
+String get foregroundTitle {
+  final foreground = _getForegroundWindow();
+  if (foreground == 0) return '(none)';
+  return _withMemory(512 * 2, (memory) {
+    final length = _getWindowText(foreground, memory.cast<Uint16>(), 512);
+    return String.fromCharCodes(memory.cast<Uint16>().asTypedList(length));
+  });
+}
+
+final _getClassName = _user32
+    .lookupFunction<
+      Int32 Function(IntPtr, Pointer<Uint16>, Int32),
+      int Function(int, Pointer<Uint16>, int)
+    >('GetClassNameW');
+
+/// The window class of [window], e.g. `Shell_TrayWnd` for the taskbar.
+String windowClassOf(int window) => _withMemory(256 * 2, (memory) {
+  final length = _getClassName(window, memory.cast<Uint16>(), 256);
+  return String.fromCharCodes(memory.cast<Uint16>().asTypedList(length));
+});
+
+/// The primary monitor's taskbar, or null if there is none to find.
+NativeWindow? get taskbar {
+  final handle = _withString(
+    'Shell_TrayWnd',
+    (name) => _findWindowEx(0, 0, name, nullptr),
+  );
+  return handle == 0 ? null : NativeWindow(handle);
+}
+
+/// Where the pointer is, in physical screen pixels.
+({int x, int y}) get cursorPosition => _withMemory(8, (memory) {
+  final point = memory.cast<Int32>();
+  _getCursorPos(point);
+  return (x: point[0], y: point[1]);
+});
+
+/// Something that happened on the desktop that a test did not do, while it
+/// ran — see `requireOwnDesktop` in `fakes.dart`.
+final desktopIncidents = <String>[];
+
 /// The top-level window a click at this point would go to.
 ///
 /// Hit-testing skips a layered window that is also `WS_EX_TRANSPARENT`, so
@@ -399,19 +453,36 @@ Future<void> dragMouse({
 }) async {
   const leftDown = 0x0002;
   const leftUp = 0x0004;
+  // Where the test last put the pointer. Anywhere else when it next looks
+  // means a hand on the mouse, and a drag that did not go where it was sent.
+  var expected = (x: fromX, y: fromY);
+  void check() {
+    final now = cursorPosition;
+    if (now != expected) {
+      desktopIncidents.add(
+        'the mouse was moved during a test drag: expected it at '
+        '(${expected.x}, ${expected.y}), found it at (${now.x}, ${now.y})',
+      );
+    }
+  }
+
   _setCursorPos(fromX, fromY);
   await settle();
+  check();
   _mouseEvent(leftDown, 0, 0, 0, 0);
   await settle();
+  check();
   // In steps, because a gesture recogniser needs to see movement to call it a
   // drag — a pointer that teleports is a tap somewhere else.
   const steps = 8;
   for (var i = 1; i <= steps; i++) {
-    _setCursorPos(
-      fromX + (toX - fromX) * i ~/ steps,
-      fromY + (toY - fromY) * i ~/ steps,
+    expected = (
+      x: fromX + (toX - fromX) * i ~/ steps,
+      y: fromY + (toY - fromY) * i ~/ steps,
     );
+    _setCursorPos(expected.x, expected.y);
     await settle();
+    check();
   }
   _mouseEvent(leftUp, 0, 0, 0, 0);
   await settle();
@@ -561,9 +632,20 @@ class ScreenShot {
   }
 
   /// How many pixels differ from [other], which must cover the same area.
-  int differenceFrom(ScreenShot other) {
+  ///
+  /// Pixels inside [ignoring], in screen coordinates, are not counted.
+  int differenceFrom(ScreenShot other, {ScreenRect? ignoring}) {
     var different = 0;
     for (var offset = 0; offset < _bgra.length; offset += 4) {
+      if (ignoring != null) {
+        final pixel = offset ~/ 4;
+        if (ignoring.contains(
+          area.left + pixel % area.width,
+          area.top + pixel ~/ area.width,
+        )) {
+          continue;
+        }
+      }
       if (_bgra[offset] != other._bgra[offset] ||
           _bgra[offset + 1] != other._bgra[offset + 1] ||
           _bgra[offset + 2] != other._bgra[offset + 2]) {
@@ -571,6 +653,38 @@ class ScreenShot {
       }
     }
     return different;
+  }
+
+  /// Where the pixels that differ from [other] are: the smallest rectangle
+  /// holding them all, and how many fall in each tenth of the width — enough
+  /// to say whether a difference is the roster or something elsewhere on the
+  /// monitor, without keeping a picture of somebody's desktop.
+  String differenceMap(ScreenShot other) {
+    final width = area.width;
+    final height = area.height;
+    var left = width, top = height, right = -1, bottom = -1;
+    final columns = List.filled(10, 0);
+    final rows = List.filled(10, 0);
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        final offset = (y * width + x) * 4;
+        if (_bgra[offset] == other._bgra[offset] &&
+            _bgra[offset + 1] == other._bgra[offset + 1] &&
+            _bgra[offset + 2] == other._bgra[offset + 2]) {
+          continue;
+        }
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        columns[x * 10 ~/ width]++;
+        rows[y * 10 ~/ height]++;
+      }
+    }
+    if (right < 0) return 'no difference';
+    return 'within ($left, $top)-($right, $bottom) of ${width}x$height; '
+        'by tenths of the width: ${columns.join(' ')}; '
+        'by tenths of the height: ${rows.join(' ')}';
   }
 
   /// Writes the capture as a PNG when a directory was asked for.
