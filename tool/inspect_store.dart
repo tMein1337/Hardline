@@ -9,7 +9,7 @@
 ///
 /// It answers the questions an encrypted store cannot be asked from outside:
 /// whether the file is really encrypted, whether the attachment table exists,
-/// and how much is in it. That is step 7 of TODO 5, and the reason it is worth
+/// and how much is in it. That is step 7 of Todo 5, and the reason it is worth
 /// keeping rather than deleting once that passes — the list there is meant to
 /// be re-run after anything touches `lib/core/storage/`, and without this the
 /// only alternative is inferring from the file size.
