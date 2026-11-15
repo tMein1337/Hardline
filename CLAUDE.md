@@ -61,6 +61,11 @@ erst fragen, ob getestet werden soll.
   bleiben: ihr erster Test prüft das allererste Einblenden im Prozess.
 - Die Suiten teilen sich einen Prozess. Was ein Test vom Betriebssystem nimmt
   (registrierte Tastenkürzel, Fenster), gibt er vor dem Ende wieder zurück.
+- **Zwei echte Nutzer:** `integration_test/two_users_flow.dart` läuft gegen einen
+  echten Homeserver mit zwei Testkonten und nur, wenn sie per
+  `--dart-define=HARDLINE_LIVE_ACCOUNTS=.claude/test-accounts.json` angegeben
+  werden (die Datei liegt im git-ignorierten `.claude/`). Ohne die Angabe wird
+  sie übersprungen. Sie räumt hinterher auf: Raum verlassen, Sitzungen abgemeldet.
 - Bildschirmfotos zum Ansehen: `--dart-define=HARDLINE_TEST_SHOTS=<Ordner>`.
   Ohne die Angabe schreibt kein Test etwas auf die Platte.
 - Hilfen liegen in `integration_test/support/`: Fakes (`fakes.dart`) und die

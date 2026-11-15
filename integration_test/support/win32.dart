@@ -208,6 +208,14 @@ final _setForegroundWindow = _user32
       'SetForegroundWindow',
     );
 
+final _showWindow = _user32
+    .lookupFunction<Int32 Function(IntPtr, Int32), int Function(int, int)>(
+      'ShowWindow',
+    );
+
+final _isIconic = _user32
+    .lookupFunction<Int32 Function(IntPtr), int Function(int)>('IsIconic');
+
 final _getSystemMetrics = _user32
     .lookupFunction<Int32 Function(Int32), int Function(int)>(
       'GetSystemMetrics',
@@ -290,6 +298,17 @@ class NativeWindow {
   bool get isForeground => _getForegroundWindow() == handle;
 
   void bringToFront() => _setForegroundWindow(handle);
+
+  /// Minimises it, as the title bar's button does.
+  void minimize() => _showWindow(handle, 6); // SW_MINIMIZE
+
+  /// Brings it back from the taskbar and gives it the foreground.
+  void restore() {
+    _showWindow(handle, 9); // SW_RESTORE
+    _setForegroundWindow(handle);
+  }
+
+  bool get isMinimized => _isIconic(handle) != 0;
 
   /// The whole window, frame included.
   ScreenRect get bounds => _withMemory(16, (memory) {

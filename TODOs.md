@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # TODOs
 
-Items 1 to 4 and 8 to 9 are **verifications**, not features: the code is
+Items 1, 3, 4, 8 and 9 are **verifications**, not features: the code is
 written and believed correct, but has never been observed working, usually
 because the test needs a second client or a second machine. Items 5 to 7 are the
 Nix packaging: one verification and two pieces of work. Item 10 is what
@@ -25,21 +25,25 @@ itself. What needs a second client:
 2. **Recovery key round trip** — enter a *wrong* recovery key and confirm the
    error is comprehensible rather than a stack trace.
 
-## 2. Verify the activity summary
+## 2. The activity summary — verified
 
-Everything in stage 5 is implemented. What it needs is a second person, because
-almost nothing in it can be triggered by the account watching it — you cannot
-follow yourself, so every list is empty against a single account.
+Done, against a real homeserver with two accounts:
+`integration_test/two_users_flow.dart` runs the app as one person and a
+second client as the other. It covers the whole of what this item listed —
+typing appearing and clearing on its own when the homeserver lets it lapse,
+the row switching to a time and the message landing in the feed, a mention
+badging the room, opening it clearing the badge while the other side sees the
+read receipt arrive, a mention while scrolled up into history staying unread
+until the list is back at the bottom, and one arriving while the window is
+minimised surviving until it is restored.
 
-1. **Typing.** Have them start typing: the badge appears and clears on its own
-   when they stop, without anything else arriving. Have them send: the row
-   switches to a relative time and the message lands in the feed.
-2. **Read receipts.** Have them send a message that mentions you: a badge
-   appears. Open the room — it clears, and Element shows your read receipt
-   moving. Then scroll **up** into history, have them send another, and confirm
-   the badge does *not* clear until you scroll back down. Minimise the window,
-   have them send one more, and confirm it survives being minimised.
+It is opt-in, because it signs two accounts in and talks in a room:
 
+```powershell
+flutter drive --driver=test_driver/integration_test.dart `
+  --target=integration_test/two_users_flow.dart -d windows `
+  --dart-define=HARDLINE_LIVE_ACCOUNTS=.claude/test-accounts.json
+```
 ## 3. Verify on-device encryption on the Nix build
 
 The way out of a forgotten passphrase is verified: the real `main()` is run

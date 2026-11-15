@@ -47,6 +47,7 @@ class RoomListTile extends StatelessWidget {
     final metrics = context.metrics;
 
     return Hoverable(
+      key: Key('room_tile_${room.id}'),
       onTap: onTap,
       onDoubleTap: onDoubleTap,
       // A channel manages itself; a direct chat is really a person, so it
