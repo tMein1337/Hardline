@@ -52,6 +52,11 @@ dependencies:
   # this is a direct dependency in substance.
   webrtc_interface: ^1.5.1
   url_launcher: ^6.3.2
+  # Desktop notifications on all three platforms: toasts on Windows (via an
+  # FFI library it builds with the runner, no download), the User
+  # Notifications framework on macOS, and org.freedesktop.Notifications over
+  # D-Bus on Linux — pure Dart there, so the Nix package needs nothing for it.
+  flutter_local_notifications: ^23.0.4
 
 dependency_overrides:
   # super_native_extensions (under super_clipboard/super_drag_and_drop) caps

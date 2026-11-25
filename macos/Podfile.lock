@@ -5,6 +5,8 @@ PODS:
     - FlutterMacOS
   - file_selector_macos (0.0.1):
     - FlutterMacOS
+  - flutter_local_notifications (0.0.1):
+    - FlutterMacOS
   - flutter_vodozemac (0.0.1):
     - FlutterMacOS
   - flutter_webrtc (1.6.3):
@@ -30,6 +32,7 @@ DEPENDENCIES:
   - connectivity_plus (from `Flutter/ephemeral/.symlinks/plugins/connectivity_plus/macos`)
   - device_info_plus (from `Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos`)
   - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
+  - flutter_local_notifications (from `Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos`)
   - flutter_vodozemac (from `Flutter/ephemeral/.symlinks/plugins/flutter_vodozemac/macos`)
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
@@ -50,6 +53,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos
   file_selector_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
+  flutter_local_notifications:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos
   flutter_vodozemac:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_vodozemac/macos
   flutter_webrtc:
@@ -71,6 +76,7 @@ SPEC CHECKSUMS:
   connectivity_plus: 4adf20a405e25b42b9c9f87feff8f4b6fde18a4e
   device_info_plus: 4fb280989f669696856f8b129e4a5e3cd6c48f76
   file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
+  flutter_local_notifications: 0000000000000000000000000000000000000000
   flutter_vodozemac: fd2ea9cb3e2a37beaac883a369811fbfe042fc53
   flutter_webrtc: c7754800cea651bdfa9e8608fdb99b33a0880858
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
