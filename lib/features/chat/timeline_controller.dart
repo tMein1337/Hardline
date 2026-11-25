@@ -137,6 +137,43 @@ class TimelineController extends ChangeNotifier {
   int indexOfEvent(String eventId) =>
       _items.indexWhere((item) => item.key == eventId);
 
+  /// The message [eventId] names, as it should be drawn — newest edit applied.
+  ///
+  /// For the quote above a reply. Answers at once when the event is loaded;
+  /// otherwise null, and [fetchEvent] goes to the store or the server.
+  Event? loadedDisplayEvent(String eventId) {
+    final timeline = _timeline;
+    if (timeline == null) return null;
+    for (final event in timeline.events) {
+      if (event.eventId == eventId) return event.getDisplayEvent(timeline);
+    }
+    return null;
+  }
+
+  /// Futures rather than events, so that a quote rebuilt while its request is
+  /// still in flight waits on the same request instead of starting another.
+  final _fetched = <String, Future<Event?>>{};
+
+  /// Fetches a message that is not in the loaded timeline.
+  ///
+  /// Through `Timeline.getEventById`, which asks the local store first and
+  /// decrypts what the server returns. A failure resolves to null — a reply
+  /// whose quote cannot be found is still a readable message.
+  Future<Event?> fetchEvent(String eventId) {
+    final timeline = _timeline;
+    if (timeline == null) return Future.value();
+    return _fetched.putIfAbsent(eventId, () async {
+      try {
+        final event = await timeline.getEventById(eventId);
+        if (event == null || _disposed) return event;
+        return event.getDisplayEvent(timeline);
+      } catch (error) {
+        debugPrint('Could not fetch $eventId in $roomId: $error');
+        return null;
+      }
+    });
+  }
+
   /// Loads an older page. Safe to call repeatedly; overlapping calls are
   /// ignored.
   Future<void> loadMore() async {
@@ -169,9 +206,13 @@ class TimelineController extends ChangeNotifier {
   /// so the message shows before the network round trip completes.
   /// [candidates] are the room's members, for turning `@name` into a real
   /// mention. Empty is fine and means the message goes out as plain text.
+  ///
+  /// [inReplyTo] makes it a reply. It must be the *original* event, since the
+  /// relation names its id.
   Future<void> send(
     String text, {
     List<MentionCandidate> candidates = const [],
+    Event? inReplyTo,
   }) async {
     final body = text.trim();
     if (body.isEmpty) return;
@@ -189,9 +230,16 @@ class TimelineController extends ChangeNotifier {
       // ordinary message is byte-for-byte what it always was.
       final mentioned = mentionedUserIds(body, candidates);
       if (mentioned.isEmpty) {
-        await room.sendTextEvent(body);
+        // The SDK adds the replied-to sender to `m.mentions` itself here.
+        await room.sendTextEvent(body, inReplyTo: inReplyTo);
         return;
       }
+
+      // The spec asks a reply to mention whoever it answers, so their client
+      // notifies them. Never ourselves: answering your own message is not a
+      // reason to ping your other devices.
+      final replyee = inReplyTo?.senderId;
+      if (replyee != null && replyee != client.userID) mentioned.add(replyee);
 
       await room.sendEvent({
         'msgtype': MessageTypes.Text,
@@ -199,7 +247,7 @@ class TimelineController extends ChangeNotifier {
         'format': 'org.matrix.custom.html',
         'formatted_body': formatMentions(body, candidates),
         'm.mentions': mentionsBlock(mentioned),
-      });
+      }, inReplyTo: inReplyTo);
     } catch (error) {
       debugPrint('Could not send message to $roomId: $error');
     }
@@ -218,7 +266,15 @@ class TimelineController extends ChangeNotifier {
   /// upload loop, the cache write that later makes `Event.sendAgain()` work,
   /// and the transition to EventStatus.error on failure. All of it arrives
   /// through the existing onChange -> notifyListeners path with no new state.
-  Future<void> sendFiles(List<MatrixFile> files, {String caption = ''}) async {
+  ///
+  /// [inReplyTo] goes on the first event sent — the caption message when there
+  /// is one of its own, otherwise the first file — so the batch answers the
+  /// message once rather than once per file.
+  Future<void> sendFiles(
+    List<MatrixFile> files, {
+    String caption = '',
+    Event? inReplyTo,
+  }) async {
     if (files.isEmpty) return;
 
     final room = client.getRoomById(roomId);
@@ -231,18 +287,23 @@ class TimelineController extends ChangeNotifier {
     // which reads as a label for that image rather than for the batch. So: one
     // file gets a real caption; several get the text as its own message ahead
     // of them.
+    var replyTo = inReplyTo;
     if (text.isNotEmpty && files.length > 1) {
       try {
-        await room.sendTextEvent(text);
+        await room.sendTextEvent(text, inReplyTo: replyTo);
+        replyTo = null;
       } catch (error) {
         debugPrint('Could not send the caption to $roomId: $error');
       }
     }
 
     for (final file in files) {
+      final answering = replyTo;
+      replyTo = null;
       try {
         await room.sendFileEvent(
           file,
+          inReplyTo: answering,
           // sendFileEvent spreads extraContent last into the event content, so
           // this overrides 'body' while 'filename' keeps the real file name —
           // exactly the MSC2530 caption shape. Building the content by hand

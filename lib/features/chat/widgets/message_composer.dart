@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:matrix/matrix.dart';
 
 import '../../../core/providers/injected_providers.dart';
+import '../../../core/util/display_name.dart';
 import '../../../theme/color_slots.dart';
 import '../../../theme/theme_context.dart';
 import '../../common/hoverable.dart';
@@ -18,6 +19,7 @@ import '../attachments/attachment_picker_source.dart';
 import '../attachments/attachment_staging.dart';
 import '../attachments/pending_attachment.dart';
 import '../chat_prefs.dart';
+import '../composer_target.dart';
 import '../mention_candidates_provider.dart';
 import '../mentions.dart';
 import '../message_drafts.dart';
@@ -26,6 +28,7 @@ import '../typing_notifier.dart';
 import '../timeline_provider.dart';
 import 'attachment_tray.dart';
 import 'paste_attachment_action.dart';
+import 'reply_preview.dart';
 
 /// The message input.
 ///
@@ -131,6 +134,9 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     // the typing stopped, and waiting for the round trip leaves the badge up
     // alongside the message it announced.
     unawaited(_typing?.stop());
+    final target = ref.read(composerTargetProvider(widget.roomId));
+    ref.read(composerTargetsProvider.notifier).clear(widget.roomId);
+    final inReplyTo = target is ReplyTarget ? target.event : null;
     setState(() => _sending = true);
     try {
       final controller = ref.read(timelineControllerProvider(widget.roomId));
@@ -139,9 +145,10 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
         await controller.send(
           text,
           candidates: ref.read(mentionCandidatesProvider(widget.roomId)),
+          inReplyTo: inReplyTo,
         );
       } else {
-        await _sendAttachments(controller, attachments, text);
+        await _sendAttachments(controller, attachments, text, inReplyTo);
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -153,6 +160,7 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     TimelineController controller,
     List<PendingAttachment> attachments,
     String caption,
+    Event? inReplyTo,
   ) async {
     // Reading the bytes can fail if a staged file was moved or deleted while it
     // sat in the tray. Those are skipped rather than aborting the whole batch.
@@ -176,7 +184,9 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     // its own progress and error states, so there is nothing left here to wait
     // for. sendFiles owns its errors; the controller outliving a room switch is
     // fine because the upload runs against the SDK's Room, not this object.
-    unawaited(controller.sendFiles(files, caption: caption));
+    unawaited(
+      controller.sendFiles(files, caption: caption, inReplyTo: inReplyTo),
+    );
   }
 
   Future<void> _pickFiles() async {
@@ -268,6 +278,14 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       }
     }
 
+    // Escape backs out of a reply. Only when there is one: otherwise the key
+    // is left alone, as it always was.
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        ref.read(composerTargetProvider(widget.roomId)) != null) {
+      ref.read(composerTargetsProvider.notifier).clear(widget.roomId);
+      return KeyEventResult.handled;
+    }
+
     if (event.logicalKey != LogicalKeyboardKey.enter) {
       return KeyEventResult.ignored;
     }
@@ -289,6 +307,13 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
         ? const <MentionCandidate>[]
         : _suggestions;
 
+    final target = ref.watch(composerTargetProvider(widget.roomId));
+    // Choosing "Reply" on a message is a request to type; the caret should
+    // already be there.
+    ref.listen(composerTargetProvider(widget.roomId), (previous, next) {
+      if (next != null && next != previous) _focus.requestFocus();
+    });
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         metrics.contentPadding,
@@ -309,6 +334,13 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
               suggestions: suggestions,
               selected: _mentionIndex.clamp(0, suggestions.length - 1),
               onPick: _accept,
+            ),
+          if (target != null)
+            _TargetBanner(
+              target: target,
+              onCancel: () => ref
+                  .read(composerTargetsProvider.notifier)
+                  .clear(widget.roomId),
             ),
           _inputBox(context, colors, attachments, blocked),
         ],
@@ -402,6 +434,67 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
                     : const Icon(Icons.send),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the next send is about, drawn as a strip above the input.
+class _TargetBanner extends StatelessWidget {
+  const _TargetBanner({required this.target, required this.onCancel});
+
+  final ComposerTarget target;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final event = target.event;
+    final name = displaySafeName(
+      event.senderFromMemoryOrFallback.calcDisplayname(),
+    );
+
+    final (icon, label) = switch (target) {
+      ReplyTarget() => (Icons.reply, 'Replying to $name'),
+    };
+
+    return Container(
+      key: const Key('composer_target_banner'),
+      decoration: BoxDecoration(
+        color: colors.inputBackgroundAlt,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: colors.textMuted),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: context.text.timestamp.copyWith(
+              color: colors.textHeader,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              messageSnippet(event),
+              style: context.text.timestamp.copyWith(color: colors.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            key: const Key('composer_target_cancel'),
+            onPressed: onCancel,
+            tooltip: 'Cancel (Esc)',
+            icon: const Icon(Icons.close),
+            iconSize: 16,
+            color: colors.textMuted,
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
