@@ -8,6 +8,7 @@
 #endif
 
 #include "flutter/generated_plugin_registrant.h"
+#include "screencast/screencast_plugin.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -103,6 +104,7 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  hardline_screencast_register(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
