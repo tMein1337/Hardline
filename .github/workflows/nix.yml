@@ -14,6 +14,10 @@ name: nix
 on:
   push:
     branches: [ main ]
+    # A release tag can point at a commit that is not main's tip (v0.3.0-nixos
+    # does), and the store path depends on the commit. Build tags too, so the
+    # cache holds exactly what the release page tells people to fetch.
+    tags: [ 'v*' ]
   pull_request:
 
 jobs:
