@@ -61,7 +61,7 @@ stdenv.mkDerivation (finalAttrs: {
     owner = "utelle";
     repo = "SQLite3MultipleCiphers";
     tag = "v${finalAttrs.version}";
-    hash = lib.fakeHash;
+    hash = "sha256-T56EYBNHXdJsxmsqJlVLL019bkEOWnSWp5O/g3dsyPA=";
   };
 
   # src/sqlite3mc.c is the library's single compilation unit: it includes
