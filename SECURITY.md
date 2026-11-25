@@ -91,10 +91,11 @@ Stated plainly, because they are design positions rather than oversights:
   - Turning it on **cannot erase plaintext already written**. The database is
     re-encrypted in place, and fragments of the previous contents may remain in
     unused disk space. Full-disk encryption is what covers that.
-- **On the Nix/Linux package, that setting is unavailable and says so.**
-  nixpkgs builds `package:sqlite3` against the system SQLite, which has no
-  cipher, so Hardline refuses to enable the feature there rather than appearing
-  to encrypt and writing plaintext. See [`NIX-PACKAGING.md`](NIX-PACKAGING.md).
+- **The Nix/Linux package encrypts the same way.** It builds SQLite3 Multiple
+  Ciphers from source rather than downloading it, at the same version and with
+  the same cipher as the other platforms. A build that somehow lacked the
+  cipher would refuse to enable the feature rather than appear to encrypt and
+  write plaintext. See [`NIX-PACKAGING.md`](NIX-PACKAGING.md).
 - **There is no auto-updater.** Updates are downloaded and installed manually,
   so there is no update channel to compromise — and no automatic delivery of
   security fixes either. Watch the releases page.

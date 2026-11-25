@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import '../../common/app_tooltip.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -204,6 +206,22 @@ class _Controls extends ConsumerWidget {
   }
 
   Future<void> _pickAndShare(BuildContext context, WidgetRef ref) async {
+    // On a Linux Wayland session the bundled libwebrtc gets no screen
+    // capturer at all (it only knows X11 here; the PipeWire portal path is
+    // off), and its source list dereferences that null capturer: listing
+    // sources would take the whole app down. Say so instead.
+    if (Platform.isLinux &&
+        Platform.environment['XDG_SESSION_TYPE'] == 'wayland') {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Screen sharing is not available on Wayland yet.',
+          ),
+        ),
+      );
+      return;
+    }
+
     // Ours, not livekit_client's. Theirs is hard-coded white, offers every
     // shell window Windows will admit to, and returns an id with the window
     // title thrown away — see `ScreenSourcePicker` for the full account.

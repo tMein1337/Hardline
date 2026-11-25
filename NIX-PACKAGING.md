@@ -70,8 +70,8 @@ fixes five distinct NixOS breakages, each of which failed differently:
    is never shown. Prepended to `LD_LIBRARY_PATH`.
 4. **`libsqlite3.so`** *(silent — throws before `runApp`, so no window).*
    `sqflite_common_ffi` opens the Matrix store via a bare-name `dlopen`. Added
-   via `pkgs.sqlite`. See "The store cipher is missing on Nix" below for what
-   that costs.
+   via `pkgs.sqlite`. The hermetic package links SQLite3 Multiple Ciphers by
+   absolute path instead; see "The store cipher on Nix" below.
 5. **The app's own bundled Rust libs** *(silent — E2EE quietly disabled).*
    `libvodozemac_bindings_dart.so` lives in `build/…/bundle/lib` and is
    `dlopen`'d by bare name, but the Flutter runner leaves the executable with no
@@ -108,13 +108,13 @@ FOD for the pub cache).
   saving to `third_party/downloads/<asset>.zip` and extracting into
   `third_party/libwebrtc/`. For this app that resolves to:
   ```
-  https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m144.7559.09/libwebrtc-linux-x64-release.zip
+  https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m150.7871.07/libwebrtc-linux-x64-release.zip
   ```
 - **Fix:** pre-fetch it as a fixed-output derivation and drop it where CMake
   expects it *before* the build, so the guarded download is skipped:
   ```nix
   libwebrtcZip = pkgs.fetchurl {
-    url = "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m144.7559.09/libwebrtc-linux-x64-release.zip";
+    url = "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m150.7871.07/libwebrtc-linux-x64-release.zip";
     hash = "sha256-AAAA…";   # fill from the first build's mismatch error
   };
   ```
@@ -172,13 +172,13 @@ packages.default = pkgs.flutter.buildFlutterApplication {
 };
 ```
 
-## The store cipher is missing on Nix
+## The store cipher on Nix
 
-**Optional on-device encryption (`Settings → Security`) does not work on the Nix
-build.** The app detects this and refuses to turn the setting on, with a message
-saying why. It is not silently degraded, and everything else is unaffected.
+**Optional on-device encryption (`Settings → Security`) works on the Nix build,
+with the same cipher and on-disk format as Windows and macOS.** A store
+encrypted on one platform opens on the others.
 
-**Why.** `pubspec.yaml` asks `package:sqlite3` for the
+**What it takes.** `pubspec.yaml` asks `package:sqlite3` for the
 [SQLite3 Multiple Ciphers](https://github.com/utelle/SQLite3MultipleCiphers)
 build — stock SQLite plus a page-level cipher behind `PRAGMA key`:
 
@@ -189,38 +189,37 @@ hooks:
       source: sqlite3mc
 ```
 
-That request is honoured everywhere except here. nixpkgs carries its own source
-builder for the `sqlite3` pub package
-(`pkgs/development/compilers/dart/package-source-builders/sqlite3`), which
-patches the package's build hook:
+Everywhere else the package's build hook answers that by downloading a
+prebuilt library from GitHub releases at build time, which the sandbox cannot
+do. nixpkgs' own source builder for the package does not help: it rewrites only
+the hook's *default* branch (`fromGitHub(LibraryType.sqlite3)` →
+`LookupSystem('sqlite3')`), not the `sqlite3mc` one, so with the define above
+the build simply failed resolving `github.com`. (Until this was fixed, this
+document claimed the nixpkgs patch overrode the define and linked plain SQLite.
+It never did; the Nix build was red from the day the define was added.)
 
-```nix
-substituteInPlace lib/src/hook/compile/description.dart \
-  --replace-fail "return fromGitHub(LibraryType.sqlite3);" "return LookupSystem('sqlite3');"
-```
+**The fix**, in two parts:
 
-It has to: the unpatched hook *downloads* a prebuilt library from GitHub
-releases at build time, which no hermetic build can allow. But the patch is
-unconditional, so it overrides the `user_defines` above and links `pkgs.sqlite`
-— plain SQLite, which accepts `PRAGMA key` and **ignores it**. Silently writing
-plaintext behind a padlock is the one outcome that must not happen, which is why
-`requireCipherSupport()` in `lib/core/storage/store_cipher.dart` probes for
-`sqlite3mc_version()` before it will key anything.
+1. `nix/sqlite3mc.nix` builds SQLite3 Multiple Ciphers from its tagged source
+   as `libsqlite3mc.so`, at the version `package:sqlite3` ships prebuilt for
+   the release in `pubspec.lock` (sqlite3 3.5.1 → SQLite3 Multiple Ciphers
+   2.5.0, SQLite 3.53.4), with that package's own compile-time options. Its
+   check phase keys a database with `chacha20`, confirms the file no longer
+   starts with `SQLite format 3`, and confirms it will not read back without
+   the key — the failure this library exists to rule out is a `PRAGMA key`
+   that is accepted and ignored.
+2. `flake.nix`'s `postPatch` rewrites the define for the sandbox to
+   `source: system` with `name: <store path>/lib/libsqlite3mc.so`. A `name`
+   that is an absolute path is loaded as exactly that file, so the app links
+   this library and nothing found by search path.
 
-**Two routes out**, neither taken yet because neither can be tested from the
-machine this was written on:
+`requireCipherSupport()` in `lib/core/storage/store_cipher.dart` still probes
+for `sqlite3mc_version()` before it keys anything, so a build that ever lost the
+library would refuse rather than write plaintext behind a padlock.
 
-1. **Package SQLite3 Multiple Ciphers in this flake** and supply our own
-   `customSourceBuilders.sqlite3` patching to `LookupSystem('sqlite3mc')`, the
-   way `nix/flutter_webrtc.nix` already supplies a fixed-output derivation for
-   a prebuilt library. Keeps one cipher and one on-disk format across every
-   platform, which is why it is the preferred route. It needs a `sha256` that
-   only a real `nix build` can produce.
-2. **Use `pkgs.sqlcipher`**, which nixpkgs already has, patching to
-   `LookupSystem('sqlcipher')`. Much less work — but SQLCipher is a *different*
-   cipher with different pragmas, so `store_cipher.dart` would have to learn
-   both, and a store written on Linux would not open on Windows. Only worth it
-   if route 1 proves impractical.
+**When `sqlite3` moves**, re-read its CHANGELOG for the bundled SQLite3 Multiple
+Ciphers version and re-pin `version` and `hash` in `nix/sqlite3mc.nix`
+together; the compile-time options are in the package's `doc/hook.md`.
 
 ## Toward nixpkgs proper
 

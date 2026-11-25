@@ -1,5 +1,7 @@
 #include "my_application.h"
 
+#include <cstring>
+
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -42,7 +44,34 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
-  if (use_header_bar) {
+  // Tiling Wayland compositors (niri, sway, Hyprland, river, ...) arrange and
+  // close windows themselves. GTK 3 has no server-side decorations on Wayland,
+  // so it would draw its own title bar with close buttons that serve no
+  // purpose there. Leave the window undecorated on those desktops.
+  // HARDLINE_DECORATIONS=none|system forces one or the other.
+  const gchar* decorations = g_getenv("HARDLINE_DECORATIONS");
+  gboolean undecorated = FALSE;
+  if (g_strcmp0(decorations, "none") == 0) {
+    undecorated = TRUE;
+  } else if (g_strcmp0(decorations, "system") != 0) {
+    const gchar* desktop = g_getenv("XDG_CURRENT_DESKTOP");
+    if (desktop != nullptr) {
+      g_autofree gchar* lower = g_ascii_strdown(desktop, -1);
+      static const char* const tiling[] = {"niri", "sway",  "hyprland",
+                                           "river", "i3",   "qtile", "dwl"};
+      for (const char* name : tiling) {
+        if (strstr(lower, name) != nullptr) {
+          undecorated = TRUE;
+          break;
+        }
+      }
+    }
+  }
+
+  if (undecorated) {
+    gtk_window_set_title(window, "Hardline");
+    gtk_window_set_decorated(window, FALSE);
+  } else if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "Hardline");
