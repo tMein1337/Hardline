@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
 import 'mentions.dart';
+import 'message_content.dart';
 import 'message_grouping.dart';
 import 'message_item.dart';
 
@@ -239,18 +240,75 @@ class TimelineController extends ChangeNotifier {
       // notifies them. Never ourselves: answering your own message is not a
       // reason to ping your other devices.
       final replyee = inReplyTo?.senderId;
-      if (replyee != null && replyee != client.userID) mentioned.add(replyee);
-
-      await room.sendEvent({
-        'msgtype': MessageTypes.Text,
-        'body': body,
-        'format': 'org.matrix.custom.html',
-        'formatted_body': formatMentions(body, candidates),
-        'm.mentions': mentionsBlock(mentioned),
-      }, inReplyTo: inReplyTo);
+      await room.sendEvent(
+        textMessageContent(
+          body,
+          candidates: candidates,
+          alsoMention: {
+            if (replyee != null && replyee != client.userID) replyee,
+          },
+        ),
+        inReplyTo: inReplyTo,
+      );
     } catch (error) {
       debugPrint('Could not send message to $roomId: $error');
     }
+  }
+
+  /// Replaces the text of [original], one of our own messages, with [text].
+  ///
+  /// The local echo of the edit is folded into the message straight away by
+  /// the timeline's aggregation, so the row changes before the server answers.
+  /// Text identical to what the message already says sends nothing — an edit
+  /// event that changes nothing would still mark the message edited.
+  Future<void> edit(
+    Event original,
+    String text, {
+    required String currentText,
+    List<MentionCandidate> candidates = const [],
+  }) async {
+    final body = text.trim();
+    if (body.isEmpty || body == currentText.trim()) return;
+
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+
+    final timeline = _timeline;
+    final shown = timeline == null
+        ? original
+        : original.getDisplayEvent(timeline);
+
+    try {
+      await room.sendEvent(
+        editContent(
+          textMessageContent(
+            body,
+            candidates: candidates,
+            msgtype: original.messageType,
+          ),
+          originalEventId: original.eventId,
+          previouslyMentioned: shown.mentions.userIds.toSet(),
+        ),
+      );
+    } catch (error) {
+      debugPrint('Could not edit ${original.eventId} in $roomId: $error');
+    }
+  }
+
+  /// Our newest message that can still be edited, as (original, display).
+  ///
+  /// For the Up arrow in an empty composer. Looks only at what is loaded:
+  /// paging back through history to find something to edit would be a
+  /// surprising thing for one key press to do.
+  ({Event original, Event shown})? newestEditableOwnMessage() {
+    final timeline = _timeline;
+    if (timeline == null) return null;
+    for (final item in _items) {
+      if (item is! MessageItem) continue;
+      if (!isEditableByMe(item.original)) continue;
+      return (original: item.original, shown: item.event);
+    }
+    return null;
   }
 
   /// Sends staged attachments, optionally with [caption] as the message text.

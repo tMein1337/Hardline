@@ -29,6 +29,15 @@ String messageSnippet(Event event) => event
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
+/// The text of [shown] as its author would edit it: the plain body with any
+/// reply fallback removed, line breaks kept.
+String editableText(Event shown) => shown.calcLocalizedBodyFallback(
+  _localizations,
+  hideReply: true,
+  hideEdit: true,
+  plaintextBody: true,
+);
+
 /// The quote above a reply: who it answers, and the first line of what they
 /// said. Clicking it jumps to the message.
 class ReplyPreview extends ConsumerWidget {

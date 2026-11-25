@@ -7,6 +7,8 @@ import 'package:matrix/matrix.dart';
 
 import '../../../theme/theme_context.dart';
 import '../composer_target.dart';
+import '../message_content.dart';
+import 'reply_preview.dart';
 
 /// The small bar of actions that appears over a message while it is hovered.
 ///
@@ -14,10 +16,17 @@ import '../composer_target.dart';
 /// screen of messages is not a screen of buttons — the same trade every
 /// desktop chat client makes.
 class MessageActionBar extends ConsumerWidget {
-  const MessageActionBar({super.key, required this.original});
+  const MessageActionBar({
+    super.key,
+    required this.original,
+    required this.shown,
+  });
 
   /// The message as first sent: relations point at its id.
   final Event original;
+
+  /// What is on screen — the newest edit, if any. Editing starts from it.
+  final Event shown;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -48,6 +57,15 @@ class MessageActionBar extends ConsumerWidget {
                         .replyTo(original)
                   : null,
             ),
+            if (isEditableByMe(original))
+              MessageActionButton(
+                key: const Key('message_action_edit'),
+                icon: Icons.edit_outlined,
+                tooltip: 'Edit',
+                onPressed: () => ref
+                    .read(composerTargetsProvider.notifier)
+                    .edit(original, text: editableText(shown)),
+              ),
           ],
         ),
       ),

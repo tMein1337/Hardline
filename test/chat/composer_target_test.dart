@@ -54,6 +54,15 @@ void main() {
     expect(container.read(composerTargetProvider(_a))!.event.eventId, r'$2');
   });
 
+  test('editing replaces a reply in the same room', () {
+    targets().replyTo(_message(roomA, r'$1'));
+    targets().edit(_message(roomA, r'$2', sender: client.me), text: 'hello');
+
+    final target = container.read(composerTargetProvider(_a));
+    expect(target, isA<EditTarget>());
+    expect((target! as EditTarget).text, 'hello');
+  });
+
   test('clearing one room leaves the others alone', () {
     targets().replyTo(_message(roomA, r'$1'));
     targets().replyTo(_message(roomB, r'$2'));

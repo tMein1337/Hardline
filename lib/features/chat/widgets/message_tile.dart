@@ -29,9 +29,13 @@ class MessageTile extends StatelessWidget {
     required this.event,
     required this.showHeader,
     Event? original,
+    this.edited = false,
     this.highlighted = false,
     this.anchorKey,
   }) : original = original ?? event;
+
+  /// Whether [event] is an edit, which is said in the row.
+  final bool edited;
 
   /// What to draw — the newest edit's content for an edited message.
   final Event event;
@@ -164,7 +168,11 @@ class MessageTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                     ],
-                    MessageBody(event: event, isPending: isPending),
+                    MessageBody(
+                      event: event,
+                      isPending: isPending,
+                      edited: edited,
+                    ),
                   ],
                 ),
               ),
@@ -179,7 +187,7 @@ class MessageTile extends StatelessWidget {
               Positioned(
                 top: 2,
                 right: metrics.contentPadding,
-                child: MessageActionBar(original: original),
+                child: MessageActionBar(original: original, shown: event),
               ),
           ],
         );

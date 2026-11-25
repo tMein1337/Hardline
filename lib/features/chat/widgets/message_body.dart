@@ -26,15 +26,25 @@ const _localizations = MatrixDefaultLocalizations();
 /// The exhaustiveness guarantee is relocated, not abandoned: the switch below
 /// covers every [AttachmentKind], and `attachmentKindOf` is unit-tested.
 class MessageBody extends StatelessWidget {
-  const MessageBody({super.key, required this.event, required this.isPending});
+  const MessageBody({
+    super.key,
+    required this.event,
+    required this.isPending,
+    this.edited = false,
+  });
 
   final Event event;
   final bool isPending;
 
+  /// Adds the "(edited)" marker after the text.
+  final bool edited;
+
   @override
   Widget build(BuildContext context) {
     final kind = attachmentKindOf(event);
-    if (kind == null) return _Text(event: event, isPending: isPending);
+    if (kind == null) {
+      return _Text(event: event, isPending: isPending, edited: edited);
+    }
 
     final caption = attachmentCaption(event.content);
 
@@ -68,10 +78,15 @@ class MessageBody extends StatelessWidget {
 }
 
 class _Text extends StatelessWidget {
-  const _Text({required this.event, required this.isPending});
+  const _Text({
+    required this.event,
+    required this.isPending,
+    required this.edited,
+  });
 
   final Event event;
   final bool isPending;
+  final bool edited;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +109,10 @@ class _Text extends StatelessWidget {
     return LinkifiedText(
       text: body,
       mentions: _mentionNames(event),
+      suffix: edited ? ' (edited)' : null,
+      suffixStyle: context.text.timestamp.copyWith(
+        fontSize: context.text.sized(10),
+      ),
       style: context.text.messageBody.copyWith(
         color: isPending
             ? context.colors.textMuted

@@ -29,9 +29,15 @@ class LinkifiedText extends ConsumerStatefulWidget {
     required this.text,
     required this.style,
     this.mentions = const {},
+    this.suffix,
+    this.suffixStyle,
   });
 
   final String text;
+
+  /// Small text after the body that is not part of it, such as "(edited)".
+  final String? suffix;
+  final TextStyle? suffixStyle;
 
   /// Applied to the whole body; links add a colour and an underline on top.
   final TextStyle style;
@@ -193,6 +199,10 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
         continue;
       }
       children.add(TextSpan(text: span.text));
+    }
+    final suffix = widget.suffix;
+    if (suffix != null) {
+      children.add(TextSpan(text: suffix, style: widget.suffixStyle));
     }
 
     return SelectableText.rich(

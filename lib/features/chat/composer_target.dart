@@ -27,11 +27,24 @@ class ReplyTarget extends ComposerTarget {
   const ReplyTarget(super.event);
 }
 
+/// The next send replaces the text of [event], which is ours.
+class EditTarget extends ComposerTarget {
+  const EditTarget(super.event, {required this.text});
+
+  /// What the message says now — the newest edit's text, which is what the
+  /// composer starts from.
+  final String text;
+}
+
 class ComposerTargets extends Notifier<Map<String, ComposerTarget>> {
   @override
   Map<String, ComposerTarget> build() => const {};
 
   void replyTo(Event event) => _set(event.roomId!, ReplyTarget(event));
+
+  /// Starts editing [original], whose current text is [text].
+  void edit(Event original, {required String text}) =>
+      _set(original.roomId!, EditTarget(original, text: text));
 
   void clear(String roomId) {
     if (!state.containsKey(roomId)) return;

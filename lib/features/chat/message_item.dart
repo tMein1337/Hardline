@@ -35,6 +35,9 @@ class MessageItem extends TimelineItem {
   /// id and the edit's content, which has no reply relation in it.
   final Event original;
 
+  /// Whether what is drawn is an edit rather than the message as sent.
+  bool get edited => !identical(event, original);
+
   /// False for a continuation line — a message from the same sender close in
   /// time to the one before it, drawn without a repeated avatar and name.
   final bool showHeader;
