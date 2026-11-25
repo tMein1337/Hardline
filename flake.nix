@@ -180,9 +180,17 @@
           #     and the bare-name dlopen'd libsqlite3/libpulse.
           #   * $out/app/hardline/lib — the app's own bundled Rust .so's
           #     (libvodozemac_bindings_dart.so, libsuper_native_extensions.so).
+          #   * __EGL_EXTERNAL_PLATFORM_CONFIG_DIRS — NVIDIA's EGL looks for its
+          #     Wayland/GBM platform plugins only in /etc/egl and /usr/share/egl,
+          #     which a NixOS system need not have. Without them every EGL
+          #     context fails on Wayland ("No GL implementation is available")
+          #     and the app crashes. NixOS ships the descriptors under
+          #     /run/opengl-driver; a value the user set still wins.
           # NixOS-first by design; non-NixOS users launch via nixGL (see README).
+          # One line: dartFixupHook evals this string, so a newline would end
+          # the wrapProgram command.
           extraWrapProgramArgs = ''
-            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath runtimeLibs}:/run/opengl-driver/lib:$out/app/hardline/lib"
+            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath runtimeLibs}:/run/opengl-driver/lib:$out/app/hardline/lib" --set-default __EGL_EXTERNAL_PLATFORM_CONFIG_DIRS /run/opengl-driver/share/egl/egl_external_platform.d
           '';
 
           meta = {
@@ -273,6 +281,10 @@
               #    link failure and resolves them at runtime (nix-ld reads
               #    LD_LIBRARY_PATH).
               export LD_LIBRARY_PATH="/run/opengl-driver/lib:${lib.makeLibraryPath runtimeLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+              # NVIDIA's Wayland EGL plugins: same reason as in the package
+              # wrapper (extraWrapProgramArgs above).
+              export __EGL_EXTERNAL_PLATFORM_CONFIG_DIRS="''${__EGL_EXTERNAL_PLATFORM_CONFIG_DIRS:-/run/opengl-driver/share/egl/egl_external_platform.d}"
 
               # The app's own Rust plugin libs (e.g. libvodozemac_bindings_dart.so)
               # sit in the build bundle and are dlopen'd by bare name, but the

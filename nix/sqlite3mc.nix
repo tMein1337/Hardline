@@ -64,6 +64,13 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-T56EYBNHXdJsxmsqJlVLL019bkEOWnSWp5O/g3dsyPA=";
   };
 
+  # -Bsymbolic binds the library's calls into itself at link time. Without it,
+  # an internal call such as sqlite3_initialize -> sqlite3_mutex_enter goes
+  # through the PLT and resolves to whichever SQLite is already in the global
+  # scope. On a GTK desktop that is the system libsqlite3 (pulled in by
+  # tinysparql), whose mutex table was never set up: the app jumps to NULL and
+  # dies before the first frame.
+  #
   # src/sqlite3mc.c is the library's single compilation unit: it includes
   # SQLite itself and every cipher. The bundled AEGIS sources include their
   # headers by bare name from sibling directories, which upstream's own build
@@ -75,6 +82,7 @@ stdenv.mkDerivation (finalAttrs: {
       ${cflags} \
       $includes src/sqlite3mc.c \
       -Wl,-soname,libsqlite3mc.so \
+      -Wl,-Bsymbolic \
       -lm -lpthread -ldl
     runHook postBuild
   '';
