@@ -96,6 +96,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # CocoaPods, not Swift Package Manager, for the native side. flutter_vodozemac
+  # ships a prebuilt XCFramework for SwiftPM whose framework symlinks do not
+  # survive the pub archive, so code signing fails on macOS; through CocoaPods
+  # it is built from its Rust source by cargokit instead.
+  config:
+    enable-swift-package-manager: false
   # Bundled so the licence and the privacy statement are readable inside the
   # app with no network — an "Appropriate Legal Notices" feature that only works
   # online is not much of one.
