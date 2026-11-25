@@ -65,12 +65,15 @@ stdenv.mkDerivation (finalAttrs: {
   };
 
   # src/sqlite3mc.c is the library's single compilation unit: it includes
-  # SQLite itself and every cipher. Nothing else in the tree is needed.
+  # SQLite itself and every cipher. The bundled AEGIS sources include their
+  # headers by bare name from sibling directories, which upstream's own build
+  # files put on the search path; do the same with every directory under src/.
   buildPhase = ''
     runHook preBuild
+    includes=$(find src -type d -printf '-I%p ')
     $CC -O2 -fPIC -shared -o libsqlite3mc.so \
       ${cflags} \
-      -Isrc src/sqlite3mc.c \
+      $includes src/sqlite3mc.c \
       -Wl,-soname,libsqlite3mc.so \
       -lm -lpthread -ldl
     runHook postBuild
