@@ -264,6 +264,24 @@ initialises E2EE; the hermetic `packages.default` is only verified as far as
 `nix run github:tMein1337/Hardline` on a machine that is not this one, with no
 checkout and no dev shell, and actually driven it.
 
+**Checked on 2026-11-26** with `nix build` of PR #4 on a NixOS desktop (NVIDIA
+RTX 4070 Ti, niri on Wayland), app built and run without a dev shell: the
+first frame paints, Settings → About shows 0.3.0 with the commit, login, sync
+and opening a room work, and a call connects with audio (the log says
+`microphone tap is delivering`). Getting there took two fixes in the package
+(NVIDIA's Wayland EGL plugin path, `-Bsymbolic` for libsqlite3mc). Still open
+from that run:
+
+- **On-device encryption** (5. below) was deliberately not tested yet.
+- **Screen sharing on Wayland** is not possible: the bundled libwebrtc only
+  has the X11 capturer enabled, gets none on Wayland, and crashed listing
+  sources. The app now says it is unavailable instead. Real support needs a
+  libwebrtc with the PipeWire/portal capturer switched on.
+- **About → Tag shows `unknown`** on the Nix build. The flake sandbox has no
+  git tags, so `postPatch` stamps only the commit and timestamp. A release
+  built from a tag will still say `unknown` unless the tag is passed in some
+  other way (e.g. derived from `version` when building a release).
+
 What still needs proving:
 
 1. **`nix run` on a clean NixOS box.** A machine that has never built this,
@@ -304,7 +322,10 @@ What still needs proving:
    Check `buildFlutterApplication` actually compiles livekit_client's Linux
    plugin, `shared_cpp` FFT sources and all. Nothing in `flake.nix` supplies a
    `customSourceBuilder` for it, so it goes through the generic path.
-5. **On-device encryption, on Linux.** The package now builds SQLite3
+5. **On-device encryption, on Linux** (not yet run; the 2026-11-26 test
+   stopped before it). Steps: `Settings → Security`, set a passphrase, close
+   the app, start it again, unlock with the passphrase, and check that the
+   store file no longer starts with `SQLite format 3`. The package now builds SQLite3
    Multiple Ciphers from source (see "The store cipher on Nix" in
    [NIX-PACKAGING.md](NIX-PACKAGING.md)), and its build checks that a key
    encrypts. What the build cannot check is the app: switch it on in
