@@ -51,7 +51,8 @@ class ForegroundApp {
 /// Everything here is a no-op off Windows, returning the answer that leaves the
 /// caller working rather than throwing: the overlay is a Windows feature today,
 /// and the settings pane says so instead of offering a switch that does
-/// nothing. The same shape the store cipher takes on Nix.
+/// nothing — the same shape as the store cipher, which refuses when the
+/// SQLite it was built with has no cipher.
 class OverlayChannel {
   OverlayChannel() {
     if (!isSupported) return;

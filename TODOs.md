@@ -11,7 +11,7 @@ reasoning in the commit messages.
 Items 1 to 7 are the Windows app. Almost all of them are **verifications**:
 the code is written and tested as far as one machine can test it, and what
 remains needs Element, a second person, a game, or a homeserver configured a
-particular way. Items 8 to 10 are the Nix packaging. The last two sections are
+particular way. Items 8 and 9 are the Nix packaging. The last two sections are
 for later.
 
 ## 1. Verify settings, accounts and verification against Element
@@ -264,13 +264,6 @@ initialises E2EE; the hermetic `packages.default` is only verified as far as
 `nix run github:tMein1337/Hardline` on a machine that is not this one, with no
 checkout and no dev shell, and actually driven it.
 
-**First, re-pin libwebrtc.** flutter_webrtc went from 1.6.0 to 1.6.3 for the
-noise gate, and 1.6.3 asks for `libwebrtc.m150.7871.07`, while
-`nix/flutter_webrtc.nix` still pre-fetches `m144.7559.09`. Until the URL and
-hash there are updated from the plugin's `third_party/libwebrtc_version.ini`,
-the Nix build is expected to fail at the plugin's CMake step, which will try
-to download the release it does not find.
-
 What still needs proving:
 
 1. **`nix run` on a clean NixOS box.** A machine that has never built this,
@@ -311,12 +304,14 @@ What still needs proving:
    Check `buildFlutterApplication` actually compiles livekit_client's Linux
    plugin, `shared_cpp` FFT sources and all. Nothing in `flake.nix` supplies a
    `customSourceBuilder` for it, so it goes through the generic path.
-5. **On-device encryption refuses, and says why.** Until item 10 is done, the
-   setting in `Settings → Security` must refuse to switch on under Nix and
-   explain it — see "The store cipher is missing on Nix" in
-   [NIX-PACKAGING.md](NIX-PACKAGING.md). That is the expected result, not a
-   bug. (The way out of a forgotten passphrase is verified on Windows, by
-   `integration_test/locked_launch_flow.dart`.)
+5. **On-device encryption, on Linux.** The package now builds SQLite3
+   Multiple Ciphers from source (see "The store cipher on Nix" in
+   [NIX-PACKAGING.md](NIX-PACKAGING.md)), and its build checks that a key
+   encrypts. What the build cannot check is the app: switch it on in
+   `Settings → Security`, restart, unlock, and confirm the store's first bytes
+   are no longer `SQLite format 3`. Then copy a store encrypted on Windows to
+   the Linux machine and open it with the same passphrase — the format is
+   meant to be the same on both, and this is the test that says so.
 6. **Non-NixOS via nixGL.** The `nix run --impure …#nixGLIntel -- nix run …`
    line in "Run on Linux with Nix" has never been run. Confirm it on a non-NixOS
    distro, and with the Nvidia variant if a card is available.
@@ -371,58 +366,6 @@ built-in pub source builders (the `super_native_extensions` 0.9.1 mapping in
 `flake.nix`), and the `cargoHash`es under `nix/`. Treat a bump as a change to
 verify, done *inside* an item-8 build-and-run pass — never a blind
 `nix flake update` on faith.
-
-## 10. Make on-device encryption work on the Nix build
-
-Today it does not, and the app says so rather than pretending — `Settings →
-Security` refuses to switch on, because `requireCipherSupport()` finds no
-cipher and will not key a store with a library that would ignore the key. Item
-8.5 checks that the refusal is what happens. **This item is about removing
-the need for it.**
-
-**Why it is missing.** `pubspec.yaml` asks `package:sqlite3` for the
-SQLite3MultipleCiphers build through `hooks.user_defines`. Everywhere except
-here that is honoured. nixpkgs carries its own source builder for the `sqlite3`
-pub package which patches the build hook:
-
-```nix
-substituteInPlace lib/src/hook/compile/description.dart \
-  --replace-fail "return fromGitHub(LibraryType.sqlite3);" "return LookupSystem('sqlite3');"
-```
-
-It has to: the unpatched hook downloads a prebuilt library from GitHub at build
-time, which no hermetic build can allow. But the patch is unconditional, so it
-overrides the request and links `pkgs.sqlite` — plain SQLite, which accepts
-`PRAGMA key` and ignores it.
-
-**Two routes, and they are not equivalent.**
-
-1. **Package SQLite3MultipleCiphers in this flake**, and supply a
-   `customSourceBuilders.sqlite3` of our own that patches to
-   `LookupSystem('sqlite3mc')` instead. `flake.nix` already does exactly this
-   shape for `flutter_webrtc`, whose builder pre-fetches a prebuilt library as
-   a fixed-output derivation (`nix/flutter_webrtc.nix`) — so the pattern is
-   established and the file to copy is sitting there.
-
-   **Preferred, and the reason is on-disk format.** One cipher everywhere means
-   one store format everywhere: a database written on Windows opens on Linux,
-   and `store_cipher.dart` keeps its single pinned `chacha20` and its single
-   set of pragmas. The cost is a `sha256` that only a real `nix build` can
-   produce, which is why this could not be done from the machine the feature
-   was written on.
-
-2. **Use `pkgs.sqlcipher`**, which nixpkgs already has, patching to
-   `LookupSystem('sqlcipher')`. Far less work. But SQLCipher is a *different*
-   cipher with different pragmas and a different header: `store_cipher.dart`
-   would have to learn both and choose at runtime, `requireCipherSupport()`
-   would need to accept either, and a store written on one platform would not
-   open on the other. Worth it only if route 1 proves impractical.
-
-**When it works, item 8.5 inverts** — the Linux package should then switch the
-setting on rather than correctly refusing to. Update that point and the "The
-store cipher is missing on Nix" section of [NIX-PACKAGING.md](NIX-PACKAGING.md),
-which is where the detail lives, along with the `sqlite` comment in
-`flake.nix`'s `runtimeLibsFor`.
 
 ## Later: platform support
 

@@ -494,8 +494,8 @@ stock `sqlite3.dll`", and costed the feature accordingly. That was true of
 to version 3.x of package:sqlite3 instead". The four lines above are the whole
 of what it replaced.
 
-It does not reach Linux. nixpkgs patches this package's hook to link the system
-SQLite, which has no cipher — see "The store cipher is missing on Nix" in
+On Nix the sandbox cannot download, so the package builds the same library from
+source and points the hook at it — see "The store cipher on Nix" in
 [NIX-PACKAGING.md](NIX-PACKAGING.md).
 
 ### The file is the source of truth, not a preference
