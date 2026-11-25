@@ -142,34 +142,3 @@ Set<String> mentionedUserIds(String body, List<MentionCandidate> candidates) {
   }
   return found;
 }
-
-/// [body] with each mention rewritten as a `matrix.to` anchor.
-///
-/// The HTML half of the message. Element and every other client renders these
-/// as a pill; a client that does not falls back to the plain body, which still
-/// reads correctly because the anchor's label is the same text.
-String formatMentions(String body, List<MentionCandidate> candidates) {
-  final sorted = [...candidates]
-    ..sort((a, b) => b.displayName.length.compareTo(a.displayName.length));
-
-  var html = _escapeHtml(body);
-  for (final candidate in sorted) {
-    if (candidate.displayName.isEmpty) continue;
-    final plain = '@${_escapeHtml(candidate.displayName)}';
-    if (!html.contains(plain)) continue;
-    // The `@` goes inside the anchor, so the pill Element draws covers the
-    // whole thing — and so it matches the span `splitMentions` produces for
-    // the same message locally. The two rendering paths must not disagree
-    // about where a mention starts.
-    final anchor =
-        '<a href="https://matrix.to/#/${Uri.encodeComponent(candidate.userId)}">'
-        '@${_escapeHtml(candidate.displayName)}</a>';
-    html = html.replaceAll(plain, anchor);
-  }
-  return html;
-}
-
-String _escapeHtml(String text) => text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');

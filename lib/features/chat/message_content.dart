@@ -8,34 +8,44 @@
 
 import 'package:matrix/matrix.dart';
 
+import 'markdown_format.dart';
 import 'mentions.dart';
 
 /// The content of a text message saying [body].
 ///
-/// [candidates] are the room's members, for turning `@name` into a real
-/// mention; [alsoMention] adds people the text does not name, such as the
-/// sender of the message a reply answers.
+/// [body] is Markdown, and goes out as typed; the HTML rendering of it goes
+/// alongside as `formatted_body` whenever it says more than the plain text
+/// (see `markdown_format.dart`). [candidates] are the room's members, for
+/// turning `@name` into a real mention; [alsoMention] adds people the text
+/// does not name, such as the sender of the message a reply answers.
 Map<String, Object?> textMessageContent(
   String body, {
   List<MentionCandidate> candidates = const [],
   Set<String> alsoMention = const {},
   String msgtype = MessageTypes.Text,
 }) {
-  final named = mentionedUserIds(body, candidates);
-  final mentioned = {...named, ...alsoMention};
+  final mentioned = {...mentionedUserIds(body, candidates), ...alsoMention};
+  final html = markdownToMatrixHtml(body, candidates: candidates);
+  final mentionsRoom = _roomMention.hasMatch(body);
 
   return {
     'msgtype': msgtype,
     'body': body,
-    // The HTML half is only there to draw a pill for each name, so it is left
-    // out when nobody is named and an ordinary message stays plain text.
-    if (named.isNotEmpty) ...{
+    if (html != null) ...{
       'format': 'org.matrix.custom.html',
-      'formatted_body': formatMentions(body, candidates),
+      'formatted_body': html,
     },
-    if (mentioned.isNotEmpty) 'm.mentions': mentionsBlock(mentioned),
+    if (mentioned.isNotEmpty || mentionsRoom)
+      'm.mentions': {
+        ...mentionsBlock(mentioned),
+        if (mentionsRoom) 'room': true,
+      },
   };
 }
+
+/// `@room` as a word of its own, which pings everybody who may be pinged.
+/// Permission is the homeserver's to check, not ours.
+final _roomMention = RegExp(r'(^|\s)@room\b');
 
 /// The content of an edit replacing [originalEventId] with [newContent].
 ///

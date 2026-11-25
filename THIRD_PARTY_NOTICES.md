@@ -11,7 +11,7 @@ whenever `pubspec.lock` changes, and verify it with
 `--check` before tagging a release.
 
 - Packages listed: 173
-- Declared directly by this project: 25
+- Declared directly by this project: 27
 
 ## Platform and native components
 
@@ -3631,7 +3631,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### html 0.15.6
 
 - Source: hosted
-- Dependency: transitive
+- Dependency: direct main
 - https://pub.dev/packages/html
 
 ```text
@@ -4545,7 +4545,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ### markdown 7.3.1
 
 - Source: hosted
-- Dependency: transitive
+- Dependency: direct main
 - https://pub.dev/packages/markdown
 
 ```text

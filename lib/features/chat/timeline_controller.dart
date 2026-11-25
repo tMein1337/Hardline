@@ -223,27 +223,24 @@ class TimelineController extends ChangeNotifier {
     if (room == null) return;
 
     try {
-      // `m.mentions` is what actually pings somebody: the homeserver's push
-      // rules read it, and a message that merely *says* "@Alice" reaches
-      // nobody. Before this, every mention this client sent was decoration.
-      //
-      // The HTML half goes with it so Element draws a pill rather than the
-      // literal text. Both are omitted entirely when nobody is named, so an
-      // ordinary message is byte-for-byte what it always was.
-      final mentioned = mentionedUserIds(body, candidates);
-      if (mentioned.isEmpty) {
-        // The SDK adds the replied-to sender to `m.mentions` itself here.
+      // A leading slash is a command — /me, /shrug, /myroomnick and the rest
+      // of what the SDK understands — and is handed to it whole.
+      // A doubled slash is the escape for a message that starts with one.
+      if (body.startsWith('/') && !body.startsWith('//')) {
         await room.sendTextEvent(body, inReplyTo: inReplyTo);
         return;
       }
+      final message = body.startsWith('//') ? body.substring(1) : body;
 
-      // The spec asks a reply to mention whoever it answers, so their client
-      // notifies them. Never ourselves: answering your own message is not a
-      // reason to ping your other devices.
+      // `m.mentions` is what actually pings somebody: the homeserver's push
+      // rules read it, and a message that merely *says* "@Alice" reaches
+      // nobody. The spec also asks a reply to mention whoever it answers, so
+      // their client notifies them — never ourselves, since answering your
+      // own message is not a reason to ping your other devices.
       final replyee = inReplyTo?.senderId;
       await room.sendEvent(
         textMessageContent(
-          body,
+          message,
           candidates: candidates,
           alsoMention: {
             if (replyee != null && replyee != client.userID) replyee,
