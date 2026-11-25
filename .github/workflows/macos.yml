@@ -46,6 +46,16 @@ jobs:
       - name: Rust targets
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
+      # The image defaults to Xcode 16, whose macOS 15 SDK lacks APIs that
+      # plugins already use behind `#available(macOS 26.0, *)` (connectivity_plus:
+      # NWPath.isUltraConstrained), so Swift refuses to compile them. Take the
+      # newest Xcode 26 on the image; the app still targets macOS 10.15.
+      - name: Select Xcode 26
+        run: |
+          xcode="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)"
+          test -n "$xcode" || { echo "no Xcode 26 on this runner image" >&2; exit 1; }
+          sudo xcode-select -s "$xcode"
+
       - name: Toolchain versions
         run: |
           flutter --version
