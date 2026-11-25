@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -114,7 +115,7 @@ class RoomListTile extends StatelessWidget {
                 ),
                 if (room.isEncrypted) ...[
                   const SizedBox(width: 4),
-                  Tooltip(
+                  AppTooltip(
                     message: 'End-to-end encrypted',
                     child: Icon(Icons.lock, size: 12, color: colors.textFaint),
                   ),
@@ -182,7 +183,7 @@ class _JoinCallIcon extends ConsumerWidget {
         return Hoverable(
           onTap: () =>
               joinVoiceCall(context, ref, room.id, room.voiceJoinability),
-          builder: (context, iconHovered) => Tooltip(
+          builder: (context, iconHovered) => AppTooltip(
             // The glyph is identical whether joining is one click, needs the
             // room's power levels changed first, or is not open to us at all.
             // Saying which is the only way to know before pressing it.

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -344,7 +345,7 @@ class _LayoutEditor extends ConsumerWidget {
             ),
             const SizedBox(width: 8),
             if (isDefault)
-              Tooltip(
+              AppTooltip(
                 message: 'Anything without a layout of its own gets this one',
                 child: Icon(Icons.star, size: 16, color: colors.accent),
               )

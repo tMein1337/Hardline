@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -129,7 +130,7 @@ class VoiceParticipantRow extends ConsumerWidget {
                   // drawn only on a call we have actually joined.
                   if (participant.deafened) ...[
                     const SizedBox(width: 4),
-                    Tooltip(
+                    AppTooltip(
                       message: 'Deafened — they cannot hear the call',
                       child: Icon(
                         Icons.headset_off,
@@ -143,7 +144,7 @@ class VoiceParticipantRow extends ConsumerWidget {
                   // reach room state and so cannot be shown here at all.
                   if (audio.locallyMuted) ...[
                     const SizedBox(width: 4),
-                    Tooltip(
+                    AppTooltip(
                       // Spelling out whose decision this was: the icon looks
                       // identical to "they muted themselves", which is a
                       // different fact and not one we can even observe.
@@ -202,7 +203,7 @@ class _ScreenShareBadge extends ConsumerWidget {
 
         return Padding(
           padding: const EdgeInsets.only(left: 4),
-          child: Tooltip(
+          child: AppTooltip(
             message: 'Sharing their screen',
             child: Icon(
               Icons.screen_share,

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -287,7 +288,7 @@ class _TooltipDelayCard extends ConsumerWidget {
             subtitle: milliseconds == 0
                 ? 'Tooltips appear immediately.'
                 : 'Tooltips appear after ${_format(milliseconds)}.',
-            trailing: Tooltip(
+            trailing: AppTooltip(
               message: 'This is what a tooltip looks like.',
               child: OutlinedButton.icon(
                 onPressed: null,

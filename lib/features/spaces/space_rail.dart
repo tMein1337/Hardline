@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -126,7 +127,8 @@ class _CreateSpaceButton extends StatelessWidget {
     final colors = context.colors;
     final metrics = context.metrics;
 
-    return Tooltip(
+    return AppTooltip(
+      side: TooltipSide.right,
       message: 'Add a space',
       child: Hoverable(
         onTap: () => _AddSpaceDialog.show(context),
@@ -169,7 +171,8 @@ class _SpaceInviteButton extends StatelessWidget {
     final colors = context.colors;
     final metrics = context.metrics;
 
-    return Tooltip(
+    return AppTooltip(
+      side: TooltipSide.right,
       message: invite.inviterName == null
           ? 'Invitation to ${invite.name}'
           : '${invite.inviterName} invited you to ${invite.name}',
