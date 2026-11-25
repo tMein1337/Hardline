@@ -76,6 +76,10 @@
           # Reuse the macOS app icon as the Linux hicolor icon source. Referencing
           # the single file (rather than ./.) imports only it into the store.
           appIcon = ./macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png;
+          # lastModifiedDate is "YYYYMMDDhhmmss" (UTC); render it as ISO-8601.
+          buildTimestamp =
+            let d = self.lastModifiedDate; sub = builtins.substring; in
+            "${sub 0 4 d}-${sub 4 2 d}-${sub 6 2 d}T${sub 8 2 d}:${sub 10 2 d}:${sub 12 2 d}Z";
         in
         pkgs.flutter.buildFlutterApplication {
           pname = "hardline";
@@ -94,9 +98,20 @@
           # Plain SQLite has no cipher, so on-device encryption refuses to switch
           # on here, as the app is built to — see "The store cipher is missing on
           # Nix" in NIX-PACKAGING.md and TODOs.md item 10.
+          #
+          # Then stamp the About screen the way tool/write_build_info.dart does
+          # for the other platforms. The sandbox has no .git, so the commit comes
+          # from the flake itself: `self.rev` exists only for a clean checkout,
+          # and a dirty tree stays `unknown`, which the app reports as a
+          # development build. The timestamp is the commit's, not the build's,
+          # so the output stays reproducible.
           postPatch = ''
             substituteInPlace pubspec.yaml \
               --replace-fail "      source: sqlite3mc" "      source: system"
+          '' + lib.optionalString (self ? rev) ''
+            substituteInPlace lib/core/build_info.dart \
+              --replace-fail "const buildCommit = 'unknown';" "const buildCommit = '${self.rev}';" \
+              --replace-fail "const buildTimestamp = 'unknown';" "const buildTimestamp = '${buildTimestamp}';"
           '';
 
           # IFD (allowed in a flake, unlike nixpkgs): read pubspec.lock directly
