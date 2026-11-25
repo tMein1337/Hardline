@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -66,7 +67,7 @@ class VoiceStatusFooter extends ConsumerWidget {
                     // itself: this row is one clipped line in a narrow
                     // sidebar, and a sentence long enough to say which half of
                     // the stack gave up would be ellipsised to nothing.
-                    child: Tooltip(
+                    child: AppTooltip(
                       message: controller.errorDetail ?? label,
                       child: Text(
                         label,
@@ -235,7 +236,7 @@ class _ControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    return AppTooltip(
       message: tooltip,
       child: IconButton(
         onPressed: onPressed,

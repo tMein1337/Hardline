@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -159,7 +160,7 @@ class _ShareRow extends StatelessWidget {
             // absence is ordinary — a source with nothing playing yields video
             // alone — but when someone expects their audio to be shared and it
             // is not, this row is where they find out.
-            Tooltip(
+            AppTooltip(
               message: 'System audio is being shared',
               child: Icon(
                 Icons.volume_up,

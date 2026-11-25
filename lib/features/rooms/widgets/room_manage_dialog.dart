@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -774,7 +775,7 @@ class _ClaimedParentRow extends StatelessWidget {
         Icon(Icons.folder_off_outlined, size: 14, color: colors.textFaint),
         const SizedBox(width: 6),
         Expanded(
-          child: Tooltip(
+          child: AppTooltip(
             // Worded as the room's claim, because that is all it is: nothing
             // here can check the space lists it back without being in it.
             message:

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -278,7 +279,7 @@ class SettingsHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    return AppTooltip(
       // A rich message rather than a plain one, only so the text can be given
       // a width. `Tooltip` otherwise wraps at the window edge, and these run
       // long enough to become a single unreadable band across a maximised

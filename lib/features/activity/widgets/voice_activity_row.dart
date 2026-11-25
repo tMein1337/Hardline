@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -59,7 +60,7 @@ class VoiceActivityRow extends ConsumerWidget {
             return _Tag(label: 'You are here', color: colors.voiceConnected);
           }
           if (!activity.canJoin) {
-            return Tooltip(
+            return AppTooltip(
               message: switch (activity.joinability) {
                 VoiceJoinability.forbidden =>
                   'Calls are not enabled here and you cannot enable them',

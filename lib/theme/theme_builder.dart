@@ -79,16 +79,31 @@ ThemeData buildThemeData(
       radius: const Radius.circular(4),
       crossAxisMargin: 2,
     ),
+    // Small on purpose: a tooltip is an aside about the thing under the
+    // pointer, and at the old 13px semibold with 10/6 padding a two-line one
+    // was the size of the rail tile it described. One step below the subtitle
+    // size, medium weight, and a hairline border so it still separates from a
+    // surface of the same colour.
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: colors.floatingSurface,
-        borderRadius: BorderRadius.circular(5),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colors.divider),
+        boxShadow: [
+          BoxShadow(
+            color: colors.scrim.withValues(alpha: 0.2),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       textStyle: typography.subtitle.copyWith(
         color: colors.textHeader,
-        fontWeight: FontWeight.w600,
+        fontSize: (typography.subtitle.fontSize ?? 13) - 1,
+        fontWeight: FontWeight.w500,
+        height: 1.3,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       // Set here rather than on each `Tooltip`, which is what lets the settings
       // slider change every tooltip in the app at once. Flutter's own default
       // is `Duration.zero` — tooltips firing the moment the pointer crosses

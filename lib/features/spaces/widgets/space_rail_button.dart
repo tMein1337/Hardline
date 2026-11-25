@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -69,7 +70,7 @@ class SpaceRailButton extends StatelessWidget {
               ),
               Expanded(
                 child: Center(
-                  child: Tooltip(
+                  child: AppTooltip(
                     message: [
                       space.name,
                       // Said, because nothing else on a folded entry does:
@@ -80,9 +81,9 @@ class SpaceRailButton extends StatelessWidget {
                             'inside',
                       if (onSecondaryTap != null) 'Right-click to manage',
                     ].join('\n'),
-                    preferBelow: false,
-                    verticalOffset: 0,
-                    margin: const EdgeInsets.only(left: 8),
+                    // Beside the rail rather than under the tile: below, it
+                    // would sit on the next space down.
+                    side: TooltipSide.right,
                     child: CustomPaint(
                       // Brackets are painted outside the tile's own box, in the
                       // 5px the rail leaves around it.

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -148,7 +149,7 @@ class ActivityRow extends StatelessWidget {
     );
 
     if (tooltip case final message?) {
-      row = Tooltip(message: message, child: row);
+      row = AppTooltip(message: message, child: row);
     }
     return Padding(padding: const EdgeInsets.only(bottom: 2), child: row);
   }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 
 import '../../../theme/theme_context.dart';
@@ -54,7 +55,7 @@ class ChatHeader extends StatelessWidget {
                   // A padlock is only reassuring if you know what it claims.
                   // Saying it out loud also distinguishes "encrypted" from
                   // "verified", which the icon cannot.
-                  Tooltip(
+                  AppTooltip(
                     message: 'Messages in this room are end-to-end encrypted',
                     child: Icon(Icons.lock, size: 14, color: colors.success),
                   ),

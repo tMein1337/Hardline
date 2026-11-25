@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import '../../common/app_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,7 +35,7 @@ class RoomListTitle extends ConsumerWidget {
       );
     }
 
-    return Tooltip(
+    return AppTooltip(
       message: isHome ? 'Back to recent activity' : 'Show what is in $title',
       child: Hoverable(
         onTap: () => ref.read(selectedRoomIdsProvider.notifier).clear(spaceId),
