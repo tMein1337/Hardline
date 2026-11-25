@@ -259,8 +259,10 @@ could not do — it fails there with a missing `VCRUNTIME140_1.dll`.
 
 ## macOS
 
-The macOS build is made by `.github/workflows/macos.yml` on a GitHub-hosted
-Mac, because nobody working on Hardline has one. It runs on every pull request
+The macOS release build is made by `.github/workflows/macos.yml` on a
+GitHub-hosted Mac, so that it comes from the same clean, documented toolchain
+every time; a local build on a developer's Mac is for trying things out, not
+for the release page. It runs on every pull request
 and on every `v*` tag. Pushing the tag from step 3 is therefore all it takes:
 the run's `hardline-macos` artifact holds `hardline-<version>-macos.dmg` and
 `SHA256SUMS-macos.txt`, packaged by `tool/package_macos_release.sh` with the

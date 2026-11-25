@@ -3,10 +3,11 @@
 
 # Build the macOS app and package it as a .dmg.
 #
-# Nobody working on Hardline has a Mac, so this runner is the only machine the
-# macOS build is ever made on. It runs on every pull request so a change that
-# breaks macOS is caught there rather than at release time, and on a v* tag it
-# produces the release image (see "macOS" in RELEASING.md).
+# Release images are built here rather than on a developer's Mac, so every
+# release comes from the same clean, documented toolchain. It runs on every
+# pull request so a change that breaks macOS is caught there rather than at
+# release time, and on a v* tag it produces the release image (see "macOS" in
+# RELEASING.md).
 #
 # The result is an artifact on the run, not a GitHub release: attaching it to
 # the release page stays a deliberate, manual step, as on Windows.
