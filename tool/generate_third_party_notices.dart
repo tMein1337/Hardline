@@ -256,8 +256,11 @@ String? _readLicense(Directory dir) {
 }
 
 /// The generated file minus the counts that change with every resolve, for
-/// `--check`.
+/// `--check`. Line endings do not count: some licences ship with CRLF (image's
+/// does), and whether they reach the committed file as CRLF depends on the
+/// checkout, so a byte-exact comparison fails on one platform or the other.
 String _comparable(String text) => text
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .where((line) => !line.startsWith('- Packages listed:'))
     .where((line) => !line.startsWith('- Declared directly'))
