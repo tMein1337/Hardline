@@ -10,7 +10,9 @@ import '../../activity/widgets/user_context_menu.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
 import 'message_actions.dart';
+import '../reactions.dart';
 import 'message_body.dart';
+import 'reaction_row.dart';
 import 'reply_preview.dart';
 import '../../../core/util/display_name.dart';
 
@@ -30,12 +32,16 @@ class MessageTile extends StatelessWidget {
     required this.showHeader,
     Event? original,
     this.edited = false,
+    this.reactions = const [],
     this.highlighted = false,
     this.anchorKey,
   }) : original = original ?? event;
 
   /// Whether [event] is an edit, which is said in the row.
   final bool edited;
+
+  /// The reactions drawn under the message.
+  final List<ReactionSummary> reactions;
 
   /// What to draw — the newest edit's content for an edited message.
   final Event event;
@@ -173,6 +179,7 @@ class MessageTile extends StatelessWidget {
                       isPending: isPending,
                       edited: edited,
                     ),
+                    ReactionRow(original: original, reactions: reactions),
                   ],
                 ),
               ),

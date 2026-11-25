@@ -8,6 +8,7 @@ import 'package:matrix/matrix.dart';
 import '../../../theme/theme_context.dart';
 import '../composer_target.dart';
 import '../message_content.dart';
+import 'reaction_row.dart';
 import 'reply_preview.dart';
 
 /// The small bar of actions that appears over a message while it is hovered.
@@ -47,6 +48,16 @@ class MessageActionBar extends ConsumerWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Builder(
+              builder: (context) => MessageActionButton(
+                key: const Key('message_action_react'),
+                icon: Icons.add_reaction_outlined,
+                tooltip: 'Add reaction',
+                onPressed: canRelate
+                    ? () => pickAndReact(context, ref, original)
+                    : null,
+              ),
+            ),
             MessageActionButton(
               key: const Key('message_action_reply'),
               icon: Icons.reply,

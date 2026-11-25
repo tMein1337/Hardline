@@ -3,6 +3,8 @@
 
 import 'package:matrix/matrix.dart';
 
+import 'reactions.dart';
+
 /// One row in the message list.
 ///
 /// These hold live `Event` objects, which the SDK mutates. That is safe here
@@ -22,7 +24,11 @@ class MessageItem extends TimelineItem {
     required this.event,
     required this.showHeader,
     Event? original,
+    this.reactions = const [],
   }) : original = original ?? event;
+
+  /// The reactions on this message, one entry per key.
+  final List<ReactionSummary> reactions;
 
   /// What to draw: the newest edit's content when there is one.
   final Event event;

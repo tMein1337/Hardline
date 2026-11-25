@@ -6,6 +6,7 @@ import 'package:matrix/matrix.dart';
 
 import '../voice/matrix_rtc_membership.dart';
 import 'message_item.dart';
+import 'reactions.dart';
 
 /// How far apart two messages from the same sender may be and still be drawn as
 /// one block.
@@ -94,6 +95,7 @@ List<TimelineItem> buildTimelineItems(Timeline timeline) {
           ? MessageItem(
               event: event,
               original: original,
+              reactions: reactionsOf(original, timeline),
               // A reply always gets its own header: the quote above it is
               // about this message alone, and drawn on a continuation line
               // it would look like it belonged to the message before.

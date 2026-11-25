@@ -8,6 +8,7 @@ import 'mentions.dart';
 import 'message_content.dart';
 import 'message_grouping.dart';
 import 'message_item.dart';
+import 'reactions.dart';
 
 enum TimelineStatus { loading, ready, error }
 
@@ -309,6 +310,44 @@ class TimelineController extends ChangeNotifier {
       return (original: item.original, shown: item.event);
     }
     return null;
+  }
+
+  /// Reacts to [original] with [key], unless we already have.
+  Future<void> react(Event original, String key) async {
+    final room = client.getRoomById(roomId);
+    final timeline = _timeline;
+    if (room == null || !original.status.isSent) return;
+    if (timeline != null &&
+        reactionsOf(
+          original,
+          timeline,
+        ).any((reaction) => reaction.key == key && reaction.mine)) {
+      return;
+    }
+    try {
+      await room.sendReaction(original.eventId, key);
+    } catch (error) {
+      debugPrint('Could not react to ${original.eventId}: $error');
+    }
+  }
+
+  /// Adds our reaction with [reaction]'s key, or takes ours back.
+  ///
+  /// Taking back is a redaction of our reaction event. One still on its way
+  /// to the server has no id that can be redacted yet, so a click then does
+  /// nothing rather than failing.
+  Future<void> toggleReaction(Event original, ReactionSummary reaction) async {
+    final mine = reaction.myEventId;
+    if (mine == null) return react(original, reaction.key);
+    if (!reaction.mySent) return;
+
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+    try {
+      await room.redactEvent(mine);
+    } catch (error) {
+      debugPrint('Could not take back the reaction $mine: $error');
+    }
   }
 
   /// Sends staged attachments, optionally with [caption] as the message text.
