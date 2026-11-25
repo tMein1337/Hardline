@@ -35,16 +35,12 @@
         stdenv.cc.cc.lib # libstdc++.so.6
         pulseaudio # libpulse — enables system-audio loopback capture and
         #             silences flutter_webrtc's CMake libpulse warning
-        sqlite # libsqlite3.so — sqflite_common_ffi opens the Matrix store
-        #        with a bare-name dlopen. Missing => buildMatrixClient throws
-        #        before runApp, so no first frame is ever produced and the
-        #        window is never shown (looks like a hung/invisible app).
-        #        Note this is *plain* SQLite, with no cipher: nixpkgs' source
-        #        builder for the sqlite3 pub package overrides the
-        #        `hooks.user_defines` in pubspec.yaml that asks for the
-        #        SQLite3MultipleCiphers build. On-device encryption therefore
-        #        refuses to switch on here rather than pretending — see
-        #        "The store cipher is missing on Nix" in NIX-PACKAGING.md.
+        sqlite # libsqlite3.so — the store itself no longer loads this: the
+        #        package links SQLite3 Multiple Ciphers by absolute path (see
+        #        nix/sqlite3mc.nix and postPatch below). Kept because a
+        #        missing SQLite fails silently — the Matrix client throws
+        #        before runApp and no window ever appears — so anything still
+        #        asking for plain libsqlite3 by name should find it.
         # X11 libs pulled in by libwebrtc.so (top-level attrs; the `xorg.*`
         # set was deprecated in nixpkgs):
         libx11
@@ -76,6 +72,7 @@
           # Reuse the macOS app icon as the Linux hicolor icon source. Referencing
           # the single file (rather than ./.) imports only it into the store.
           appIcon = ./macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png;
+          sqlite3mc = pkgs.callPackage ./nix/sqlite3mc.nix { };
           # lastModifiedDate is "YYYYMMDDhhmmss" (UTC); render it as ISO-8601.
           buildTimestamp =
             let d = self.lastModifiedDate; sub = builtins.substring; in
@@ -89,15 +86,14 @@
             (builtins.match ".*\nversion: ([0-9]+[.][0-9]+[.][0-9]+).*" (builtins.readFile ./pubspec.yaml));
           src = ./.;
 
-          # pubspec.yaml asks package:sqlite3's build hook for SQLite3MultipleCiphers
-          # (`hooks.user_defines.sqlite3.source: sqlite3mc`). The hook fetches
-          # that as a prebuilt library from GitHub at build time, which the
-          # sandbox has no network for, and nixpkgs' sqlite3 source builder only
-          # patches the hook's *default* download, not this one. Ask for the
-          # system SQLite instead: `pkgs.sqlite`, on LD_LIBRARY_PATH below.
-          # Plain SQLite has no cipher, so on-device encryption refuses to switch
-          # on here, as the app is built to — see "The store cipher is missing on
-          # Nix" in NIX-PACKAGING.md and TODOs.md item 10.
+          # pubspec.yaml asks package:sqlite3's build hook for SQLite3 Multiple
+          # Ciphers (`hooks.user_defines.sqlite3.source: sqlite3mc`), the build
+          # behind on-device encryption. The hook fetches it prebuilt from GitHub
+          # at build time; the sandbox has no network, and nixpkgs' sqlite3 source
+          # builder only redirects the hook's *default* download, not this one.
+          # So the Nix build points the hook at the same library built from
+          # source (nix/sqlite3mc.nix), by absolute store path: `source: system`
+          # with a `name` that is a path is loaded as exactly that file.
           #
           # Then stamp the About screen the way tool/write_build_info.dart does
           # for the other platforms. The sandbox has no .git, so the commit comes
@@ -107,7 +103,8 @@
           # so the output stays reproducible.
           postPatch = ''
             substituteInPlace pubspec.yaml \
-              --replace-fail "      source: sqlite3mc" "      source: system"
+              --replace-fail "      source: sqlite3mc" \
+                "      source: system"$'\n'"      name: ${sqlite3mc}/lib/libsqlite3mc.so"
           '' + lib.optionalString (self ? rev) ''
             substituteInPlace lib/core/build_info.dart \
               --replace-fail "const buildCommit = 'unknown';" "const buildCommit = '${self.rev}';" \
