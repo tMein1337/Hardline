@@ -257,6 +257,34 @@ Verified this way for 0.1.1: both the installer and the portable archive start
 on a machine that has never had the Visual C++ Redistributable, which 0.1.0
 could not do — it fails there with a missing `VCRUNTIME140_1.dll`.
 
+## macOS
+
+The macOS build is made by `.github/workflows/macos.yml` on a GitHub-hosted
+Mac, because nobody working on Hardline has one. It runs on every pull request
+and on every `v*` tag. Pushing the tag from step 3 is therefore all it takes:
+the run's `hardline-macos` artifact holds `hardline-<version>-macos.dmg` and
+`SHA256SUMS-macos.txt`, packaged by `tool/package_macos_release.sh` with the
+same documents and the same clean-tree and stamp checks as the Windows script.
+Attach both to the release page by hand.
+
+The image contains `Hardline.app`, a universal binary (Apple silicon and
+Intel), for macOS 10.15 or later.
+
+Read the toolchain off the run's "Toolchain versions" step for the release
+notes: Flutter, Xcode and Rust as the runner actually had them.
+
+**Signing.** The build is ad-hoc signed only, not signed with a Developer ID
+and not notarized. Gatekeeper refuses it on first open; `README.txt` in the
+image explains "Open Anyway". Say so plainly on the release page, as for an
+unsigned Windows build. Developer ID signing and notarization need an Apple
+Developer Program membership and its certificate as repository secrets; until
+then there is nothing to sign with.
+
+**Not on macOS:** the game overlay and its global hotkeys are Windows-only
+(`windows/runner/overlay_window.cpp` has no macOS counterpart), and the
+settings pane says so. Screen sharing asks for the Screen Recording permission
+in System Settings the first time.
+
 ## 10. Keep it available
 
 For as long as any binary of a version is downloadable:

@@ -4,6 +4,21 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Homeserver, LiveKit SFU and TURN: every outgoing connection. Without
+	     it the sandbox refuses the first request and login reports a network
+	     error that is not one. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Voice and video calls. macOS still asks the user once; this only
+	     allows the sandboxed app to ask at all. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
+	<!-- Attachments and theme files go through the system file dialog
+	     (file_selector), which grants access only to what the user picks. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.network.server</key>

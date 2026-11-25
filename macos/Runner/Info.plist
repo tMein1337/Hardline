@@ -26,6 +26,12 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hardline uses the microphone for voice and video calls.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Hardline uses the camera for video calls.</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.social-networking</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
