@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:matrix/matrix.dart';
 
@@ -10,6 +12,7 @@ import '../attachments/attachment_errors.dart';
 import '../attachments/attachment_kind.dart';
 import 'attachment_card.dart';
 import 'attachment_image.dart';
+import 'formatted_body.dart';
 import 'linkified_text.dart';
 
 const _localizations = MatrixDefaultLocalizations();
@@ -26,15 +29,25 @@ const _localizations = MatrixDefaultLocalizations();
 /// The exhaustiveness guarantee is relocated, not abandoned: the switch below
 /// covers every [AttachmentKind], and `attachmentKindOf` is unit-tested.
 class MessageBody extends StatelessWidget {
-  const MessageBody({super.key, required this.event, required this.isPending});
+  const MessageBody({
+    super.key,
+    required this.event,
+    required this.isPending,
+    this.edited = false,
+  });
 
   final Event event;
   final bool isPending;
 
+  /// Adds the "(edited)" marker after the text.
+  final bool edited;
+
   @override
   Widget build(BuildContext context) {
     final kind = attachmentKindOf(event);
-    if (kind == null) return _Text(event: event, isPending: isPending);
+    if (kind == null) {
+      return _Text(event: event, isPending: isPending, edited: edited);
+    }
 
     final caption = attachmentCaption(event.content);
 
@@ -68,22 +81,45 @@ class MessageBody extends StatelessWidget {
 }
 
 class _Text extends StatelessWidget {
-  const _Text({required this.event, required this.isPending});
+  const _Text({
+    required this.event,
+    required this.isPending,
+    required this.edited,
+  });
 
   final Event event;
   final bool isPending;
+  final bool edited;
 
   @override
   Widget build(BuildContext context) {
+    final style = context.text.messageBody.copyWith(
+      color: isPending
+          ? context.colors.textMuted
+          : context.text.messageBody.color,
+    );
+    final suffix = edited ? ' (edited)' : null;
+    final suffixStyle = context.text.timestamp.copyWith(
+      fontSize: context.text.sized(10),
+    );
+
+    // Formatted text is drawn from its HTML. Only for the message types that
+    // are text: a formatted caption or an unknown type falls back to the
+    // plain body below.
+    final html = _formattedBody(event);
+    if (html != null) {
+      return FormattedBody(
+        html: html,
+        style: style,
+        mentions: _mentionNames(event),
+        suffix: suffix,
+        suffixStyle: suffixStyle,
+      );
+    }
+
     // Resolves replies, edits and non-text message types to something
-    // presentable, and handles pending sends.
-    //
-    // `plaintextBody: true` is also what makes the detected links in
-    // [LinkifiedText] safe to open without asking first: the body is the
-    // literal text the sender typed, so a link's label and its target are the
-    // same characters. Rendering `formatted_body` one day would separate the
-    // two — an <a href> can say anything — and the link handling has to gain a
-    // confirmation step in the same change.
+    // presentable, and handles pending sends. `plaintextBody: true` keeps the
+    // body the literal text the sender typed.
     final body = event.calcLocalizedBodyFallback(
       _localizations,
       hideReply: true,
@@ -94,13 +130,38 @@ class _Text extends StatelessWidget {
     return LinkifiedText(
       text: body,
       mentions: _mentionNames(event),
-      style: context.text.messageBody.copyWith(
-        color: isPending
-            ? context.colors.textMuted
-            : context.text.messageBody.color,
-      ),
+      suffix: suffix,
+      suffixStyle: suffixStyle,
+      style: style,
     );
   }
+}
+
+/// The HTML to draw for a text message, or null to draw the plain body.
+///
+/// The reply fallback is stripped by the sanitizer; what is left after it
+/// may be nothing, for a client that put the whole message in the fallback.
+String? _formattedBody(Event event) {
+  if (!event.isRichMessage || event.redacted) return null;
+  if (!const {
+    MessageTypes.Text,
+    MessageTypes.Notice,
+    MessageTypes.Emote,
+  }.contains(event.messageType)) {
+    return null;
+  }
+  final html = event.formattedText;
+  final withoutFallback = html.replaceAll(
+    RegExp(r'<mx-reply>.*?</mx-reply>', dotAll: true, caseSensitive: false),
+    '',
+  );
+  if (withoutFallback.trim().isEmpty) return null;
+  if (event.messageType != MessageTypes.Emote) return withoutFallback;
+  // "/me waves" is drawn "* Alice waves", as the plain fallback would be.
+  final name = const HtmlEscape().convert(
+    displaySafeName(event.senderFromMemoryOrFallback.calcDisplayname()),
+  );
+  return '* $name $withoutFallback';
 }
 
 /// The people this message names, as user id to display name.

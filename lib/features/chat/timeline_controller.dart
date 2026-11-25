@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:matrix/matrix.dart';
 
 import 'mentions.dart';
+import 'message_content.dart';
 import 'message_grouping.dart';
 import 'message_item.dart';
+import 'reactions.dart';
 
 enum TimelineStatus { loading, ready, error }
 
@@ -137,6 +139,43 @@ class TimelineController extends ChangeNotifier {
   int indexOfEvent(String eventId) =>
       _items.indexWhere((item) => item.key == eventId);
 
+  /// The message [eventId] names, as it should be drawn — newest edit applied.
+  ///
+  /// For the quote above a reply. Answers at once when the event is loaded;
+  /// otherwise null, and [fetchEvent] goes to the store or the server.
+  Event? loadedDisplayEvent(String eventId) {
+    final timeline = _timeline;
+    if (timeline == null) return null;
+    for (final event in timeline.events) {
+      if (event.eventId == eventId) return event.getDisplayEvent(timeline);
+    }
+    return null;
+  }
+
+  /// Futures rather than events, so that a quote rebuilt while its request is
+  /// still in flight waits on the same request instead of starting another.
+  final _fetched = <String, Future<Event?>>{};
+
+  /// Fetches a message that is not in the loaded timeline.
+  ///
+  /// Through `Timeline.getEventById`, which asks the local store first and
+  /// decrypts what the server returns. A failure resolves to null — a reply
+  /// whose quote cannot be found is still a readable message.
+  Future<Event?> fetchEvent(String eventId) {
+    final timeline = _timeline;
+    if (timeline == null) return Future.value();
+    return _fetched.putIfAbsent(eventId, () async {
+      try {
+        final event = await timeline.getEventById(eventId);
+        if (event == null || _disposed) return event;
+        return event.getDisplayEvent(timeline);
+      } catch (error) {
+        debugPrint('Could not fetch $eventId in $roomId: $error');
+        return null;
+      }
+    });
+  }
+
   /// Loads an older page. Safe to call repeatedly; overlapping calls are
   /// ignored.
   Future<void> loadMore() async {
@@ -169,9 +208,13 @@ class TimelineController extends ChangeNotifier {
   /// so the message shows before the network round trip completes.
   /// [candidates] are the room's members, for turning `@name` into a real
   /// mention. Empty is fine and means the message goes out as plain text.
+  ///
+  /// [inReplyTo] makes it a reply. It must be the *original* event, since the
+  /// relation names its id.
   Future<void> send(
     String text, {
     List<MentionCandidate> candidates = const [],
+    Event? inReplyTo,
   }) async {
     final body = text.trim();
     if (body.isEmpty) return;
@@ -180,28 +223,127 @@ class TimelineController extends ChangeNotifier {
     if (room == null) return;
 
     try {
-      // `m.mentions` is what actually pings somebody: the homeserver's push
-      // rules read it, and a message that merely *says* "@Alice" reaches
-      // nobody. Before this, every mention this client sent was decoration.
-      //
-      // The HTML half goes with it so Element draws a pill rather than the
-      // literal text. Both are omitted entirely when nobody is named, so an
-      // ordinary message is byte-for-byte what it always was.
-      final mentioned = mentionedUserIds(body, candidates);
-      if (mentioned.isEmpty) {
-        await room.sendTextEvent(body);
+      // A leading slash is a command — /me, /shrug, /myroomnick and the rest
+      // of what the SDK understands — and is handed to it whole.
+      // A doubled slash is the escape for a message that starts with one.
+      if (body.startsWith('/') && !body.startsWith('//')) {
+        await room.sendTextEvent(body, inReplyTo: inReplyTo);
         return;
       }
+      final message = body.startsWith('//') ? body.substring(1) : body;
 
-      await room.sendEvent({
-        'msgtype': MessageTypes.Text,
-        'body': body,
-        'format': 'org.matrix.custom.html',
-        'formatted_body': formatMentions(body, candidates),
-        'm.mentions': mentionsBlock(mentioned),
-      });
+      // `m.mentions` is what actually pings somebody: the homeserver's push
+      // rules read it, and a message that merely *says* "@Alice" reaches
+      // nobody. The spec also asks a reply to mention whoever it answers, so
+      // their client notifies them — never ourselves, since answering your
+      // own message is not a reason to ping your other devices.
+      final replyee = inReplyTo?.senderId;
+      await room.sendEvent(
+        textMessageContent(
+          message,
+          candidates: candidates,
+          alsoMention: {
+            if (replyee != null && replyee != client.userID) replyee,
+          },
+        ),
+        inReplyTo: inReplyTo,
+      );
     } catch (error) {
       debugPrint('Could not send message to $roomId: $error');
+    }
+  }
+
+  /// Replaces the text of [original], one of our own messages, with [text].
+  ///
+  /// The local echo of the edit is folded into the message straight away by
+  /// the timeline's aggregation, so the row changes before the server answers.
+  /// Text identical to what the message already says sends nothing — an edit
+  /// event that changes nothing would still mark the message edited.
+  Future<void> edit(
+    Event original,
+    String text, {
+    required String currentText,
+    List<MentionCandidate> candidates = const [],
+  }) async {
+    final body = text.trim();
+    if (body.isEmpty || body == currentText.trim()) return;
+
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+
+    final timeline = _timeline;
+    final shown = timeline == null
+        ? original
+        : original.getDisplayEvent(timeline);
+
+    try {
+      await room.sendEvent(
+        editContent(
+          textMessageContent(
+            body,
+            candidates: candidates,
+            msgtype: original.messageType,
+          ),
+          originalEventId: original.eventId,
+          previouslyMentioned: shown.mentions.userIds.toSet(),
+        ),
+      );
+    } catch (error) {
+      debugPrint('Could not edit ${original.eventId} in $roomId: $error');
+    }
+  }
+
+  /// Our newest message that can still be edited, as (original, display).
+  ///
+  /// For the Up arrow in an empty composer. Looks only at what is loaded:
+  /// paging back through history to find something to edit would be a
+  /// surprising thing for one key press to do.
+  ({Event original, Event shown})? newestEditableOwnMessage() {
+    final timeline = _timeline;
+    if (timeline == null) return null;
+    for (final item in _items) {
+      if (item is! MessageItem) continue;
+      if (!isEditableByMe(item.original)) continue;
+      return (original: item.original, shown: item.event);
+    }
+    return null;
+  }
+
+  /// Reacts to [original] with [key], unless we already have.
+  Future<void> react(Event original, String key) async {
+    final room = client.getRoomById(roomId);
+    final timeline = _timeline;
+    if (room == null || !original.status.isSent) return;
+    if (timeline != null &&
+        reactionsOf(
+          original,
+          timeline,
+        ).any((reaction) => reaction.key == key && reaction.mine)) {
+      return;
+    }
+    try {
+      await room.sendReaction(original.eventId, key);
+    } catch (error) {
+      debugPrint('Could not react to ${original.eventId}: $error');
+    }
+  }
+
+  /// Adds our reaction with [reaction]'s key, or takes ours back.
+  ///
+  /// Taking back is a redaction of our reaction event. One still on its way
+  /// to the server has no id that can be redacted yet, so a click then does
+  /// nothing rather than failing.
+  Future<void> toggleReaction(Event original, ReactionSummary reaction) async {
+    final mine = reaction.myEventId;
+    if (mine == null) return react(original, reaction.key);
+    if (!reaction.mySent) return;
+
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+    try {
+      await room.redactEvent(mine);
+    } catch (error) {
+      debugPrint('Could not take back the reaction $mine: $error');
     }
   }
 
@@ -218,7 +360,15 @@ class TimelineController extends ChangeNotifier {
   /// upload loop, the cache write that later makes `Event.sendAgain()` work,
   /// and the transition to EventStatus.error on failure. All of it arrives
   /// through the existing onChange -> notifyListeners path with no new state.
-  Future<void> sendFiles(List<MatrixFile> files, {String caption = ''}) async {
+  ///
+  /// [inReplyTo] goes on the first event sent — the caption message when there
+  /// is one of its own, otherwise the first file — so the batch answers the
+  /// message once rather than once per file.
+  Future<void> sendFiles(
+    List<MatrixFile> files, {
+    String caption = '',
+    Event? inReplyTo,
+  }) async {
     if (files.isEmpty) return;
 
     final room = client.getRoomById(roomId);
@@ -231,18 +381,23 @@ class TimelineController extends ChangeNotifier {
     // which reads as a label for that image rather than for the batch. So: one
     // file gets a real caption; several get the text as its own message ahead
     // of them.
+    var replyTo = inReplyTo;
     if (text.isNotEmpty && files.length > 1) {
       try {
-        await room.sendTextEvent(text);
+        await room.sendTextEvent(text, inReplyTo: replyTo);
+        replyTo = null;
       } catch (error) {
         debugPrint('Could not send the caption to $roomId: $error');
       }
     }
 
     for (final file in files) {
+      final answering = replyTo;
+      replyTo = null;
       try {
         await room.sendFileEvent(
           file,
+          inReplyTo: answering,
           // sendFileEvent spreads extraContent last into the event content, so
           // this overrides 'body' while 'filename' keeps the real file name —
           // exactly the MSC2530 caption shape. Building the content by hand

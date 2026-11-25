@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../activity/message_activity_log.dart';
 import '../../hotkeys/hotkey_provider.dart';
+import '../../notifications/message_notifications.dart';
 import '../../overlay/overlay_provider.dart';
 import '../../voice/stale_membership_sweeper.dart';
 import '../../voice/stale_ring_sweeper.dart';
@@ -33,7 +34,8 @@ import '../../voice/stale_ring_sweeper.dart';
 /// overlay has to follow a call whether or not anybody has opened its
 /// settings. The **hotkey driver** likewise — every global chord, the
 /// overlay's two included, has to be bound before the pane that describes it
-/// has ever been visited.
+/// has ever been visited. **Desktop notifications** too: a message has to be
+/// announced whether or not its room, or any room, is on screen.
 class BackgroundWorkers extends ConsumerWidget {
   const BackgroundWorkers({super.key});
 
@@ -44,6 +46,7 @@ class BackgroundWorkers extends ConsumerWidget {
     ref.watch(staleMembershipSweepProvider);
     ref.watch(overlayDriverProvider);
     ref.watch(hotkeyDriverProvider);
+    ref.watch(messageNotificationsProvider);
     return const SizedBox.shrink();
   }
 }

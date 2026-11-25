@@ -295,6 +295,9 @@ class _MessageListState extends ConsumerState<MessageList> {
                 MessageItem() => MessageTile(
                   key: ValueKey(item.key),
                   event: item.event,
+                  original: item.original,
+                  edited: item.edited,
+                  reactions: item.reactions,
                   showHeader: item.showHeader,
                   highlighted: highlighted,
                   // The scroll target, and only on the one row that is it.

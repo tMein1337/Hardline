@@ -3,6 +3,8 @@
 
 import 'package:matrix/matrix.dart';
 
+import 'reactions.dart';
+
 /// One row in the message list.
 ///
 /// These hold live `Event` objects, which the SDK mutates. That is safe here
@@ -18,16 +20,36 @@ sealed class TimelineItem {
 
 /// A chat message.
 class MessageItem extends TimelineItem {
-  const MessageItem({required this.event, required this.showHeader});
+  const MessageItem({
+    required this.event,
+    required this.showHeader,
+    Event? original,
+    this.reactions = const [],
+  }) : original = original ?? event;
 
+  /// The reactions on this message, one entry per key.
+  final List<ReactionSummary> reactions;
+
+  /// What to draw: the newest edit's content when there is one.
   final Event event;
+
+  /// The event as first sent.
+  ///
+  /// Differs from [event] only for an edited message, and matters because
+  /// everything that *points at* a message — a reply, a reaction, a further
+  /// edit — points at the original's id. The display copy carries the edit's
+  /// id and the edit's content, which has no reply relation in it.
+  final Event original;
+
+  /// Whether what is drawn is an edit rather than the message as sent.
+  bool get edited => !identical(event, original);
 
   /// False for a continuation line — a message from the same sender close in
   /// time to the one before it, drawn without a repeated avatar and name.
   final bool showHeader;
 
   @override
-  String get key => event.eventId;
+  String get key => original.eventId;
 }
 
 /// A membership change, topic edit and similar — rendered as a muted one-liner.

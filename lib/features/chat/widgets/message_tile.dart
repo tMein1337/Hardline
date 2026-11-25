@@ -9,7 +9,11 @@ import '../../../theme/theme_context.dart';
 import '../../activity/widgets/user_context_menu.dart';
 import '../../common/hoverable.dart';
 import '../../common/mx_avatar.dart';
+import 'message_actions.dart';
+import '../reactions.dart';
 import 'message_body.dart';
+import 'reaction_row.dart';
+import 'reply_preview.dart';
 import '../../../core/util/display_name.dart';
 
 /// How long the jump-to wash takes to appear and to fade.
@@ -26,11 +30,25 @@ class MessageTile extends StatelessWidget {
     super.key,
     required this.event,
     required this.showHeader,
+    Event? original,
+    this.edited = false,
+    this.reactions = const [],
     this.highlighted = false,
     this.anchorKey,
-  });
+  }) : original = original ?? event;
 
+  /// Whether [event] is an edit, which is said in the row.
+  final bool edited;
+
+  /// The reactions drawn under the message.
+  final List<ReactionSummary> reactions;
+
+  /// What to draw — the newest edit's content for an edited message.
   final Event event;
+
+  /// The message as first sent. Replies, reactions and edits point at its id,
+  /// and only it still carries the reply relation once a message is edited.
+  final Event original;
   final bool showHeader;
 
   /// Whether this is the message somebody jumped to. Washed rather than
@@ -52,6 +70,7 @@ class MessageTile extends StatelessWidget {
 
     final isPending = !event.status.isSent;
     final isMention = event.mentions.userIds.contains(event.room.client.userID);
+    final replyTo = original.inReplyToEventId();
 
     return Hoverable(
       cursor: SystemMouseCursors.basic,
@@ -67,7 +86,7 @@ class MessageTile extends StatelessWidget {
                   : colors.mentionBackground)
             : (hovered ? colors.messageHover : Colors.transparent);
 
-        return AnimatedContainer(
+        final row = AnimatedContainer(
           key: anchorKey,
           duration: _highlightFade,
           curve: Curves.easeOut,
@@ -121,6 +140,11 @@ class MessageTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (replyTo != null)
+                      ReplyPreview(
+                        roomId: event.roomId!,
+                        replyToEventId: replyTo,
+                      ),
                     if (showHeader) ...[
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -150,12 +174,29 @@ class MessageTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                     ],
-                    MessageBody(event: event, isPending: isPending),
+                    MessageBody(
+                      event: event,
+                      isPending: isPending,
+                      edited: edited,
+                    ),
+                    ReactionRow(original: original, reactions: reactions),
                   ],
                 ),
               ),
             ],
           ),
+        );
+
+        return Stack(
+          children: [
+            row,
+            if (hovered)
+              Positioned(
+                top: 2,
+                right: metrics.contentPadding,
+                child: MessageActionBar(original: original, shown: event),
+              ),
+          ],
         );
       },
     );

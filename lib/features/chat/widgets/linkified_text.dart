@@ -6,13 +6,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/providers/injected_providers.dart';
-import '../../../core/util/open_link.dart';
 import '../../../theme/theme_context.dart';
-import '../../activity/activity_navigation.dart';
 import '../../activity/widgets/user_context_menu.dart';
 import '../message_links.dart';
-import 'link_confirmation.dart';
+import 'message_link_opener.dart';
 
 /// Message text whose links can be clicked, and which is still selectable.
 ///
@@ -29,9 +26,15 @@ class LinkifiedText extends ConsumerStatefulWidget {
     required this.text,
     required this.style,
     this.mentions = const {},
+    this.suffix,
+    this.suffixStyle,
   });
 
   final String text;
+
+  /// Small text after the body that is not part of it, such as "(edited)".
+  final String? suffix;
+  final TextStyle? suffixStyle;
 
   /// Applied to the whole body; links add a colour and an underline on top.
   final TextStyle style;
@@ -111,41 +114,7 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
     _recognizers.clear();
   }
 
-  Future<void> _open(Uri target) async {
-    // A permalink that resolves to a room in this app never leaves it, so
-    // there is nothing to confirm. The step exists for handing an address
-    // somebody else wrote to the browser, which is a different act.
-    final matrixTo = parseMatrixTo(target);
-    if (matrixTo != null && _openHere(matrixTo)) return;
-
-    if (!await confirmOpenLink(context, ref, target)) return;
-    if (!mounted) return;
-    await openExternalUrl(context, target);
-  }
-
-  /// Opens a `matrix.to` link inside the app, and reports whether it could.
-  ///
-  /// A permalink to a room this account is already in has no business going out
-  /// to a web page that exists only to send the reader back again. A room we are
-  /// *not* in, or a link to a person, is a different matter: matrix.to's page
-  /// offers to join or to start a chat, which is more than this app has to show
-  /// for one, so those are left to the browser.
-  bool _openHere(MatrixToTarget target) {
-    final identifier = target.identifier;
-    final client = ref.read(clientProvider);
-    final room = identifier.startsWith('#')
-        ? client.getRoomByAlias(identifier)
-        : client.getRoomById(identifier);
-    if (room == null) return false;
-
-    final eventId = target.eventId;
-    if (eventId == null) {
-      openRoom(ref, room.id);
-    } else {
-      jumpToMessage(ref, room.id, eventId);
-    }
-    return true;
-  }
+  Future<void> _open(Uri target) => openMessageLink(context, ref, target);
 
   @override
   Widget build(BuildContext context) {
@@ -193,6 +162,10 @@ class _LinkifiedTextState extends ConsumerState<LinkifiedText> {
         continue;
       }
       children.add(TextSpan(text: span.text));
+    }
+    final suffix = widget.suffix;
+    if (suffix != null) {
+      children.add(TextSpan(text: suffix, style: widget.suffixStyle));
     }
 
     return SelectableText.rich(

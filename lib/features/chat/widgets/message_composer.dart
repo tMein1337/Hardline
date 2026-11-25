@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:matrix/matrix.dart';
 
 import '../../../core/providers/injected_providers.dart';
+import '../../../core/util/display_name.dart';
 import '../../../theme/color_slots.dart';
 import '../../../theme/theme_context.dart';
 import '../../common/hoverable.dart';
@@ -18,6 +19,7 @@ import '../attachments/attachment_picker_source.dart';
 import '../attachments/attachment_staging.dart';
 import '../attachments/pending_attachment.dart';
 import '../chat_prefs.dart';
+import '../composer_target.dart';
 import '../mention_candidates_provider.dart';
 import '../mentions.dart';
 import '../message_drafts.dart';
@@ -26,6 +28,7 @@ import '../typing_notifier.dart';
 import '../timeline_provider.dart';
 import 'attachment_tray.dart';
 import 'paste_attachment_action.dart';
+import 'reply_preview.dart';
 
 /// The message input.
 ///
@@ -61,6 +64,11 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   /// Which suggestion the arrow keys are on.
   int _mentionIndex = 0;
 
+  /// What was in the box before an edit replaced it, given back when the edit
+  /// is sent or abandoned. Starting an edit must not cost a half-written
+  /// message.
+  String? _stashedDraft;
+
   @override
   void initState() {
     super.initState();
@@ -79,10 +87,46 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     // `State` being reused across them — which is what used to carry one
     // room's draft into the next.
     final draft = ref.read(roomDraftProvider(widget.roomId));
-    if (draft.isNotEmpty) {
+    final target = ref.read(composerTargetProvider(widget.roomId));
+    if (target is EditTarget) {
+      // Came back mid-edit: the box holds the message being edited, and the
+      // draft waits until the edit is done.
+      _stashedDraft = draft;
+      _setText(target.text);
+    } else if (draft.isNotEmpty) {
       _controller.text = draft;
       _controller.selection = TextSelection.collapsed(offset: draft.length);
     }
+  }
+
+  bool get _editing =>
+      ref.read(composerTargetProvider(widget.roomId)) is EditTarget;
+
+  /// Replaces the whole text and puts the caret at the end.
+  void _setText(String text) {
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  /// Swaps the box's contents as an edit starts or ends.
+  void _onTargetChanged(ComposerTarget? previous, ComposerTarget? next) {
+    if (next is EditTarget && next != previous) {
+      if (previous is! EditTarget) _stashedDraft = _controller.text;
+      _setText(next.text);
+    } else if (previous is EditTarget && next is! EditTarget) {
+      final draft = _stashedDraft ?? '';
+      _stashedDraft = null;
+      _setText(draft);
+      if (ref.read(chatPrefsProvider).keepDrafts) {
+        ref.read(messageDraftsProvider.notifier).set(widget.roomId, draft);
+      }
+    }
+    _refreshMention();
+    // Choosing "Reply" or "Edit" on a message is a request to type; the caret
+    // should already be there.
+    if (next != null && next != previous) _focus.requestFocus();
   }
 
   /// Held here rather than built inline: a fresh instance on every rebuild
@@ -109,6 +153,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   void _onChanged(String text) {
     _typing?.onChanged(text);
     _refreshMention();
+    // The text of a message being edited is not a draft of a new one.
+    if (_editing) return;
     if (!ref.read(chatPrefsProvider).keepDrafts) return;
     ref.read(messageDraftsProvider.notifier).set(widget.roomId, text);
   }
@@ -118,6 +164,12 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
 
     final text = _controller.text;
     final attachments = ref.read(roomAttachmentsProvider(widget.roomId));
+    final target = ref.read(composerTargetProvider(widget.roomId));
+
+    if (target is EditTarget) {
+      await _sendEdit(target, text);
+      return;
+    }
 
     if (text.trim().isEmpty && attachments.isEmpty) return;
     // Enter must not silently discard the file the server would refuse.
@@ -131,6 +183,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     // the typing stopped, and waiting for the round trip leaves the badge up
     // alongside the message it announced.
     unawaited(_typing?.stop());
+    ref.read(composerTargetsProvider.notifier).clear(widget.roomId);
+    final inReplyTo = target is ReplyTarget ? target.event : null;
     setState(() => _sending = true);
     try {
       final controller = ref.read(timelineControllerProvider(widget.roomId));
@@ -139,9 +193,10 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
         await controller.send(
           text,
           candidates: ref.read(mentionCandidatesProvider(widget.roomId)),
+          inReplyTo: inReplyTo,
         );
       } else {
-        await _sendAttachments(controller, attachments, text);
+        await _sendAttachments(controller, attachments, text, inReplyTo);
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -149,10 +204,51 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     }
   }
 
+  /// Sends the edit and gives the box back to whatever was being written.
+  ///
+  /// Emptying the text and pressing Enter abandons the edit rather than
+  /// sending an empty message in its place; removing a message is a different
+  /// act from editing it. Staged attachments stay in the tray for the next
+  /// message — an edit can only change text.
+  Future<void> _sendEdit(EditTarget target, String text) async {
+    // Clearing the target is what restores the stashed draft.
+    ref.read(composerTargetsProvider.notifier).clear(widget.roomId);
+    unawaited(_typing?.stop());
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(timelineControllerProvider(widget.roomId))
+          .edit(
+            target.event,
+            text,
+            currentText: target.text,
+            candidates: ref.read(mentionCandidatesProvider(widget.roomId)),
+          );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+      _focus.requestFocus();
+    }
+  }
+
+  /// Up in an empty box edits our newest message, as in most chat clients.
+  bool _editNewest() {
+    if (_controller.text.isNotEmpty) return false;
+    if (ref.read(composerTargetProvider(widget.roomId)) != null) return false;
+    final newest = ref
+        .read(timelineControllerProvider(widget.roomId))
+        .newestEditableOwnMessage();
+    if (newest == null) return false;
+    ref
+        .read(composerTargetsProvider.notifier)
+        .edit(newest.original, text: editableText(newest.shown));
+    return true;
+  }
+
   Future<void> _sendAttachments(
     TimelineController controller,
     List<PendingAttachment> attachments,
     String caption,
+    Event? inReplyTo,
   ) async {
     // Reading the bytes can fail if a staged file was moved or deleted while it
     // sat in the tray. Those are skipped rather than aborting the whole batch.
@@ -176,7 +272,9 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     // its own progress and error states, so there is nothing left here to wait
     // for. sendFiles owns its errors; the controller outliving a room switch is
     // fine because the upload runs against the SDK's Room, not this object.
-    unawaited(controller.sendFiles(files, caption: caption));
+    unawaited(
+      controller.sendFiles(files, caption: caption, inReplyTo: inReplyTo),
+    );
   }
 
   Future<void> _pickFiles() async {
@@ -268,6 +366,18 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       }
     }
 
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp && _editNewest()) {
+      return KeyEventResult.handled;
+    }
+
+    // Escape backs out of a reply or an edit. Only when there is one:
+    // otherwise the key is left alone, as it always was.
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        ref.read(composerTargetProvider(widget.roomId)) != null) {
+      ref.read(composerTargetsProvider.notifier).clear(widget.roomId);
+      return KeyEventResult.handled;
+    }
+
     if (event.logicalKey != LogicalKeyboardKey.enter) {
       return KeyEventResult.ignored;
     }
@@ -289,6 +399,12 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
         ? const <MentionCandidate>[]
         : _suggestions;
 
+    final target = ref.watch(composerTargetProvider(widget.roomId));
+    ref.listen<ComposerTarget?>(
+      composerTargetProvider(widget.roomId),
+      _onTargetChanged,
+    );
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         metrics.contentPadding,
@@ -309,6 +425,13 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
               suggestions: suggestions,
               selected: _mentionIndex.clamp(0, suggestions.length - 1),
               onPick: _accept,
+            ),
+          if (target != null)
+            _TargetBanner(
+              target: target,
+              onCancel: () => ref
+                  .read(composerTargetsProvider.notifier)
+                  .clear(widget.roomId),
             ),
           _inputBox(context, colors, attachments, blocked),
         ],
@@ -355,7 +478,9 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
                       minLines: 1,
                       cursorColor: colors.textHeader,
                       decoration: InputDecoration(
-                        hintText: attachments.isEmpty
+                        hintText: _editing
+                            ? 'Edit message'
+                            : attachments.isEmpty
                             ? 'Message #${widget.roomName}'
                             : 'Add a caption',
                         hintStyle: context.text.inputText.copyWith(
@@ -402,6 +527,68 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
                     : const Icon(Icons.send),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the next send is about, drawn as a strip above the input.
+class _TargetBanner extends StatelessWidget {
+  const _TargetBanner({required this.target, required this.onCancel});
+
+  final ComposerTarget target;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final event = target.event;
+    final name = displaySafeName(
+      event.senderFromMemoryOrFallback.calcDisplayname(),
+    );
+
+    final (icon, label) = switch (target) {
+      ReplyTarget() => (Icons.reply, 'Replying to $name'),
+      EditTarget() => (Icons.edit_outlined, 'Editing message'),
+    };
+
+    return Container(
+      key: const Key('composer_target_banner'),
+      decoration: BoxDecoration(
+        color: colors.inputBackgroundAlt,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: colors.textMuted),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: context.text.timestamp.copyWith(
+              color: colors.textHeader,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              messageSnippet(event),
+              style: context.text.timestamp.copyWith(color: colors.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            key: const Key('composer_target_cancel'),
+            onPressed: onCancel,
+            tooltip: 'Cancel (Esc)',
+            icon: const Icon(Icons.close),
+            iconSize: 16,
+            color: colors.textMuted,
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),

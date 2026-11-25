@@ -6,6 +6,7 @@ import 'package:matrix/matrix.dart';
 
 import '../voice/matrix_rtc_membership.dart';
 import 'message_item.dart';
+import 'reactions.dart';
 
 /// How far apart two messages from the same sender may be and still be drawn as
 /// one block.
@@ -67,9 +68,12 @@ GroupingFlags _flagsFor(GroupingEvent event, {required GroupingEvent? older}) {
 List<TimelineItem> buildTimelineItems(Timeline timeline) {
   // Resolve edits and drop rows that are not rendered, so that "the previous
   // message" means the previous *visible* message.
-  final visible = <Event>[
+  final originals = <Event>[
     for (final event in timeline.events)
-      if (_isRenderable(event)) event.getDisplayEvent(timeline),
+      if (_isRenderable(event)) event,
+  ];
+  final visible = <Event>[
+    for (final event in originals) event.getDisplayEvent(timeline),
   ];
 
   final flags = computeGroupingFlags([
@@ -84,10 +88,20 @@ List<TimelineItem> buildTimelineItems(Timeline timeline) {
   final items = <TimelineItem>[];
   for (var i = 0; i < visible.length; i++) {
     final event = visible[i];
+    final original = originals[i];
 
     items.add(
       event.type == EventTypes.Message
-          ? MessageItem(event: event, showHeader: flags[i].startsGroup)
+          ? MessageItem(
+              event: event,
+              original: original,
+              reactions: reactionsOf(original, timeline),
+              // A reply always gets its own header: the quote above it is
+              // about this message alone, and drawn on a continuation line
+              // it would look like it belonged to the message before.
+              showHeader:
+                  flags[i].startsGroup || original.inReplyToEventId() != null,
+            )
           : SystemItem(event: event),
     );
 

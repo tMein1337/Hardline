@@ -15,7 +15,11 @@ const _prefsKey = 'chat_prefs_v1';
 /// How the chat panel behaves, as distinct from what it contains.
 @immutable
 class ChatPrefsState {
-  const ChatPrefsState({this.keepDrafts = true});
+  const ChatPrefsState({
+    this.keepDrafts = true,
+    this.notify = true,
+    this.notificationPreview = true,
+  });
 
   /// Reads what it can and falls back to the default for the rest.
   ///
@@ -24,25 +28,54 @@ class ChatPrefsState {
   /// is a safety question — the careful answer and the useful answer are the
   /// same one, which is to keep what somebody typed.
   factory ChatPrefsState.fromJson(Map<String, Object?> json) {
-    final keep = json['keepDrafts'];
-    return ChatPrefsState(keepDrafts: keep is bool ? keep : true);
+    bool read(String key) {
+      final value = json[key];
+      return value is bool ? value : true;
+    }
+
+    return ChatPrefsState(
+      keepDrafts: read('keepDrafts'),
+      notify: read('notify'),
+      notificationPreview: read('notificationPreview'),
+    );
   }
 
   /// Whether unsent message text survives leaving a room and coming back.
   final bool keepDrafts;
 
-  ChatPrefsState copyWith({bool? keepDrafts}) =>
-      ChatPrefsState(keepDrafts: keepDrafts ?? this.keepDrafts);
+  /// Whether new messages raise a desktop notification.
+  final bool notify;
 
-  Map<String, Object?> toJson() => {'keepDrafts': keepDrafts};
+  /// Whether that notification shows the text of the message, or only that
+  /// there is one.
+  final bool notificationPreview;
+
+  ChatPrefsState copyWith({
+    bool? keepDrafts,
+    bool? notify,
+    bool? notificationPreview,
+  }) => ChatPrefsState(
+    keepDrafts: keepDrafts ?? this.keepDrafts,
+    notify: notify ?? this.notify,
+    notificationPreview: notificationPreview ?? this.notificationPreview,
+  );
+
+  Map<String, Object?> toJson() => {
+    'keepDrafts': keepDrafts,
+    'notify': notify,
+    'notificationPreview': notificationPreview,
+  };
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ChatPrefsState && keepDrafts == other.keepDrafts;
+      other is ChatPrefsState &&
+          keepDrafts == other.keepDrafts &&
+          notify == other.notify &&
+          notificationPreview == other.notificationPreview;
 
   @override
-  int get hashCode => keepDrafts.hashCode;
+  int get hashCode => Object.hash(keepDrafts, notify, notificationPreview);
 }
 
 class ChatPrefsController extends Notifier<ChatPrefsState> {
@@ -60,6 +93,12 @@ class ChatPrefsController extends Notifier<ChatPrefsState> {
 
   Future<void> setKeepDrafts(bool keep) =>
       _persist(state.copyWith(keepDrafts: keep));
+
+  Future<void> setNotify(bool notify) =>
+      _persist(state.copyWith(notify: notify));
+
+  Future<void> setNotificationPreview(bool preview) =>
+      _persist(state.copyWith(notificationPreview: preview));
 
   Future<void> _persist(ChatPrefsState next) async {
     state = next;

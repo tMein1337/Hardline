@@ -148,30 +148,6 @@ void main() {
     });
   });
 
-  group('formatMentions', () {
-    test('wraps the name in a matrix.to anchor', () {
-      final html = formatMentions('hi @Alice', const [_alice]);
-      expect(
-        html,
-        'hi <a href="https://matrix.to/#/%40alice%3Aexample.org">@Alice</a>',
-      );
-    });
-
-    // The body is somebody else's text going into an HTML document. Escaping
-    // is not optional, and it has to happen before the anchors are inserted or
-    // it would escape them too.
-    test('escapes the body', () {
-      expect(
-        formatMentions('<b>hi</b> & bye', const []),
-        '&lt;b&gt;hi&lt;/b&gt; &amp; bye',
-      );
-    });
-
-    test('leaves a message with no mentions alone', () {
-      expect(formatMentions('plain text', const [_alice]), 'plain text');
-    });
-  });
-
   group('splitMentions', () {
     test('splits a plain run around the mention', () {
       final spans = splitMentions(splitBodyLinks('hi @Alice there'), {

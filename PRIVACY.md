@@ -100,6 +100,7 @@ is a JSON file inside the same application data directory:
 | `activity_prefs_v1:<user id>` | Which people you have chosen to follow |
 | `sas_display_v1` | Whether verification shows emoji or numbers |
 | `security_prefs_v1` | Whether a link is confirmed before it is opened |
+| `chat_prefs_v1` | Whether drafts are kept, whether desktop notifications are shown, and whether they show message text |
 
 No preference records whether on-device encryption is on. Hardline works that
 out from the database files themselves, so there is nothing in the preference
@@ -202,6 +203,7 @@ feature:
 | **Clipboard** | When you paste into the composer, or copy from the app. | Read only on an explicit paste. |
 | **Drag and drop** | When you drop a file onto the window. | Reads the dropped file, including virtual files that have no path on disk. |
 | **File dialogs** | When you attach a file or save one. | Only the files you pick. |
+| **Notifications** | When a message arrives that your push rules say should notify you, unless you turned notifications off under Settings → Chat. | The room name, the sender and — unless you turned previews off — the start of the message are handed to the operating system, which may keep them in its notification history (Windows Action Center, macOS Notification Center, your Linux desktop's notification daemon), outside Hardline's encryption. On Windows, the first notification registers Hardline's app id under `HKCU\Software\Classes\AppUserModelId`. macOS asks for permission the first time. |
 
 Hardline does not run in the background, does not register a startup entry, and
 does not capture audio, video or the screen when you have not started a call or

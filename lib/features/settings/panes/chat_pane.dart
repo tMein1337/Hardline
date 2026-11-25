@@ -20,7 +20,7 @@ class ChatPane extends ConsumerWidget {
 
     return SettingsPane(
       title: 'Chat',
-      description: 'How messages are written and sent.',
+      description: 'How messages are written, sent and announced.',
       children: [
         const SettingsLabel('Drafts'),
         SettingsCard(
@@ -41,6 +41,40 @@ class ChatPane extends ConsumerWidget {
               // each room has been visited once more.
               if (!value) ref.read(messageDraftsProvider.notifier).clearAll();
             },
+          ),
+        ),
+        const SettingsLabel('Notifications'),
+        SettingsCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Column(
+            children: [
+              SettingsSwitchTile(
+                key: const Key('settings_notify'),
+                value: prefs.notify,
+                title: 'Show desktop notifications',
+                subtitle:
+                    'For the messages your notification settings on the '
+                    'server say should notify you: mentions, direct messages '
+                    'and rooms you have not muted. Not for the room you are '
+                    'reading while Hardline is in front.',
+                onChanged: (value) =>
+                    ref.read(chatPrefsProvider.notifier).setNotify(value),
+              ),
+              SettingsSwitchTile(
+                key: const Key('settings_notification_preview'),
+                value: prefs.notificationPreview,
+                title: 'Show message text in notifications',
+                subtitle:
+                    'Off, a notification says only who wrote and where. '
+                    'Notifications are kept in the system\'s history, '
+                    'outside Hardline\'s encryption.',
+                onChanged: prefs.notify
+                    ? (value) => ref
+                          .read(chatPrefsProvider.notifier)
+                          .setNotificationPreview(value)
+                    : null,
+              ),
+            ],
           ),
         ),
       ],

@@ -29,6 +29,11 @@ dependencies:
   # only way to see what livekit says about a connection that will not come up.
   logging: ^1.3.0
   matrix: ^9.0.0
+  # Both already resolved transitively via matrix, and listed because the chat
+  # uses them directly: markdown turns what is typed into the HTML half of a
+  # message, html parses that half back for drawing.
+  html: ^0.15.6
+  markdown: ^7.3.1
   # Already resolved transitively via matrix, but listed explicitly because the
   # attachment tray sniffs a dropped file's type before the SDK ever sees it —
   # lookupMimeType decides whether a chip shows a thumbnail or a file icon.
@@ -52,6 +57,11 @@ dependencies:
   # this is a direct dependency in substance.
   webrtc_interface: ^1.5.1
   url_launcher: ^6.3.2
+  # Desktop notifications on all three platforms: toasts on Windows (via an
+  # FFI library it builds with the runner, no download), the User
+  # Notifications framework on macOS, and org.freedesktop.Notifications over
+  # D-Bus on Linux — pure Dart there, so the Nix package needs nothing for it.
+  flutter_local_notifications: ^23.0.4
 
 dependency_overrides:
   # super_native_extensions (under super_clipboard/super_drag_and_drop) caps
