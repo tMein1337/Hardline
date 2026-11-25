@@ -11,12 +11,11 @@
 # write into the read-only store path is attempted at build time). CMake then
 # does nothing: no download, no extraction.
 #
-# Version/URL are pinned to what flutter_webrtc 1.6.0 requests
-# (libwebrtc_version.ini: binary_version = libwebrtc.m144.7559.09). If the plugin
-# is bumped, re-read that manifest and re-pin url + hash.
-#
-# STALE: pubspec now resolves flutter_webrtc 1.6.3, which requests
-# libwebrtc.m150.7871.07. Re-pin before the next Nix build (TODOs.md item 8).
+# Version/URL are pinned to what flutter_webrtc 1.6.3 requests
+# (third_party/libwebrtc_version.ini: binary_version = libwebrtc.m150.7871.07).
+# If the plugin is bumped, re-read that manifest and re-pin url + hash. A stale
+# pin does not fail loudly: CMake finds *a* zip and skips the download, so the
+# plugin's headers and the prebuilt library would silently disagree.
 {
   lib,
   stdenv,
@@ -28,8 +27,8 @@
 
 let
   libwebrtcZip = fetchurl {
-    url = "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m144.7559.09/libwebrtc-linux-x64-release.zip";
-    hash = "sha256-eWvXZV5r6nb4UfBCByH38Bf+NcWsvvRrSckIoIAZSa8=";
+    url = "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m150.7871.07/libwebrtc-linux-x64-release.zip";
+    hash = lib.fakeHash;
   };
 in
 stdenv.mkDerivation {
@@ -49,14 +48,22 @@ stdenv.mkDerivation {
     mkdir -p "$out/third_party/downloads"
     cp "${libwebrtcZip}" "$out/third_party/downloads/libwebrtc-linux-x64-release.zip"
 
-    # 2. Pre-extract it exactly the way third_party/CMakeLists.txt would: the
-    #    archive has a single top-level dir (linux-x64-release/) holding include/
-    #    and lib/libwebrtc.so, which CMake renames to third_party/libwebrtc/.
+    # 2. Pre-extract it exactly the way third_party/CMakeLists.txt would: a
+    #    single top-level directory (whatever it is called) becomes
+    #    third_party/libwebrtc/; an archive with files at its root is wrapped
+    #    in one instead.
     tmp=$(mktemp -d)
     unzip -q "${libwebrtcZip}" -d "$tmp"
     rm -rf "$out/third_party/libwebrtc"
-    mv "$tmp"/linux-x64-release "$out/third_party/libwebrtc"
+    entries=("$tmp"/*)
+    if [ "''${#entries[@]}" -eq 1 ] && [ -d "''${entries[0]}" ]; then
+      mv "''${entries[0]}" "$out/third_party/libwebrtc"
+    else
+      mkdir "$out/third_party/libwebrtc"
+      mv "$tmp"/* "$out/third_party/libwebrtc/"
+    fi
     rm -rf "$tmp"
+    test -f "$out/third_party/libwebrtc/lib/libwebrtc.so"
 
     runHook postInstall
   '';

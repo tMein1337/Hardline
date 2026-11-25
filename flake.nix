@@ -79,8 +79,25 @@
         in
         pkgs.flutter.buildFlutterApplication {
           pname = "hardline";
-          version = "0.1.1";
+          # The app's own version, read from pubspec.yaml so the two cannot
+          # drift ("0.3.0+5" -> "0.3.0"; the build number is Flutter's).
+          version = builtins.head
+            (builtins.match ".*\nversion: ([0-9]+[.][0-9]+[.][0-9]+).*" (builtins.readFile ./pubspec.yaml));
           src = ./.;
+
+          # pubspec.yaml asks package:sqlite3's build hook for SQLite3MultipleCiphers
+          # (`hooks.user_defines.sqlite3.source: sqlite3mc`). The hook fetches
+          # that as a prebuilt library from GitHub at build time, which the
+          # sandbox has no network for, and nixpkgs' sqlite3 source builder only
+          # patches the hook's *default* download, not this one. Ask for the
+          # system SQLite instead: `pkgs.sqlite`, on LD_LIBRARY_PATH below.
+          # Plain SQLite has no cipher, so on-device encryption refuses to switch
+          # on here, as the app is built to — see "The store cipher is missing on
+          # Nix" in NIX-PACKAGING.md and TODOs.md item 10.
+          postPatch = ''
+            substituteInPlace pubspec.yaml \
+              --replace-fail "      source: sqlite3mc" "      source: system"
+          '';
 
           # IFD (allowed in a flake, unlike nixpkgs): read pubspec.lock directly
           # instead of maintaining a committed pubspec.lock.json.
