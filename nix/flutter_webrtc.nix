@@ -28,7 +28,7 @@
 let
   libwebrtcZip = fetchurl {
     url = "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m150.7871.07/libwebrtc-linux-x64-release.zip";
-    hash = lib.fakeHash;
+    hash = "sha256-7zgFJs+WFoSLwLl7JJkMvyrYUcIJ1dzpPMPrudN4n7w=";
   };
 in
 stdenv.mkDerivation {
