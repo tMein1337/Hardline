@@ -1,0 +1,96 @@
+# SPDX-FileCopyrightText: 2026 Mein1337
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# One-off: build the Windows release files for an existing release tag on a
+# GitHub-hosted runner. The tag (v0.3.1) predates windows.yml on main, so this
+# copy lives on a side branch and checks out the tag itself; what it builds is
+# exactly the tagged tree, stamped and packaged as RELEASING.md describes.
+name: windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build
+        required: true
+        default: v0.3.1
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Toolchain versions
+        run: |
+          flutter --version
+          rustc --version
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property displayName
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property catalog_productDisplayVersion
+          git describe --tags --exact-match HEAD
+          git rev-parse HEAD
+
+      - name: Stamp build info
+        run: |
+          flutter pub get
+          git status --porcelain
+          dart run tool/write_build_info.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content lib/core/build_info.dart | Select-String "build(Version|Commit|Tag) ="
+
+      - name: Build
+        run: flutter build windows --release
+
+      - name: Inno Setup
+        run: |
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup --no-progress -y }
+          (Get-Item (@("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1)).VersionInfo.ProductVersion
+
+      - name: Package
+        run: |
+          $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([^+\s]+)').Matches[0].Groups[1].Value)
+          powershell -ExecutionPolicy Bypass -File tool\package_windows_release.ps1 -Version $version -Tag ${{ inputs.tag }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Dependency sources
+        run: |
+          dart run tool/bundle_dependency_sources.dart
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path dist/dependency-sources/* -DestinationPath "dist/hardline-${{ inputs.tag }}-dependencies.zip"
+
+      - name: Hashes and sizes
+        run: |
+          Get-ChildItem dist -File | ForEach-Object {
+            "{0}  {1}  {2:N1} MB" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name, ($_.Length / 1MB)
+          }
+          $exe = Get-ChildItem dist -Recurse -Filter hardline.exe | Select-Object -First 1
+          "{0}  hardline.exe" -f (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hardline-windows-${{ inputs.tag }}
+          path: |
+            dist/*.zip
+            dist/*-setup.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
