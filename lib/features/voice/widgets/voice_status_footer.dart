@@ -214,9 +214,7 @@ class _Controls extends ConsumerWidget {
         Platform.environment['XDG_SESSION_TYPE'] == 'wayland') {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
-          content: Text(
-            'Screen sharing is not available on Wayland yet.',
-          ),
+          content: Text('Screen sharing is not available on Wayland yet.'),
         ),
       );
       return;
