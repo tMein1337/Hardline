@@ -49,6 +49,12 @@
         libxext
         libxfixes
         libxrandr
+        # Wayland screen sharing (linux/screencast/): the portal hands over a
+        # PipeWire stream, and its GPU buffers are read back through EGL/GLES.
+        # libglvnd only dispatches; the driver itself comes from
+        # /run/opengl-driver at runtime.
+        pipewire
+        libglvnd
       ];
 
       # The hermetic package. Uses nixpkgs' flutter.buildFlutterApplication,

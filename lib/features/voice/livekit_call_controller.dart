@@ -26,6 +26,7 @@ import 'noise_gate.dart';
 import 'speaking_participants.dart';
 import 'voice_joinability.dart';
 import 'voice_prefs_state.dart';
+import 'wayland_screencast.dart';
 
 /// Whether the microphone is captured with WebRTC's echo cancellation, noise
 /// suppression and automatic gain control. Always true outside tests.
@@ -570,6 +571,11 @@ class LiveKitCallController extends ChangeNotifier {
     _cameraOn = false;
     // Cleared rather than unpublished: the room is gone by this point, so
     // there is nothing left to take down — only our record of it.
+    // Portal captures are ours, not the room's, and keep running until
+    // told to stop.
+    for (final share in _shares) {
+      unawaited(WaylandScreencast.stop(share.sourceId));
+    }
     _shares.clear();
     if (!_disposed) notifyListeners();
   }
@@ -823,6 +829,79 @@ class LiveKitCallController extends ChangeNotifier {
     }
   }
 
+  /// Starts a share on a Linux Wayland session, alongside any already up.
+  ///
+  /// There is no source id to pass in: on Wayland only the desktop knows what
+  /// can be shared, and the xdg-desktop-portal asks the user itself. See
+  /// [WaylandScreencast]. Returns quietly when they cancel its picker.
+  ///
+  /// The portal's capture is published like flutter_webrtc's own, so
+  /// everything [startScreenShare] says about publishing directly and about
+  /// encryption holds here too. System audio is not offered: the portal
+  /// shares pictures only.
+  Future<void> startWaylandScreenShare() async {
+    final participant = _room?.localParticipant;
+    if (participant == null) return;
+
+    _portalEnded ??= WaylandScreencast.ended.listen(_onPortalShareEnded);
+
+    WaylandShare? share;
+    try {
+      share = await WaylandScreencast.start();
+      if (share == null) return;
+      // The picker can stay open for as long as the user likes; the call may
+      // have ended, or become a different one, in the meantime.
+      if (_disposed || _room?.localParticipant != participant) {
+        await WaylandScreencast.stop(share.sessionId);
+        return;
+      }
+
+      // The constructor LiveKit's own createScreenShareTrack uses, marked
+      // internal. That factory cannot be used: it captures through
+      // getDisplayMedia, which is the X11-only capturer this path replaces.
+      // The stream handed in has the same shape getDisplayMedia returns.
+      // ignore: invalid_use_of_internal_member
+      final track = lk.LocalVideoTrack(
+        lk.TrackSource.screenShareVideo,
+        share.stream,
+        share.stream.getVideoTracks().first,
+        lk.ScreenShareCaptureOptions(sourceId: share.sessionId),
+      );
+      final video = await participant.publishVideoTrack(track);
+
+      // The portal does not say what was picked, so there is no window title
+      // to show, only a number.
+      _shares.add(
+        LocalShare(
+          sourceId: share.sessionId,
+          label: 'Screen ${_shares.length + 1}',
+          videoSid: video.sid,
+          audioSid: null,
+        ),
+      );
+      notifyListeners();
+    } catch (error, stack) {
+      debugPrint('[voice] Wayland screen share failed: $error\n$stack');
+      final started = share;
+      if (started != null) await WaylandScreencast.stop(started.sessionId);
+      _error = 'Could not start sharing.';
+      _errorDetail = null;
+      notifyListeners();
+    }
+  }
+
+  /// Portal shares that ended outside the app: the desktop's own "stop
+  /// sharing" control, or the window being shared closing.
+  StreamSubscription<String>? _portalEnded;
+
+  void _onPortalShareEnded(String sessionId) {
+    // A copy: stopScreenShare takes the share out of the list.
+    for (final share
+        in _shares.where((s) => s.sourceId == sessionId).toList()) {
+      unawaited(stopScreenShare(share.videoSid));
+    }
+  }
+
   /// Stops one share, leaving any others running.
   ///
   /// Removed from the list before the unpublish rather than after: the far end
@@ -846,6 +925,8 @@ class LiveKitCallController extends ChangeNotifier {
       if (audioSid != null) await participant.removePublishedTrack(audioSid);
     } catch (error, stack) {
       debugPrint('[voice] stopping screen share failed: $error\n$stack');
+    } finally {
+      await WaylandScreencast.stop(share.sourceId);
     }
   }
 
@@ -1325,7 +1406,11 @@ class LiveKitCallController extends ChangeNotifier {
       // drawing a share that has already stopped.
       ..on<lk.LocalTrackPublishedEvent>((_) => _safeNotify())
       ..on<lk.LocalTrackUnpublishedEvent>((event) {
-        _shares.removeWhere((share) => share.videoSid == event.publication.sid);
+        final sid = event.publication.sid;
+        for (final share in _shares.where((share) => share.videoSid == sid)) {
+          unawaited(WaylandScreencast.stop(share.sourceId));
+        }
+        _shares.removeWhere((share) => share.videoSid == sid);
         _safeNotify();
       });
 
@@ -1597,6 +1682,10 @@ class LiveKitCallController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_portalEnded?.cancel());
+    for (final share in _shares) {
+      unawaited(WaylandScreencast.stop(share.sourceId));
+    }
     _refreshTimer?.cancel();
     // Stops the heartbeat but deliberately leaves the scheduled withdrawal
     // standing. `_teardown` below cancels it properly if it gets that far; if

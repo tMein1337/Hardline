@@ -74,6 +74,10 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# Wayland screen sharing; needs the flutter_webrtc target defined above.
+add_subdirectory("screencast")
+target_link_libraries(${BINARY_NAME} PRIVATE hardline_screencast)
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

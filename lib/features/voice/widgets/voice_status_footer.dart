@@ -1,17 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Mein1337
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import '../../common/app_tooltip.dart';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../common/app_tooltip.dart';
 import '../../../core/providers/injected_providers.dart';
 import '../../../theme/theme_context.dart';
 import '../call_controller_provider.dart';
 import '../livekit_call_controller.dart';
 import '../voice_prefs_controller.dart';
+import '../wayland_screencast.dart';
 import '../../../core/util/display_name.dart';
 import 'screen_share_menu.dart';
 import 'screen_source_picker.dart';
@@ -206,17 +205,25 @@ class _Controls extends ConsumerWidget {
   }
 
   Future<void> _pickAndShare(BuildContext context, WidgetRef ref) async {
-    // On a Linux Wayland session the bundled libwebrtc gets no screen
-    // capturer at all (it only knows X11 here; the PipeWire portal path is
-    // off), and its source list dereferences that null capturer: listing
-    // sources would take the whole app down. Say so instead.
-    if (Platform.isLinux &&
-        Platform.environment['XDG_SESSION_TYPE'] == 'wayland') {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text('Screen sharing is not available on Wayland yet.'),
-        ),
-      );
+    // On a Linux Wayland session flutter_webrtc's capturer must not be
+    // touched: its bundled libwebrtc only knows X11, gets no capturer at
+    // all here, and listing sources dereferences that null capturer, which
+    // takes the whole app down. The desktop's portal picks instead, in its
+    // own dialog; see `WaylandScreencast`.
+    if (WaylandScreencast.applies) {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (await WaylandScreencast.isAvailable()) {
+        await controller.startWaylandScreenShare();
+      } else {
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Screen sharing on Wayland needs xdg-desktop-portal with '
+              'PipeWire, and this build has no support for it.',
+            ),
+          ),
+        );
+      }
       return;
     }
 
