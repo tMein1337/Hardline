@@ -18,7 +18,29 @@ on:
     # does), and the store path depends on the commit. Build tags too, so the
     # cache holds exactly what the release page tells people to fetch.
     tags: [ 'v*' ]
+  # Pull requests only when the Nix package can change. Pushes to main and tags
+  # stay unfiltered: the flake's source is the whole tree, so every commit has
+  # its own store path, and the cache should hold each one.
   pull_request:
+    paths:
+      - 'lib/**'
+      - 'linux/**'
+      - 'nix/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      # Bundled into the app as assets, and the icon the package installs.
+      - 'LICENSE'
+      - 'PRIVACY.md'
+      - 'macos/Runner/Assets.xcassets/AppIcon.appiconset/**'
+      - '.github/workflows/nix.yml'
+
+# A new push to a pull request cancels the run for the previous commit.
+# Pushes to main and tags always finish, so each one reaches the cache.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
