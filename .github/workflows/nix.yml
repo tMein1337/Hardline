@@ -82,6 +82,31 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
 
+      # nix/release.nix names the release tag shown on the About screen. It may
+      # only be set in the commit a Nix release tag points at: on a branch or a
+      # pull request it must be null, or every later build of main would claim
+      # to be that release; and a `*-nixos` tag must name itself, or its build
+      # would say `unknown` (or another tag). Checked before the long build.
+      - name: Check the release tag in nix/release.nix
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          declared="$(nix eval --json --file nix/release.nix tag)"
+          echo "nix/release.nix: tag = $declared"
+          if [ "$REF_TYPE" = tag ]; then
+            case "$REF_NAME" in
+              *-nixos) expected="\"$REF_NAME\"" ;;
+              *) [ "$declared" = null ] && exit 0; expected="\"$REF_NAME\"" ;;
+            esac
+          else
+            expected=null
+          fi
+          if [ "$declared" != "$expected" ]; then
+            echo "::error file=nix/release.nix::tag must be $expected here, is $declared (see RELEASING.md, Nix release)"
+            exit 1
+          fi
+
       # Pushes all built store paths to the cache after the build when the auth
       # token is present. Forks (PRs without the secret) still build as a check
       # but do not push.
