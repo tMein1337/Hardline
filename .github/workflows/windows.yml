@@ -5,9 +5,10 @@
 #
 # Two jobs:
 #
-#   build        analyze, unit and widget tests, formatting, the notices
-#                check, and the release build packaged exactly as
+#   build        the release build, packaged exactly as
 #                tool/package_windows_release.ps1 does it on a developer's PC.
+#                Analysis, unit and widget tests, formatting and the notices
+#                check run once for all platforms in dart.yml.
 #   integration  the suites under integration_test/, which open a real window,
 #                press real keys and put the overlay over the monitor. A
 #                GitHub-hosted Windows runner has an interactive desktop that
@@ -27,9 +28,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to a pull request replaces its older run; tag builds and
+# manual runs are never cancelled.
 concurrency:
-  group: windows-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -75,18 +78,6 @@ jobs:
           flutter pub get
           git status --porcelain
           dart run tool/write_build_info.dart --allow-dirty
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Unit and widget tests
-        run: flutter test
-
-      - name: Formatting
-        run: dart format --output=none --set-exit-if-changed lib test integration_test test_driver
-
-      - name: Third-party notices match pubspec.lock
-        run: dart run tool/generate_third_party_notices.dart --check
 
       - name: Build
         run: flutter build windows --release
