@@ -26,7 +26,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # write_build_info.dart needs the tag to name it on the About screen.
           fetch-depth: 0
@@ -136,7 +136,7 @@ jobs:
             tool/package_macos_release.sh "$version" "untagged" --skip-build-check
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: hardline-macos
           path: |
@@ -144,7 +144,7 @@ jobs:
             dist/SHA256SUMS-macos.txt
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: build-changes
