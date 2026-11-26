@@ -73,6 +73,17 @@
           # the single file (rather than ./.) imports only it into the store.
           appIcon = ./macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png;
           sqlite3mc = pkgs.callPackage ./nix/sqlite3mc.nix { };
+          # The app's own version, read from pubspec.yaml so the two cannot
+          # drift ("0.3.0+5" -> "0.3.0"; the build number is Flutter's).
+          version = builtins.head
+            (builtins.match ".*\nversion: ([0-9]+[.][0-9]+[.][0-9]+).*" (builtins.readFile ./pubspec.yaml));
+          # Release tag for the About screen, or null (see nix/release.nix). A
+          # tag that does not start with this version is a stale stamp from an
+          # earlier release, so refuse it rather than mislabel the build.
+          releaseTag =
+            let tag = (import ./nix/release.nix).tag; in
+            if tag == null || lib.hasPrefix "v${version}" tag then tag
+            else throw "nix/release.nix names tag '${tag}', but pubspec.yaml is version ${version}.";
           # lastModifiedDate is "YYYYMMDDhhmmss" (UTC); render it as ISO-8601.
           buildTimestamp =
             let d = self.lastModifiedDate; sub = builtins.substring; in
@@ -80,10 +91,7 @@
         in
         pkgs.flutter.buildFlutterApplication {
           pname = "hardline";
-          # The app's own version, read from pubspec.yaml so the two cannot
-          # drift ("0.3.0+5" -> "0.3.0"; the build number is Flutter's).
-          version = builtins.head
-            (builtins.match ".*\nversion: ([0-9]+[.][0-9]+[.][0-9]+).*" (builtins.readFile ./pubspec.yaml));
+          inherit version;
           src = ./.;
 
           # pubspec.yaml asks package:sqlite3's build hook for SQLite3 Multiple
@@ -100,7 +108,9 @@
           # from the flake itself: `self.rev` exists only for a clean checkout,
           # and a dirty tree stays `unknown`, which the app reports as a
           # development build. The timestamp is the commit's, not the build's,
-          # so the output stays reproducible.
+          # so the output stays reproducible. The tag cannot come from `self`
+          # (a flake never sees the ref it was fetched by), so it is read from
+          # nix/release.nix, which only a Nix release tag's own commit sets.
           postPatch = ''
             substituteInPlace pubspec.yaml \
               --replace-fail "      source: sqlite3mc" \
@@ -109,6 +119,9 @@
             substituteInPlace lib/core/build_info.dart \
               --replace-fail "const buildCommit = 'unknown';" "const buildCommit = '${self.rev}';" \
               --replace-fail "const buildTimestamp = 'unknown';" "const buildTimestamp = '${buildTimestamp}';"
+          '' + lib.optionalString (self ? rev && releaseTag != null) ''
+            substituteInPlace lib/core/build_info.dart \
+              --replace-fail "const buildTag = 'unknown';" "const buildTag = '${releaseTag}';"
           '';
 
           # IFD (allowed in a flake, unlike nixpkgs): read pubspec.lock directly

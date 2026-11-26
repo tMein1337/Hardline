@@ -287,6 +287,34 @@ then there is nothing to sign with.
 settings pane says so. Screen sharing asks for the Screen Recording permission
 in System Settings the first time.
 
+## Nix release
+
+There is no file to build or attach: Nix users build or fetch the package from
+the tag itself (`github:tMein1337/hardline/v<version>-nixos`), and
+`.github/workflows/nix.yml` builds every `v*` tag and pushes the result to the
+Cachix cache.
+
+The About screen's **Tag** line needs one extra commit. A flake never sees the
+ref it was fetched by, only the commit, so the tag is read from
+`nix/release.nix`, which is `null` on main. The tag points at a commit on top of
+the release commit that sets it and changes nothing else; that commit is pushed
+only as the tag and is **never merged into main**:
+
+```sh
+git switch --detach <release commit>
+sed -i 's/  tag = null;/  tag = "v0.3.0-nixos";/' nix/release.nix
+git commit -am "release: v0.3.0-nixos"
+git tag -a v0.3.0-nixos -m "Hardline 0.3.0 for NixOS"
+git push origin v0.3.0-nixos
+git switch main
+```
+
+The source of the release is that tagged commit, so it is the commit to name in
+`SOURCE.md` and the release notes. CI refuses a `*-nixos` tag whose
+`nix/release.nix` does not name it, and any branch or pull request where it is
+not `null`. The flake also refuses a tag that does not start with
+`v<pubspec version>`.
+
 ## 10. Keep it available
 
 For as long as any binary of a version is downloadable:

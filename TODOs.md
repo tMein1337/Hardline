@@ -277,10 +277,9 @@ from that run:
   has the X11 capturer enabled, gets none on Wayland, and crashed listing
   sources. The app now says it is unavailable instead. Real support needs a
   libwebrtc with the PipeWire/portal capturer switched on.
-- **About → Tag shows `unknown`** on the Nix build. The flake sandbox has no
-  git tags, so `postPatch` stamps only the commit and timestamp. A release
-  built from a tag will still say `unknown` unless the tag is passed in some
-  other way (e.g. derived from `version` when building a release).
+- ~~**About → Tag shows `unknown`** on the Nix build.~~ Fixed: a flake cannot
+  see git tags, so a Nix release tag points at a commit that sets
+  `nix/release.nix` and the flake stamps it (RELEASING.md, "Nix release").
 
 What still needs proving:
 
