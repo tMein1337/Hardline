@@ -290,7 +290,7 @@ in System Settings the first time.
 ## Nix release
 
 There is no file to build or attach: Nix users build or fetch the package from
-the tag itself (`github:tMein1337/hardline/v<version>-nixos`), and
+the tag itself (`github:tMein1337/hardline/<tag>`), and
 `.github/workflows/nix.yml` builds every `v*` tag and pushes the result to the
 Cachix cache.
 
@@ -302,18 +302,20 @@ only as the tag and is **never merged into main**:
 
 ```sh
 git switch --detach <release commit>
-sed -i 's/  tag = null;/  tag = "v0.3.0-nixos";/' nix/release.nix
-git commit -am "release: v0.3.0-nixos"
-git tag -a v0.3.0-nixos -m "Hardline 0.3.0 for NixOS"
-git push origin v0.3.0-nixos
+sed -i 's/  tag = null;/  tag = "v0.3.1";/' nix/release.nix
+git commit -am "release: v0.3.1"
+git tag -a v0.3.1 -m "Hardline 0.3.1"
+git push origin v0.3.1
 git switch main
 ```
 
 The source of the release is that tagged commit, so it is the commit to name in
-`SOURCE.md` and the release notes. CI refuses a `*-nixos` tag whose
-`nix/release.nix` does not name it, and any branch or pull request where it is
-not `null`. The flake also refuses a tag that does not start with
-`v<pubspec version>`.
+`SOURCE.md` and the release notes, and the commit the Windows and macOS builds
+of the same tag are made from too (the extra line does not touch the app). CI
+refuses a branch or pull request where `nix/release.nix` is not `null`, a tag
+it names that is not the pushed one, and a `*-nixos` tag that it does not name.
+A tag without the stamp still builds; its Nix package just says `unknown`.
+The flake also refuses a tag that does not start with `v<pubspec version>`.
 
 ## 10. Keep it available
 
