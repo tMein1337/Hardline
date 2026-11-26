@@ -11,7 +11,7 @@
 library;
 
 /// Marketing version, copied from `pubspec.yaml`.
-const buildVersion = '0.3.0';
+const buildVersion = '0.3.1';
 
 /// The commit this build was made from, or `unknown`.
 const buildCommit = 'unknown';
