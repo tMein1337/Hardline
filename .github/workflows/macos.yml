@@ -16,8 +16,31 @@ name: macos
 on:
   push:
     tags: [ 'v*' ]
+  # Only for changes that can affect the macOS app. A Mac runner is the
+  # scarcest thing this repository uses (a handful at a time, often a long
+  # queue), so a pull request that only touches docs, nix/, windows/ or another
+  # workflow does not take one. Tags and manual runs always build.
   pull_request:
+    paths:
+      - 'lib/**'
+      - 'macos/**'
+      - 'tool/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      # Bundled into the app or the .dmg, and checked by the packaging script.
+      - 'LICENSE'
+      - 'PRIVACY.md'
+      - 'SOURCE.md'
+      - 'THIRD_PARTY_NOTICES.md'
+      - '.github/workflows/macos.yml'
   workflow_dispatch:
+
+# A new push to a pull request makes the run for the previous commit
+# pointless; cancel it rather than let it hold a Mac runner for another
+# quarter of an hour. Tag builds and manual runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -82,14 +105,6 @@ jobs:
           flutter pub get
           git status --porcelain
           dart run tool/write_build_info.dart --allow-dirty
-
-      # The suite has only ever run on Windows. Until it has passed here once,
-      # a failure is reported but does not hold back the image.
-      - name: Analyze and test
-        continue-on-error: true
-        run: |
-          flutter analyze
-          flutter test
 
       - name: Build
         run: flutter build macos --release

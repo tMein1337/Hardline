@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2026 Mein1337
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# The Dart checks: analyzer, unit and widget tests (test/), formatting and the
+# third-party notices. They used to run inside the macOS and Windows build
+# workflows, once each; here they run once, on Linux, which is the cheapest
+# runner and starts at once. The platform workflows only build and package.
+#
+# Two jobs:
+#
+#   checks          everything above, on Linux.
+#   windows-tests   the tests that only run on Windows (the overlay's native
+#                   channel; they skip themselves anywhere else), so they are
+#                   still run on every pull request.
+#
+# The integration suites (integration_test/) need a real Windows desktop and
+# stay in the windows workflow.
+name: dart
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'integration_test/**'
+      - 'test_driver/**'
+      - 'tool/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'analysis_options.yaml'
+      - 'THIRD_PARTY_NOTICES.md'
+      # Bundled as assets; the app reads them at startup.
+      - 'LICENSE'
+      - 'PRIVACY.md'
+      - '.github/workflows/dart.yml'
+  workflow_dispatch:
+
+# A new push to a pull request cancels the run for the previous commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Keep in step with the toolchain table in RELEASING.md.
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Formatting
+        run: dart format --output=none --set-exit-if-changed lib test integration_test test_driver
+
+      - name: Third-party notices match pubspec.lock
+        run: dart run tool/generate_third_party_notices.dart --check
+
+      - name: Unit and widget tests
+        run: flutter test
+
+  windows-tests:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      # CRLF checkouts would make generated files come out "changed"; keep the
+      # tree as committed, as the windows workflow does.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      # Only the directory whose tests are Windows-only; the rest ran on Linux.
+      - name: Windows-only tests
+        run: flutter test test/overlay
