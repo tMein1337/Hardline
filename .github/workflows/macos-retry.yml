@@ -1,0 +1,80 @@
+# SPDX-FileCopyrightText: 2026 Mein1337
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Re-run a macos build that never got a Mac runner.
+#
+# When GitHub cannot hand a queued job to a hosted runner, it gives up after
+# about 15 minutes and cancels the job ("The job was not acquired by Runner of
+# type hosted even after multiple attempts"). No step has run, so there is
+# nothing wrong with the change; the check just shows "cancelled". This is a
+# GitHub-side limit: `timeout-minutes` only counts once a runner has the job,
+# and no setting in macos.yml makes the queue wait longer. Mac runners are the
+# scarcest kind, so it hits that workflow. Re-running the same run usually gets
+# a runner within seconds.
+#
+# A run is re-run only when all of these hold:
+#   * it was cancelled, and none of its jobs ever got a runner or ran a step;
+#   * the job was queued for at least 10 minutes, so a queued run someone
+#     cancelled by hand right away is left alone;
+#   * no newer macos run exists for the same branch or tag, so a run that
+#     concurrency cancelled for a newer push is left alone;
+#   * it is the run's first or second attempt, so this cannot loop.
+#
+# This file takes effect from the default branch: workflow_run always uses the
+# workflow as it is on main.
+name: macos-retry
+
+on:
+  workflow_run:
+    workflows: [ macos ]
+    types: [ completed ]
+
+permissions:
+  actions: write
+
+jobs:
+  retry:
+    if: >-
+      github.event.workflow_run.conclusion == 'cancelled' &&
+      github.event.workflow_run.run_attempt < 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-run if no runner was acquired
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+
+          jobs=$(gh api "repos/$REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs" --jq '.jobs')
+          echo "$jobs" | jq -r '.[] | "\(.name): \(.conclusion), runner \(.runner_name // "none"), \(.steps | length) steps, queued \(.created_at) until \(.completed_at)"'
+
+          started=$(echo "$jobs" | jq '[.[] | select((.runner_id // 0) != 0 or (.steps | length) > 0)] | length')
+          if [[ $started -ne 0 ]]; then
+            echo "A job got a runner, so this was not a runner shortage. Not re-running."
+            exit 0
+          fi
+
+          queued=$(echo "$jobs" | jq '[.[] | ((.completed_at | fromdateiso8601) - (.created_at | fromdateiso8601))] | max // 0')
+          if [[ $queued -lt 600 ]]; then
+            echo "Cancelled after ${queued}s in the queue, before GitHub would give up. Not re-running."
+            exit 0
+          fi
+
+          newest=$(gh api "repos/$REPO/actions/workflows/$WORKFLOW_ID/runs?branch=$HEAD_BRANCH&per_page=1" \
+            --jq '.workflow_runs[0].run_number')
+          if [[ $newest != "$RUN_NUMBER" ]]; then
+            echo "Run #$newest is newer for $HEAD_BRANCH. Not re-running."
+            exit 0
+          fi
+
+          echo "No runner was acquired in ${queued}s. Re-running."
+          gh run rerun "$RUN_ID" --repo "$REPO"
+          echo "::notice::Re-ran macos run #$RUN_NUMBER (attempt $ATTEMPT got no Mac runner): $RUN_URL"
