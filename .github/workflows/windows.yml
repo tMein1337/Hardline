@@ -158,8 +158,14 @@ jobs:
           channel: stable
           cache: true
 
+      # The runner's desktop is 1024x768, smaller than the app's 1400x900
+      # window. A foreground window that covers the whole monitor counts as
+      # full screen, and Windows then lowers the taskbar beneath it, so the
+      # overlay suite's "the taskbar stays reachable" finds the app window
+      # where the taskbar should be. Give it a desktop like a real one.
       - name: Screen
         run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
           Add-Type -AssemblyName System.Windows.Forms
           [System.Windows.Forms.Screen]::AllScreens | Format-List DeviceName, Primary, Bounds
 
