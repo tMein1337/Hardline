@@ -101,6 +101,20 @@ jobs:
       # the build-changes artifact.
       - name: Files the build changed
         run: |
+          # `pod install` rewrites the SPEC CHECKSUMS of the Flutter plugin
+          # pods, which Flutter generates locally: they come out different
+          # here than on a developer's Mac (a different Ruby serialises the
+          # podspecs differently) although the pods, their versions and the
+          # Podfile are the same. Put the committed lock file back when that
+          # section is all that changed; any other change still fails below.
+          strip='/^SPEC CHECKSUMS:/,/^$/d'
+          if ! git diff --quiet -- macos/Podfile.lock &&
+             diff -q <(git show HEAD:macos/Podfile.lock | sed "$strip") \
+                     <(sed "$strip" macos/Podfile.lock) >/dev/null; then
+            echo "macos/Podfile.lock: only SPEC CHECKSUMS differ; restoring the committed file."
+            git diff -- macos/Podfile.lock
+            git checkout -- macos/Podfile.lock
+          fi
           patch="$RUNNER_TEMP/build-changes.patch"
           git diff -- . ':(exclude)lib/core/build_info.dart' > "$patch"
           git ls-files --others --exclude-standard -z |
