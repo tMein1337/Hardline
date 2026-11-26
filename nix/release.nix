@@ -16,5 +16,5 @@
 # make every later build claim a release it is not, which is worse than
 # `unknown`.
 {
-  tag = null;
+  tag = "v0.4.0";
 }
